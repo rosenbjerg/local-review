@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { api } from "../api";
+import { langForPath, tokenize, type Token } from "../highlight";
 import type { Comment, CommentType, FileDiff, LineKind } from "../types";
 import { CommentComposer } from "./CommentComposer";
 import { CommentThread } from "./CommentThread";
@@ -41,15 +42,81 @@ export function DiffView({
   onToggleReviewed,
 }: Props) {
   const [mode, setMode] = useState<"changed" | "full">("changed");
-  const [fullLines, setFullLines] = useState<string[] | null>(null);
+  const [source, setSource] = useState<string[] | null>(null);
   const [collapsed, setCollapsed] = useState(reviewed);
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
   const [dragAnchor, setDragAnchor] = useState<number | null>(null);
+  const [newTokens, setNewTokens] = useState<Map<number, Token[]> | null>(null);
+  const [delTokens, setDelTokens] = useState<Map<string, Token[]> | null>(null);
+
+  const path = file.newPath || file.oldPath;
+  const lang = langForPath(path);
 
   // Auto-collapse when marked reviewed, expand when unmarked.
   useEffect(() => {
     setCollapsed(reviewed);
   }, [reviewed]);
+
+  // Fetch the full new-side file (once expanded) for both the Full view and
+  // syntax highlighting of add/context lines. Skipped for deleted files.
+  useEffect(() => {
+    if (collapsed || source || file.status === "deleted" || !file.newPath) return;
+    let cancelled = false;
+    api
+      .file(file.newPath, headRef)
+      .then((res) => {
+        if (!cancelled) setSource(res.content.replace(/\n$/, "").split("\n"));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [collapsed, source, file, headRef]);
+
+  // Tokenize the full source → one token array per line (keyed by new line no).
+  useEffect(() => {
+    if (!source || !lang) {
+      setNewTokens(null);
+      return;
+    }
+    let cancelled = false;
+    tokenize(source.join("\n"), lang).then((toks) => {
+      if (cancelled || !toks) return;
+      const m = new Map<number, Token[]>();
+      toks.forEach((t, i) => m.set(i + 1, t));
+      setNewTokens(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [source, lang]);
+
+  // Tokenize deleted (old-side) lines individually, keyed by content.
+  useEffect(() => {
+    if (!lang) {
+      setDelTokens(null);
+      return;
+    }
+    const contents = [
+      ...new Set(
+        file.hunks.flatMap((h) => h.lines.filter((l) => l.kind === "del").map((l) => l.content))
+      ),
+    ];
+    if (contents.length === 0) {
+      setDelTokens(null);
+      return;
+    }
+    let cancelled = false;
+    tokenize(contents.join("\n"), lang).then((toks) => {
+      if (cancelled || !toks) return;
+      const m = new Map<string, Token[]>();
+      contents.forEach((c, i) => m.set(c, toks[i] ?? []));
+      setDelTokens(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [file, lang]);
 
   // End a range drag when the mouse is released anywhere.
   useEffect(() => {
@@ -89,8 +156,8 @@ export function DiffView({
   }, [comments]);
 
   const rows: Row[] = useMemo(() => {
-    if (mode === "full" && fullLines) {
-      return fullLines.map((content, i) => {
+    if (mode === "full" && source) {
+      return source.map((content, i) => {
         const newLine = i + 1;
         return {
           key: `f${newLine}`,
@@ -114,13 +181,13 @@ export function DiffView({
       });
     });
     return out;
-  }, [mode, fullLines, file, addedSet]);
+  }, [mode, source, file, addedSet]);
 
   async function switchMode(next: "changed" | "full") {
-    if (next === "full" && !fullLines) {
+    if (next === "full" && !source) {
       try {
         const res = await api.file(file.newPath, headRef);
-        setFullLines(res.content.replace(/\n$/, "").split("\n"));
+        setSource(res.content.replace(/\n$/, "").split("\n"));
       } catch (e) {
         alert(`Could not load full file: ${(e as Error).message}`);
         return;
@@ -178,7 +245,15 @@ export function DiffView({
     setSelection(null);
   }
 
-  const path = file.newPath || file.oldPath;
+  function renderContent(kind: LineKind | "hunk", newLine: number | undefined, content: string) {
+    const toks = kind === "del" ? delTokens?.get(content) : newLine ? newTokens?.get(newLine) : undefined;
+    if (!toks || toks.length === 0) return content;
+    return toks.map((t, i) => (
+      <span key={i} style={{ color: t.color }}>
+        {t.content}
+      </span>
+    ));
+  }
 
   function threadRow(key: string, children: ReactNode) {
     return (
@@ -231,7 +306,7 @@ export function DiffView({
           <span className="sign">
             {r.kind === "add" ? "+" : r.kind === "del" ? "-" : " "}
           </span>
-          {r.content}
+          {renderContent(r.kind, r.newLine, r.content)}
         </td>
       </tr>
     );
