@@ -239,6 +239,14 @@ export default function App() {
     try {
       await api.setReviewed(review.id, path, reviewed);
     } catch (e) {
+      // Roll back the optimistic change so the file isn't left marked
+      // reviewed/collapsed when the save didn't actually land.
+      setReviewedFiles((s) => {
+        const n = new Set(s);
+        if (reviewed) n.delete(path);
+        else n.add(path);
+        return n;
+      });
       setError((e as Error).message);
     }
   }
