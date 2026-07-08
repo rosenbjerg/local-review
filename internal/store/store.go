@@ -44,6 +44,12 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	// SQLite's foreign_keys pragma is per-connection, so with a pooled DB some
+	// connections could miss it and skip ON DELETE CASCADE. A single connection
+	// makes the one-time pragma below authoritative; DB access is low-frequency
+	// (git diffs/file reads don't hit SQLite), so serializing it is free, and it
+	// also gives CreateOrGetReview's transaction full check-then-insert atomicity.
+	db.SetMaxOpenConns(1)
 	if _, err := db.Exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;`); err != nil {
 		return nil, err
 	}
