@@ -80,5 +80,7 @@ export const api = {
     }),
 
   export: (reviewId: number) =>
-    req<{ markdown: string; filename: string }>(`/api/reviews/${reviewId}/export`),
+    req<{ markdown: string; filename: string }>(`/api/reviews/${reviewId}/export`, {
+      method: "POST",
+    }),
 };

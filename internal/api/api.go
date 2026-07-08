@@ -86,7 +86,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/reviews", s.handleListReviews)
 	mux.HandleFunc("GET /api/reviews/{id}", s.handleGetReview)
 	mux.HandleFunc("DELETE /api/reviews/{id}", s.handleDeleteReview)
-	mux.HandleFunc("GET /api/reviews/{id}/export", s.handleExport)
+	mux.HandleFunc("POST /api/reviews/{id}/export", s.handleExport)
 	mux.HandleFunc("POST /api/reviews/{id}/reviewed", s.handleSetReviewed)
 
 	mux.HandleFunc("POST /api/reviews/{id}/comments", s.handleAddComment)
