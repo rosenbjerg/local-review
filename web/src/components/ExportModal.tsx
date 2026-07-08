@@ -14,7 +14,7 @@ export function ExportModal({ reviewId, onClose }: Props) {
   const [markdown, setMarkdown] = useState("");
   const [filename, setFilename] = useState("review.md");
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "ok" | "fail">("idle");
   const [view, setView] = useState<"preview" | "raw">("preview");
 
   useEffect(() => {
@@ -30,9 +30,13 @@ export function ExportModal({ reviewId, onClose }: Props) {
   const html = useMemo(() => md.render(markdown), [markdown]);
 
   async function copy() {
-    await navigator.clipboard.writeText(markdown); // always the raw markdown
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(markdown); // always the raw markdown
+      setCopyState("ok");
+    } catch {
+      setCopyState("fail");
+    }
+    setTimeout(() => setCopyState("idle"), 1500);
   }
 
   function download() {
@@ -63,7 +67,7 @@ export function ExportModal({ reviewId, onClose }: Props) {
           </div>
           <span className="spacer" />
           <button className="btn" onClick={copy}>
-            {copied ? "Copied ✓" : "Copy markdown"}
+            {copyState === "ok" ? "Copied ✓" : copyState === "fail" ? "Copy failed" : "Copy markdown"}
           </button>
           <button className="btn btn-primary" onClick={download}>
             Download .md
