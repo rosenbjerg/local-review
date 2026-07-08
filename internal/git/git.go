@@ -209,15 +209,16 @@ func stripDiffPath(p string) string {
 // parseHunkHeader parses "@@ -oldStart,oldLines +newStart,newLines @@ ..." and
 // returns the starting old and new line numbers.
 func parseHunkHeader(h string) (oldStart, newStart int) {
-	// h looks like: @@ -12,7 +12,9 @@ optional context
+	// h looks like: @@ -12,7 +12,9 @@ optional section heading
+	// Only the two fixed-position range tokens are the line numbers; the
+	// trailing section heading git appends can itself contain "-"/"+" tokens
+	// (e.g. a "->" return arrow or "x += 1"), so we must not scan the whole line.
 	parts := strings.Split(h, " ")
-	for _, p := range parts {
-		if strings.HasPrefix(p, "-") {
-			oldStart = firstInt(p[1:])
-		} else if strings.HasPrefix(p, "+") {
-			newStart = firstInt(p[1:])
-		}
+	if len(parts) < 3 {
+		return
 	}
+	oldStart = firstInt(strings.TrimPrefix(parts[1], "-"))
+	newStart = firstInt(strings.TrimPrefix(parts[2], "+"))
 	return
 }
 
