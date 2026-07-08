@@ -17,7 +17,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 pulls full history + tags so the changelog step can
+      # diff against the previous release tag.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # Build the frontend once — web/dist is platform-agnostic and embedded
       # into every binary via go:embed.
@@ -50,11 +54,30 @@ jobs:
           build linux   amd64 local-review-linux-amd64
           build windows amd64 local-review-windows-amd64.exe
 
+      # Release notes are the commit titles since the previous release tag.
+      - name: Build changelog
+        run: |
+          prev_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          if [ -n "$prev_tag" ]; then
+            range="$prev_tag..HEAD"
+            echo "changelog since $prev_tag"
+          else
+            range=""
+            echo "no previous tag; using full history"
+          fi
+          commits=$(git log --no-merges --pretty=format:'- %s' $range)
+          {
+            echo "## Changes"
+            echo
+            if [ -n "$commits" ]; then echo "$commits"; else echo "- No changes"; fi
+          } > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v0.0.${{ github.run_number }}
           name: v0.0.${{ github.run_number }}
           target_commitish: ${{ github.sha }}
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
           files: out/*
