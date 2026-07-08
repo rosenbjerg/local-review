@@ -1,0 +1,60 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+
+# Needed to create tags/releases and upload assets.
+permissions:
+  contents: write
+
+# Don't let overlapping pushes race on the release.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build the frontend once — web/dist is platform-agnostic and embedded
+      # into every binary via go:embed.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Pure-Go build (modernc.org/sqlite needs no cgo), so all targets
+      # cross-compile from this one Linux runner.
+      - name: Build binaries
+        run: |
+          mkdir -p out
+          build() {
+            echo "building $3"
+            CGO_ENABLED=0 GOOS=$1 GOARCH=$2 \
+              go build -trimpath -ldflags="-s -w" -o "out/$3" .
+          }
+          build darwin  arm64 local-review-darwin-arm64
+          build linux   amd64 local-review-linux-amd64
+          build windows amd64 local-review-windows-amd64.exe
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.0.${{ github.run_number }}
+          name: v0.0.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          files: out/*
