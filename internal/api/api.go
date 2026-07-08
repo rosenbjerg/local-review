@@ -128,9 +128,15 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 	}
 	base := r.URL.Query().Get("base")
 	head := r.URL.Query().Get("head")
-	if head == "" {
-		httpError(w, http.StatusBadRequest, errString("head is required"))
+	if err := validRef(head); err != nil {
+		httpError(w, http.StatusBadRequest, err)
 		return
+	}
+	if base != "" {
+		if err := validRef(base); err != nil {
+			httpError(w, http.StatusBadRequest, err)
+			return
+		}
 	}
 	if base == "" {
 		mb, err := repo.MergeBase(repo.MainBranch(), head)
@@ -161,8 +167,12 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 	}
 	path := r.URL.Query().Get("path")
 	ref := r.URL.Query().Get("ref")
-	if path == "" || ref == "" {
-		httpError(w, http.StatusBadRequest, errString("path and ref are required"))
+	if path == "" {
+		httpError(w, http.StatusBadRequest, errString("path is required"))
+		return
+	}
+	if err := validRef(ref); err != nil {
+		httpError(w, http.StatusBadRequest, err)
 		return
 	}
 	content, err := repo.FileContent(ref, path)
@@ -192,9 +202,15 @@ func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, err)
 		return
 	}
-	if req.Head == "" {
-		httpError(w, http.StatusBadRequest, errString("head is required"))
+	if err := validRef(req.Head); err != nil {
+		httpError(w, http.StatusBadRequest, err)
 		return
+	}
+	if req.Base != "" {
+		if err := validRef(req.Base); err != nil {
+			httpError(w, http.StatusBadRequest, err)
+			return
+		}
 	}
 	base := req.Base
 	if base == "" {
@@ -407,6 +423,19 @@ func httpError(w http.ResponseWriter, code int, err error) {
 type errString string
 
 func (e errString) Error() string { return string(e) }
+
+// validRef rejects empty refs and refs git would treat as an option (leading
+// "-"). Legitimate git ref names never start with "-", so this is safe and
+// prevents a client-supplied ref like "--output=/path" from becoming a git flag.
+func validRef(ref string) error {
+	if ref == "" {
+		return errString("empty ref")
+	}
+	if strings.HasPrefix(ref, "-") {
+		return errString("invalid ref")
+	}
+	return nil
+}
 
 func looksLikeSHA(s string) bool {
 	if len(s) < 7 || len(s) > 40 {
