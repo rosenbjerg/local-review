@@ -39,6 +39,10 @@ export default function App() {
   const diffColRef = useRef<HTMLDivElement>(null);
   const expandN = useRef(0);
   const [expandTarget, setExpandTarget] = useState<{ path: string; n: number } | null>(null);
+  // Monotonic token identifying the latest load. A repo switch or a newer
+  // startReview bumps it; in-flight responses check it before applying state so
+  // a stale repo's review/diff can't repopulate the UI for the new selection.
+  const reqSeq = useRef(0);
 
   useEffect(() => {
     localStorage.setItem(LS_LEFT, String(leftW));
@@ -92,6 +96,10 @@ export default function App() {
 
   // When the active repo changes, load its branches and clear any prior review.
   useEffect(() => {
+    // Invalidate any in-flight startReview so its response can't land on the
+    // newly-selected repo, and drop its loading state.
+    reqSeq.current++;
+    setLoading(false);
     if (!repo) {
       setBranches([]);
       setHead("");
@@ -116,19 +124,22 @@ export default function App() {
 
   async function startReview() {
     if (!repo || !head) return;
+    const seq = ++reqSeq.current;
     setLoading(true);
     setError(null);
     try {
       const rev = await api.createReview(repo, head, base || undefined);
+      if (reqSeq.current !== seq) return; // superseded by a repo switch / newer load
       setReview(rev);
       setComments(rev.comments ?? []);
       setReviewedFiles(new Set(rev.reviewedFiles ?? []));
       const diff = await api.diff(repo, rev.headRef, rev.baseRef);
+      if (reqSeq.current !== seq) return;
       setFiles(diff.files ?? []);
     } catch (e) {
-      setError((e as Error).message);
+      if (reqSeq.current === seq) setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (reqSeq.current === seq) setLoading(false);
     }
   }
 
@@ -222,7 +233,7 @@ export default function App() {
         <span className="logo">local-review</span>
         <label>
           repo
-          <select value={repo} onChange={(e) => setRepo(e.target.value)}>
+          <select value={repo} onChange={(e) => setRepo(e.target.value)} disabled={loading}>
             {repos.length === 0 && <option value="">(none found)</option>}
             {repos.map((r) => (
               <option key={r} value={r}>
@@ -233,7 +244,7 @@ export default function App() {
         </label>
         <label>
           base
-          <select value={base} onChange={(e) => setBase(e.target.value)}>
+          <select value={base} onChange={(e) => setBase(e.target.value)} disabled={loading}>
             <option value="">auto (merge-base)</option>
             {branches.map((b) => (
               <option key={b.name} value={b.name}>
@@ -246,7 +257,7 @@ export default function App() {
         <span className="arrow">←</span>
         <label>
           head
-          <select value={head} onChange={(e) => setHead(e.target.value)}>
+          <select value={head} onChange={(e) => setHead(e.target.value)} disabled={loading}>
             {branches.map((b) => (
               <option key={b.name} value={b.name}>
                 {b.name}
