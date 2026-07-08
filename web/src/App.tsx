@@ -35,6 +35,8 @@ export default function App() {
   const [rightW, setRightW] = useState(() => readWidth(LS_RIGHT, 380));
   const mainRef = useRef<HTMLDivElement>(null);
   const diffColRef = useRef<HTMLDivElement>(null);
+  const expandN = useRef(0);
+  const [expandTarget, setExpandTarget] = useState<{ path: string; n: number } | null>(null);
 
   useEffect(() => {
     localStorage.setItem(LS_LEFT, String(leftW));
@@ -145,12 +147,16 @@ export default function App() {
 
   function jumpTo(id: number) {
     if (flashComment(id)) return;
-    // The comment's file may not be mounted yet (lazy rendering). Scroll to the
-    // file to trigger its mount, then retry once it renders.
+    // The comment's file may be unmounted (lazy rendering) and/or collapsed
+    // (large/reviewed file). Signal its DiffView to expand, scroll to trigger
+    // mount, then retry the flash once it has rendered.
     const c = comments.find((x) => x.id === id);
     if (!c) return;
+    setExpandTarget({ path: c.filePath, n: ++expandN.current });
     document.getElementById(`file-${c.filePath}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    setTimeout(() => flashComment(id), 450);
+    setTimeout(() => {
+      if (!flashComment(id)) setTimeout(() => flashComment(id), 350);
+    }, 300);
   }
 
   function jumpToFile(path: string) {
@@ -272,6 +278,7 @@ export default function App() {
                     onDeleteComment={handleDelete}
                     reviewed={reviewedFiles.has(path)}
                     onToggleReviewed={(r) => toggleReviewed(path, r)}
+                    expandTarget={expandTarget}
                   />
                 </LazyFile>
               );

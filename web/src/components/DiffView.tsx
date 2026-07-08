@@ -29,6 +29,7 @@ interface Props {
   onDeleteComment: (id: number) => Promise<void>;
   reviewed: boolean;
   onToggleReviewed: (reviewed: boolean) => void;
+  expandTarget: { path: string; n: number } | null;
 }
 
 // Files with more changed lines than this start collapsed, and are not syntax
@@ -45,6 +46,7 @@ export function DiffView({
   onDeleteComment,
   reviewed,
   onToggleReviewed,
+  expandTarget,
 }: Props) {
   const changedLines = useMemo(
     () => file.hunks.reduce((n, h) => n + h.lines.length, 0),
@@ -67,6 +69,12 @@ export function DiffView({
   useEffect(() => {
     setCollapsed(reviewed || isLarge);
   }, [reviewed, isLarge]);
+
+  // Expand when a jump targets this file (e.g. clicking a comment on a
+  // collapsed large/reviewed file). Runs after the collapse effect so it wins.
+  useEffect(() => {
+    if (expandTarget && expandTarget.path === path) setCollapsed(false);
+  }, [expandTarget, path]);
 
   // Fetch the full new-side file (once expanded) for both the Full view and
   // syntax highlighting of add/context lines. Skipped for deleted files.
