@@ -104,19 +104,29 @@ const timeFmt = time.RFC3339
 // 'exported') does not orphan an in-progress review — re-opening the same branch
 // resumes it with its comments intact. HeadSHA is refreshed on fetch.
 func (s *Store) CreateOrGetReview(repoPath, base, head, sha string) (*Review, error) {
-	row := s.db.QueryRow(
-		`SELECT id FROM reviews WHERE repo_path=? AND base_ref=? AND head_ref=? ORDER BY id DESC LIMIT 1`,
-		repoPath, base, head)
+	// Run the check-then-insert in a transaction so two concurrent callers for
+	// the same (repo, base, head) can't both insert and split comments across
+	// duplicate rows. With the single connection (see Open), the transaction
+	// holds it end-to-end, so a concurrent creator blocks until commit and then
+	// its SELECT sees the inserted row.
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
 	var id int64
-	err := row.Scan(&id)
+	err = tx.QueryRow(
+		`SELECT id FROM reviews WHERE repo_path=? AND base_ref=? AND head_ref=? ORDER BY id DESC LIMIT 1`,
+		repoPath, base, head).Scan(&id)
 	now := time.Now().UTC().Format(timeFmt)
 	switch err {
 	case nil:
-		if _, err := s.db.Exec(`UPDATE reviews SET head_sha=?, updated_at=? WHERE id=?`, sha, now, id); err != nil {
+		if _, err := tx.Exec(`UPDATE reviews SET head_sha=?, updated_at=? WHERE id=?`, sha, now, id); err != nil {
 			return nil, err
 		}
 	case sql.ErrNoRows:
-		res, err := s.db.Exec(
+		res, err := tx.Exec(
 			`INSERT INTO reviews (repo_path, base_ref, head_ref, head_sha, status, created_at, updated_at)
 			 VALUES (?,?,?,?, 'draft', ?, ?)`,
 			repoPath, base, head, sha, now, now)
@@ -125,6 +135,9 @@ func (s *Store) CreateOrGetReview(repoPath, base, head, sha string) (*Review, er
 		}
 		id, _ = res.LastInsertId()
 	default:
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return s.GetReview(id)
