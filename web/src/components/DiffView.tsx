@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { api } from "../api";
 import type { Comment, CommentType, FileDiff, LineKind } from "../types";
 import { CommentComposer } from "./CommentComposer";
@@ -44,11 +44,20 @@ export function DiffView({
   const [fullLines, setFullLines] = useState<string[] | null>(null);
   const [collapsed, setCollapsed] = useState(reviewed);
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
+  const [dragAnchor, setDragAnchor] = useState<number | null>(null);
 
   // Auto-collapse when marked reviewed, expand when unmarked.
   useEffect(() => {
     setCollapsed(reviewed);
   }, [reviewed]);
+
+  // End a range drag when the mouse is released anywhere.
+  useEffect(() => {
+    if (dragAnchor === null) return;
+    const onUp = () => setDragAnchor(null);
+    window.addEventListener("mouseup", onUp);
+    return () => window.removeEventListener("mouseup", onUp);
+  }, [dragAnchor]);
 
   const addedSet = useMemo(() => {
     const s = new Set<number>();
@@ -133,15 +142,27 @@ export function DiffView({
     return parts.join("\n");
   }
 
-  function onGutterClick(newLine: number, shift: boolean) {
+  function onGutterMouseDown(newLine: number, shift: boolean, e: ReactMouseEvent) {
+    e.preventDefault(); // avoid starting a native text selection while dragging
     if (shift && selection) {
+      // Shift-click extends from the existing anchor (the range start).
+      setDragAnchor(selection.start);
       setSelection({
         start: Math.min(selection.start, newLine),
         end: Math.max(selection.start, newLine),
       });
     } else {
+      setDragAnchor(newLine);
       setSelection({ start: newLine, end: newLine });
     }
+  }
+
+  function onGutterMouseEnter(newLine: number) {
+    if (dragAnchor === null) return;
+    setSelection({
+      start: Math.min(dragAnchor, newLine),
+      end: Math.max(dragAnchor, newLine),
+    });
   }
 
   async function submit(body: string, type: CommentType) {
@@ -200,8 +221,9 @@ export function DiffView({
         <td className="gutter">{r.oldLine ?? ""}</td>
         <td
           className={`gutter${commentable ? " gutter-click" : ""}`}
-          onClick={(e) => commentable && onGutterClick(r.newLine!, e.shiftKey)}
-          title={commentable ? "Click to comment, shift-click to extend range" : ""}
+          onMouseDown={(e) => commentable && onGutterMouseDown(r.newLine!, e.shiftKey, e)}
+          onMouseEnter={() => commentable && onGutterMouseEnter(r.newLine!)}
+          title={commentable ? "Click, drag, or shift-click to select line(s)" : ""}
         >
           {r.newLine ?? ""}
         </td>
@@ -232,7 +254,7 @@ export function DiffView({
           )
         );
       }
-      if (selection && r.newLine === selection.end) {
+      if (selection && dragAnchor === null && r.newLine === selection.end) {
         composerPlaced = true;
         body.push(threadRow("composer", renderComposer()));
       }
@@ -256,7 +278,7 @@ export function DiffView({
       )
     );
   }
-  if (selection && !composerPlaced) {
+  if (selection && !composerPlaced && dragAnchor === null) {
     body.push(threadRow("composer", renderComposer()));
   }
 
