@@ -213,9 +213,14 @@ export default function App() {
     if (!c) return;
     setExpandTarget({ path: c.filePath, n: ++expandN.current });
     document.getElementById(`file-${c.filePath}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    setTimeout(() => {
-      if (!flashComment(id)) setTimeout(() => flashComment(id), 350);
-    }, 300);
+    // Poll until the lazy file mounts and the comment renders, rather than
+    // guessing a fixed delay (which fails on slow devices / long scrolls).
+    let tries = 0;
+    const poll = () => {
+      if (flashComment(id) || tries++ > 40) return; // ~4s cap
+      setTimeout(poll, 100);
+    };
+    setTimeout(poll, 100);
   }
 
   function jumpToFile(path: string) {
