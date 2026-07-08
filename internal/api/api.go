@@ -138,20 +138,18 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if base == "" {
-		mb, err := repo.MergeBase(repo.MainBranch(), head)
-		if err != nil {
-			httpError(w, http.StatusInternalServerError, err)
-			return
-		}
-		base = mb
-	} else if !looksLikeSHA(base) {
-		// resolve a ref to its merge-base with head so we show only what head introduces
-		mb, err := repo.MergeBase(base, head)
-		if err == nil {
-			base = mb
-		}
+	// Resolve base to its merge-base with head so the review shows only what
+	// head introduces. Default to the main branch when no base is given.
+	baseRef := base
+	if baseRef == "" {
+		baseRef = repo.MainBranch()
 	}
+	mb, err := repo.MergeBase(baseRef, head)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, err)
+		return
+	}
+	base = mb
 	diff, err := repo.Diff(base, head)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)
@@ -435,18 +433,6 @@ func validRef(ref string) error {
 		return errString("invalid ref")
 	}
 	return nil
-}
-
-func looksLikeSHA(s string) bool {
-	if len(s) < 7 || len(s) > 40 {
-		return false
-	}
-	for _, c := range s {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
-			return false
-		}
-	}
-	return true
 }
 
 func sanitize(s string) string {
