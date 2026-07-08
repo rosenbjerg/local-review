@@ -40,7 +40,9 @@ func Render(r *store.Review) string {
 		for _, c := range comments {
 			fmt.Fprintf(&b, "\n### %s · %s\n", lineLabel(c.StartLine, c.EndLine), c.Type)
 			if strings.TrimSpace(c.Snippet) != "" {
-				fmt.Fprintf(&b, "```%s\n%s\n```\n", lang, strings.TrimRight(c.Snippet, "\n"))
+				snippet := strings.TrimRight(c.Snippet, "\n")
+				fence := fenceFor(snippet)
+				fmt.Fprintf(&b, "%s%s\n%s\n%s\n", fence, lang, snippet, fence)
 			}
 			body := strings.TrimSpace(c.Body)
 			if body != "" {
@@ -50,6 +52,29 @@ func Render(r *store.Review) string {
 	}
 
 	return b.String()
+}
+
+// fenceFor returns a backtick fence long enough to safely wrap s: one backtick
+// longer than the longest run of backticks inside it (CommonMark rule), and at
+// least three. Prevents a snippet containing ``` (e.g. from a reviewed .md
+// file) from prematurely closing the fenced block.
+func fenceFor(s string) string {
+	longest, run := 0, 0
+	for _, r := range s {
+		if r == '`' {
+			run++
+			if run > longest {
+				longest = run
+			}
+		} else {
+			run = 0
+		}
+	}
+	n := longest + 1
+	if n < 3 {
+		n = 3
+	}
+	return strings.Repeat("`", n)
 }
 
 func groupByFile(comments []store.Comment) map[string][]store.Comment {
