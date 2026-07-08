@@ -96,15 +96,16 @@ export default function App() {
 
   // When the active repo changes, load its branches and clear any prior review.
   useEffect(() => {
-    // Invalidate any in-flight startReview so its response can't land on the
+    // Invalidate any in-flight load so a stale response can't land on the
     // newly-selected repo, and drop its loading state.
     reqSeq.current++;
+    const seq = reqSeq.current;
     setLoading(false);
-    if (!repo) {
-      setBranches([]);
-      setHead("");
-      return;
-    }
+    // Clear the previous repo's branches/head synchronously so the dropdowns
+    // never show branches that don't belong to the selected repo.
+    setBranches([]);
+    setHead("");
+    if (!repo) return;
     setReview(null);
     setFiles([]);
     setComments([]);
@@ -115,11 +116,14 @@ export default function App() {
     api
       .branches(repo)
       .then((r) => {
+        if (reqSeq.current !== seq) return; // superseded by another repo switch
         setBranches(r.branches);
         const current = r.branches.find((b) => b.isCurrent);
         setHead(current?.name ?? r.branches[0]?.name ?? "");
       })
-      .catch((e) => setError((e as Error).message));
+      .catch((e) => {
+        if (reqSeq.current === seq) setError((e as Error).message);
+      });
   }, [repo]);
 
   async function startReview() {
