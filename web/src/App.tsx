@@ -143,6 +143,8 @@ export default function App() {
     }
   }
 
+  // Returns true on success so the caller only closes its composer when the
+  // comment actually saved (otherwise the typed text would be lost).
   async function handleAddComment(args: {
     filePath: string;
     startLine: number;
@@ -150,27 +152,43 @@ export default function App() {
     snippet: string;
     body: string;
     type: CommentType;
-  }) {
-    if (!review) return;
-    const c = await api.addComment(review.id, args);
-    setComments((cs) => [...cs, c]);
+  }): Promise<boolean> {
+    if (!review) return false;
+    try {
+      const c = await api.addComment(review.id, args);
+      setComments((cs) => [...cs, c]);
+      return true;
+    } catch (e) {
+      setError((e as Error).message);
+      return false;
+    }
   }
 
-  async function handleUpdate(id: number, body: string, type: CommentType) {
+  async function handleUpdate(id: number, body: string, type: CommentType): Promise<boolean> {
     const existing = comments.find((c) => c.id === id);
-    if (!existing) return;
-    const updated = await api.updateComment(id, {
-      body,
-      type,
-      startLine: existing.startLine,
-      endLine: existing.endLine,
-    });
-    setComments((cs) => cs.map((c) => (c.id === id ? updated : c)));
+    if (!existing) return false;
+    try {
+      const updated = await api.updateComment(id, {
+        body,
+        type,
+        startLine: existing.startLine,
+        endLine: existing.endLine,
+      });
+      setComments((cs) => cs.map((c) => (c.id === id ? updated : c)));
+      return true;
+    } catch (e) {
+      setError((e as Error).message);
+      return false;
+    }
   }
 
   async function handleDelete(id: number) {
-    await api.deleteComment(id);
-    setComments((cs) => cs.filter((c) => c.id !== id));
+    try {
+      await api.deleteComment(id);
+      setComments((cs) => cs.filter((c) => c.id !== id));
+    } catch (e) {
+      setError((e as Error).message);
+    }
   }
 
   function flashComment(id: number): boolean {

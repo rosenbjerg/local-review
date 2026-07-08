@@ -4,7 +4,7 @@ import { CommentComposer } from "./CommentComposer";
 
 interface Props {
   comment: Comment;
-  onUpdate: (id: number, body: string, type: CommentType) => Promise<void>;
+  onUpdate: (id: number, body: string, type: CommentType) => Promise<boolean>;
   onDelete: (id: number) => Promise<void>;
 }
 
@@ -35,8 +35,7 @@ export function CommentThread({ comment, onUpdate, onDelete }: Props) {
           submitLabel="Save"
           onCancel={() => setEditing(false)}
           onSubmit={async (body, type) => {
-            await onUpdate(comment.id, body, type);
-            setEditing(false);
+            if (await onUpdate(comment.id, body, type)) setEditing(false);
           }}
         />
       ) : (

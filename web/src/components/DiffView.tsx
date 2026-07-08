@@ -25,8 +25,8 @@ interface Props {
     snippet: string;
     body: string;
     type: CommentType;
-  }) => Promise<void>;
-  onUpdateComment: (id: number, body: string, type: CommentType) => Promise<void>;
+  }) => Promise<boolean>;
+  onUpdateComment: (id: number, body: string, type: CommentType) => Promise<boolean>;
   onDeleteComment: (id: number) => Promise<void>;
   reviewed: boolean;
   onToggleReviewed: (reviewed: boolean) => void;
@@ -256,7 +256,7 @@ export function DiffView({
 
   async function submit(body: string, type: CommentType) {
     if (!selection) return;
-    await onAddComment({
+    const ok = await onAddComment({
       filePath: file.newPath,
       startLine: selection.start,
       endLine: selection.end,
@@ -264,7 +264,7 @@ export function DiffView({
       body,
       type,
     });
-    setSelection(null);
+    if (ok) setSelection(null); // keep the composer open (with the text) on failure
   }
 
   function renderContent(kind: LineKind | "hunk", newLine: number | undefined, content: string) {
