@@ -31,6 +31,11 @@ interface Props {
   onToggleReviewed: (reviewed: boolean) => void;
 }
 
+// Files with more changed lines than this start collapsed, and are not syntax
+// highlighted (both to keep large change-sets responsive).
+export const LARGE_FILE_LINES = 500;
+const HIGHLIGHT_MAX_LINES = 2000;
+
 export function DiffView({
   file,
   headRef,
@@ -41,9 +46,15 @@ export function DiffView({
   reviewed,
   onToggleReviewed,
 }: Props) {
+  const changedLines = useMemo(
+    () => file.hunks.reduce((n, h) => n + h.lines.length, 0),
+    [file]
+  );
+  const isLarge = changedLines > LARGE_FILE_LINES;
+
   const [mode, setMode] = useState<"changed" | "full">("changed");
   const [source, setSource] = useState<string[] | null>(null);
-  const [collapsed, setCollapsed] = useState(reviewed);
+  const [collapsed, setCollapsed] = useState(reviewed || isLarge);
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
   const [dragAnchor, setDragAnchor] = useState<number | null>(null);
   const [newTokens, setNewTokens] = useState<Map<number, Token[]> | null>(null);
@@ -52,10 +63,10 @@ export function DiffView({
   const path = file.newPath || file.oldPath;
   const lang = langForPath(path);
 
-  // Auto-collapse when marked reviewed, expand when unmarked.
+  // Auto-collapse when marked reviewed; large files stay collapsed regardless.
   useEffect(() => {
-    setCollapsed(reviewed);
-  }, [reviewed]);
+    setCollapsed(reviewed || isLarge);
+  }, [reviewed, isLarge]);
 
   // Fetch the full new-side file (once expanded) for both the Full view and
   // syntax highlighting of add/context lines. Skipped for deleted files.
@@ -74,8 +85,9 @@ export function DiffView({
   }, [collapsed, source, file, headRef]);
 
   // Tokenize the full source → one token array per line (keyed by new line no).
+  // Skipped for very large files to avoid blocking the main thread.
   useEffect(() => {
-    if (!source || !lang) {
+    if (!source || !lang || source.length > HIGHLIGHT_MAX_LINES) {
       setNewTokens(null);
       return;
     }
@@ -102,7 +114,7 @@ export function DiffView({
         file.hunks.flatMap((h) => h.lines.filter((l) => l.kind === "del").map((l) => l.content))
       ),
     ];
-    if (contents.length === 0) {
+    if (contents.length === 0 || contents.length > HIGHLIGHT_MAX_LINES) {
       setDelTokens(null);
       return;
     }
@@ -375,7 +387,7 @@ export function DiffView({
   }
 
   return (
-    <div className={`file${reviewed ? " file-reviewed" : ""}`} id={`file-${path}`}>
+    <div className={`file${reviewed ? " file-reviewed" : ""}`}>
       <div className="file-header">
         <button className="file-toggle" onClick={() => setCollapsed((c) => !c)}>
           {collapsed ? "▸" : "▾"}

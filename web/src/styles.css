@@ -147,6 +147,9 @@ select {
   margin-bottom: 16px;
   overflow: hidden;
 }
+.file-placeholder {
+  opacity: 0.5;
+}
 .file-header {
   display: flex;
   align-items: center;

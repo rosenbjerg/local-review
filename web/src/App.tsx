@@ -1,9 +1,10 @@
-import { useEffect, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { api } from "./api";
 import { CommentsPanel } from "./components/CommentsPanel";
-import { DiffView } from "./components/DiffView";
+import { DiffView, LARGE_FILE_LINES } from "./components/DiffView";
 import { ExportModal } from "./components/ExportModal";
 import { FileExplorer } from "./components/FileExplorer";
+import { LazyFile } from "./components/LazyFile";
 import type { Branch, Comment, CommentType, FileDiff, Review } from "./types";
 
 const LS_LEFT = "lr.leftWidth";
@@ -32,6 +33,8 @@ export default function App() {
   const [showExport, setShowExport] = useState(false);
   const [leftW, setLeftW] = useState(() => readWidth(LS_LEFT, 260));
   const [rightW, setRightW] = useState(() => readWidth(LS_RIGHT, 380));
+  const mainRef = useRef<HTMLDivElement>(null);
+  const diffColRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     localStorage.setItem(LS_LEFT, String(leftW));
@@ -40,21 +43,31 @@ export default function App() {
     localStorage.setItem(LS_RIGHT, String(rightW));
   }, [rightW]);
 
+  // Resize by writing grid-template-columns directly to the DOM during the drag
+  // (no React re-render per mousemove — important with large diffs mounted),
+  // then commit to state once on release so it persists.
   function startResize(e: ReactMouseEvent, side: "left" | "right") {
     e.preventDefault();
     const startX = e.clientX;
     const startLeft = leftW;
     const startRight = rightW;
+    let finalLeft = startLeft;
+    let finalRight = startRight;
     const onMove = (ev: MouseEvent) => {
       const dx = ev.clientX - startX;
-      if (side === "left") setLeftW(clamp(startLeft + dx, 160, 560));
-      else setRightW(clamp(startRight - dx, 220, 640));
+      if (side === "left") finalLeft = clamp(startLeft + dx, 160, 560);
+      else finalRight = clamp(startRight - dx, 220, 640);
+      if (mainRef.current) {
+        mainRef.current.style.gridTemplateColumns = `${finalLeft}px 6px 1fr 6px ${finalRight}px`;
+      }
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       document.body.style.userSelect = "";
       document.body.style.cursor = "";
+      setLeftW(finalLeft);
+      setRightW(finalRight);
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -121,12 +134,23 @@ export default function App() {
     setComments((cs) => cs.filter((c) => c.id !== id));
   }
 
-  function jumpTo(id: number) {
+  function flashComment(id: number): boolean {
     const el = document.getElementById(`comment-${id}`);
-    if (!el) return;
+    if (!el) return false;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     el.classList.add("thread-flash");
     setTimeout(() => el.classList.remove("thread-flash"), 1200);
+    return true;
+  }
+
+  function jumpTo(id: number) {
+    if (flashComment(id)) return;
+    // The comment's file may not be mounted yet (lazy rendering). Scroll to the
+    // file to trigger its mount, then retry once it renders.
+    const c = comments.find((x) => x.id === id);
+    if (!c) return;
+    document.getElementById(`file-${c.filePath}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => flashComment(id), 450);
   }
 
   function jumpToFile(path: string) {
@@ -147,6 +171,15 @@ export default function App() {
     } catch (e) {
       setError((e as Error).message);
     }
+  }
+
+  // Rough rendered height for a not-yet-mounted file, so the scrollbar and
+  // jump-to-file behave before the diff mounts. Mirrors the collapse decision.
+  function estFileHeight(f: FileDiff): number {
+    const path = f.newPath || f.oldPath;
+    const lines = f.hunks.reduce((n, h) => n + h.lines.length, 0);
+    const collapsed = reviewedFiles.has(path) || lines > LARGE_FILE_LINES;
+    return collapsed ? 44 : Math.min(lines, 400) * 18 + 44;
   }
 
   const shortSha = review?.headSha.slice(0, 7);
@@ -204,6 +237,7 @@ export default function App() {
       {review && (
         <div
           className="main"
+          ref={mainRef}
           style={{ gridTemplateColumns: `${leftW}px 6px 1fr 6px ${rightW}px` }}
         >
           <aside className="explorer-column">
@@ -217,22 +251,29 @@ export default function App() {
             />
           </aside>
           <div className="resizer" onMouseDown={(e) => startResize(e, "left")} />
-          <div className="diff-column">
+          <div className="diff-column" ref={diffColRef}>
             {files.length === 0 && <div className="empty">No changes between base and head.</div>}
             {files.map((f) => {
               const path = f.newPath || f.oldPath;
               return (
-                <DiffView
+                <LazyFile
                   key={path}
-                  file={f}
-                  headRef={review.headRef}
-                  comments={comments.filter((c) => c.filePath === path)}
-                  onAddComment={handleAddComment}
-                  onUpdateComment={handleUpdate}
-                  onDeleteComment={handleDelete}
-                  reviewed={reviewedFiles.has(path)}
-                  onToggleReviewed={(r) => toggleReviewed(path, r)}
-                />
+                  anchorId={`file-${path}`}
+                  label={path}
+                  estHeight={estFileHeight(f)}
+                  rootRef={diffColRef}
+                >
+                  <DiffView
+                    file={f}
+                    headRef={review.headRef}
+                    comments={comments.filter((c) => c.filePath === path)}
+                    onAddComment={handleAddComment}
+                    onUpdateComment={handleUpdate}
+                    onDeleteComment={handleDelete}
+                    reviewed={reviewedFiles.has(path)}
+                    onToggleReviewed={(r) => toggleReviewed(path, r)}
+                  />
+                </LazyFile>
               );
             })}
           </div>
