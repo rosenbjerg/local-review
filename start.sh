@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # Build the frontend, embed it into the Go binary, and launch local-review
-# against the given repository.
+# against a folder containing one or more git repositories.
 #
-# Usage: ./start.sh <repo-path> [extra local-review flags...]
-#   ./start.sh ~/code/myproject
-#   ./start.sh ~/code/myproject -port 8080 -no-open
+# Usage: ./start.sh <root-path> [extra local-review flags...]
+#   ./start.sh ~/code
+#   ./start.sh ~/code -port 8080 -no-open
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: $0 <repo-path> [extra local-review flags...]" >&2
+  echo "usage: $0 <root-path> [extra local-review flags...]" >&2
   exit 1
 fi
 
-REPO="$1"
+ROOT="$1"
 shift
 
-if [[ ! -d "$REPO/.git" ]]; then
-  echo "error: '$REPO' is not a git repository" >&2
+if [[ ! -d "$ROOT" ]]; then
+  echo "error: '$ROOT' is not a directory" >&2
   exit 1
 fi
 
@@ -30,5 +30,5 @@ npm --prefix web run build
 echo "==> Building binary"
 go build -o local-review .
 
-echo "==> Starting local-review on $REPO"
-exec ./local-review -repo "$REPO" "$@"
+echo "==> Starting local-review on $ROOT"
+exec ./local-review -root "$ROOT" "$@"

@@ -4,6 +4,8 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -13,16 +15,69 @@ import (
 )
 
 type Server struct {
-	Repo  *git.Repo
+	Root  string // folder containing one or more git repositories
 	Store *store.Store
 }
 
-func New(repo *git.Repo, st *store.Store) *Server {
-	return &Server{Repo: repo, Store: st}
+func New(root string, st *store.Store) *Server {
+	return &Server{Root: root, Store: st}
+}
+
+// isGitRepo reports whether path is a git working tree (has a .git entry).
+func isGitRepo(path string) bool {
+	_, err := os.Stat(filepath.Join(path, ".git"))
+	return err == nil
+}
+
+// listRepos returns the names of git repositories directly under the root.
+func (s *Server) listRepos() ([]string, error) {
+	entries, err := os.ReadDir(s.Root)
+	if err != nil {
+		return nil, err
+	}
+	repos := []string{}
+	for _, e := range entries {
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		if isGitRepo(filepath.Join(s.Root, e.Name())) {
+			repos = append(repos, e.Name())
+		}
+	}
+	return repos, nil
+}
+
+// repoFor resolves a client-supplied repo name to a Repo, rejecting anything
+// that isn't a single path segment naming a git repo under the root (guards
+// against path traversal).
+func (s *Server) repoFor(name string) (*git.Repo, error) {
+	if name == "" {
+		return nil, errString("repo is required")
+	}
+	if name != filepath.Base(name) || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
+		return nil, errString("invalid repo name")
+	}
+	abs := filepath.Join(s.Root, name)
+	if !isGitRepo(abs) {
+		return nil, errString("not a git repository: " + name)
+	}
+	return git.New(abs), nil
+}
+
+// repoParam resolves the ?repo= query parameter, writing an error response on
+// failure.
+func (s *Server) repoParam(w http.ResponseWriter, r *http.Request) (*git.Repo, bool) {
+	repo, err := s.repoFor(r.URL.Query().Get("repo"))
+	if err != nil {
+		httpError(w, http.StatusBadRequest, err)
+		return nil, false
+	}
+	return repo, true
 }
 
 // Routes registers all API handlers on the given mux.
 func (s *Server) Routes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/repos", s.handleRepos)
 	mux.HandleFunc("GET /api/branches", s.handleBranches)
 	mux.HandleFunc("GET /api/diff", s.handleDiff)
 	mux.HandleFunc("GET /api/file", s.handleFile)
@@ -41,19 +96,36 @@ func (s *Server) Routes(mux *http.ServeMux) {
 
 // --- git-reading ---
 
+func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
+	repos, err := s.listRepos()
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, map[string]any{"repos": repos})
+}
+
 func (s *Server) handleBranches(w http.ResponseWriter, r *http.Request) {
-	branches, err := s.Repo.ListBranches()
+	repo, ok := s.repoParam(w, r)
+	if !ok {
+		return
+	}
+	branches, err := repo.ListBranches()
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, map[string]any{
 		"branches": branches,
-		"main":     s.Repo.MainBranch(),
+		"main":     repo.MainBranch(),
 	})
 }
 
 func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
+	repo, ok := s.repoParam(w, r)
+	if !ok {
+		return
+	}
 	base := r.URL.Query().Get("base")
 	head := r.URL.Query().Get("head")
 	if head == "" {
@@ -61,7 +133,7 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if base == "" {
-		mb, err := s.Repo.MergeBase(s.Repo.MainBranch(), head)
+		mb, err := repo.MergeBase(repo.MainBranch(), head)
 		if err != nil {
 			httpError(w, http.StatusInternalServerError, err)
 			return
@@ -69,12 +141,12 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		base = mb
 	} else if !looksLikeSHA(base) {
 		// resolve a ref to its merge-base with head so we show only what head introduces
-		mb, err := s.Repo.MergeBase(base, head)
+		mb, err := repo.MergeBase(base, head)
 		if err == nil {
 			base = mb
 		}
 	}
-	diff, err := s.Repo.Diff(base, head)
+	diff, err := repo.Diff(base, head)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)
 		return
@@ -83,13 +155,17 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
+	repo, ok := s.repoParam(w, r)
+	if !ok {
+		return
+	}
 	path := r.URL.Query().Get("path")
 	ref := r.URL.Query().Get("ref")
 	if path == "" || ref == "" {
 		httpError(w, http.StatusBadRequest, errString("path and ref are required"))
 		return
 	}
-	content, err := s.Repo.FileContent(ref, path)
+	content, err := repo.FileContent(ref, path)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)
 		return
@@ -100,6 +176,7 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 // --- reviews ---
 
 type createReviewReq struct {
+	Repo string `json:"repo"`
 	Base string `json:"base"`
 	Head string `json:"head"`
 }
@@ -107,6 +184,11 @@ type createReviewReq struct {
 func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) {
 	var req createReviewReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, err)
+		return
+	}
+	repo, err := s.repoFor(req.Repo)
+	if err != nil {
 		httpError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -119,14 +201,14 @@ func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) {
 		// Store the main branch name (readable in the export). The diff
 		// endpoint resolves it to the merge-base with head at query time,
 		// so the review still shows only what head introduces.
-		base = s.Repo.MainBranch()
+		base = repo.MainBranch()
 	}
-	sha, err := s.Repo.ResolveSHA(req.Head)
+	sha, err := repo.ResolveSHA(req.Head)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)
 		return
 	}
-	review, err := s.Store.CreateOrGetReview(s.Repo.Path, base, req.Head, sha)
+	review, err := s.Store.CreateOrGetReview(repo.Path, base, req.Head, sha)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)
 		return

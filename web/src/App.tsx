@@ -20,6 +20,8 @@ function clamp(n: number, min: number, max: number): number {
 }
 
 export default function App() {
+  const [repos, setRepos] = useState<string[]>([]);
+  const [repo, setRepo] = useState("");
   const [branches, setBranches] = useState<Branch[]>([]);
   const [head, setHead] = useState("");
   const [base, setBase] = useState("");
@@ -77,27 +79,51 @@ export default function App() {
     document.body.style.cursor = "col-resize";
   }
 
+  // Discover repositories under the root once on load.
   useEffect(() => {
     api
-      .branches()
+      .repos()
+      .then((r) => {
+        setRepos(r.repos);
+        setRepo(r.repos[0] ?? "");
+      })
+      .catch((e) => setError((e as Error).message));
+  }, []);
+
+  // When the active repo changes, load its branches and clear any prior review.
+  useEffect(() => {
+    if (!repo) {
+      setBranches([]);
+      setHead("");
+      return;
+    }
+    setReview(null);
+    setFiles([]);
+    setComments([]);
+    setReviewedFiles(new Set());
+    setSelectedFile(null);
+    setExpandTarget(null);
+    setBase("");
+    api
+      .branches(repo)
       .then((r) => {
         setBranches(r.branches);
         const current = r.branches.find((b) => b.isCurrent);
         setHead(current?.name ?? r.branches[0]?.name ?? "");
       })
       .catch((e) => setError((e as Error).message));
-  }, []);
+  }, [repo]);
 
   async function startReview() {
-    if (!head) return;
+    if (!repo || !head) return;
     setLoading(true);
     setError(null);
     try {
-      const rev = await api.createReview(head, base || undefined);
+      const rev = await api.createReview(repo, head, base || undefined);
       setReview(rev);
       setComments(rev.comments ?? []);
       setReviewedFiles(new Set(rev.reviewedFiles ?? []));
-      const diff = await api.diff(rev.headRef, rev.baseRef);
+      const diff = await api.diff(repo, rev.headRef, rev.baseRef);
       setFiles(diff.files ?? []);
     } catch (e) {
       setError((e as Error).message);
@@ -195,6 +221,17 @@ export default function App() {
       <header className="topbar">
         <span className="logo">local-review</span>
         <label>
+          repo
+          <select value={repo} onChange={(e) => setRepo(e.target.value)}>
+            {repos.length === 0 && <option value="">(none found)</option>}
+            {repos.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
           base
           <select value={base} onChange={(e) => setBase(e.target.value)}>
             <option value="">auto (merge-base)</option>
@@ -218,7 +255,7 @@ export default function App() {
             ))}
           </select>
         </label>
-        <button className="btn btn-primary" onClick={startReview} disabled={loading || !head}>
+        <button className="btn btn-primary" onClick={startReview} disabled={loading || !repo || !head}>
           {loading ? "Loading…" : review ? "Reload" : "Start review"}
         </button>
         <span className="spacer" />
@@ -271,6 +308,7 @@ export default function App() {
                 >
                   <DiffView
                     file={f}
+                    repo={repo}
                     headRef={review.headRef}
                     comments={comments.filter((c) => c.filePath === path)}
                     onAddComment={handleAddComment}

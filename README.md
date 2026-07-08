@@ -23,22 +23,23 @@ go build -o local-review .
 ## Run
 
 ```sh
-./local-review -repo /path/to/your/repo
+./local-review -root /path/to/folder-of-repos
 ```
 
-Opens `http://127.0.0.1:7777` in your browser. Pick a head branch (base defaults to
-the merge-base with `main`/`master`), review the diff, click line numbers to comment
-(shift-click to extend a range), then **Export** to preview, copy, or download the
-markdown.
+Opens `http://127.0.0.1:7777` in your browser. Pick a **repository** (any git repo
+directly under the root), then a head branch (base defaults to the merge-base with
+`main`/`master`), review the diff, click/drag line numbers to comment, then
+**Export** to preview, copy, or download the markdown.
 
-The SQLite DB lives next to the binary (`local-review.db`), so one install serves
-many repos; draft reviews are pruned after `-retention-days` (default 30).
+The SQLite DB lives next to the binary (`local-review.db`), keyed by repo path, so
+one install serves many repos and resumes each independently; draft reviews are
+pruned after `-retention-days` (default 30).
 
 ### Flags
 
 | flag | default | purpose |
 |------|---------|---------|
-| `-repo` | `.` | repository to review |
+| `-root` | `.` | folder containing one or more git repositories |
 | `-port` | `7777` | listen port |
 | `-retention-days` | `30` | prune draft reviews older than this on startup |
 | `-no-open` | `false` | don't auto-open the browser |
@@ -48,6 +49,6 @@ many repos; draft reviews are pruned after `-retention-days` (default 30).
 Run the Go server and the Vite dev server side by side (Vite proxies `/api` to `:7777`):
 
 ```sh
-./local-review -repo /path/to/repo -no-open   # terminal 1
-cd web && npm run dev                          # terminal 2 → http://localhost:5173
+./local-review -root /path/to/folder-of-repos -no-open   # terminal 1
+cd web && npm run dev                                     # terminal 2 → http://localhost:5173
 ```

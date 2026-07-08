@@ -15,6 +15,7 @@ interface Row {
 
 interface Props {
   file: FileDiff;
+  repo: string;
   headRef: string;
   comments: Comment[];
   onAddComment: (args: {
@@ -39,6 +40,7 @@ const HIGHLIGHT_MAX_LINES = 2000;
 
 export function DiffView({
   file,
+  repo,
   headRef,
   comments,
   onAddComment,
@@ -82,7 +84,7 @@ export function DiffView({
     if (collapsed || source || file.status === "deleted" || !file.newPath) return;
     let cancelled = false;
     api
-      .file(file.newPath, headRef)
+      .file(repo, file.newPath, headRef)
       .then((res) => {
         if (!cancelled) setSource(res.content.replace(/\n$/, "").split("\n"));
       })
@@ -90,7 +92,7 @@ export function DiffView({
     return () => {
       cancelled = true;
     };
-  }, [collapsed, source, file, headRef]);
+  }, [collapsed, source, file, headRef, repo]);
 
   // Tokenize the full source → one token array per line (keyed by new line no).
   // Skipped for very large files to avoid blocking the main thread.
@@ -206,7 +208,7 @@ export function DiffView({
   async function switchMode(next: "changed" | "full") {
     if (next === "full" && !source) {
       try {
-        const res = await api.file(file.newPath, headRef);
+        const res = await api.file(repo, file.newPath, headRef);
         setSource(res.content.replace(/\n$/, "").split("\n"));
       } catch (e) {
         alert(`Could not load full file: ${(e as Error).message}`);

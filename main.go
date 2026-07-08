@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"local-review/internal/api"
-	"local-review/internal/git"
 	"local-review/internal/store"
 )
 
@@ -24,20 +23,19 @@ var embeddedWeb embed.FS
 
 func main() {
 	var (
-		repoPath  = flag.String("repo", ".", "path to the git repository to review")
+		rootPath  = flag.String("root", ".", "path to a folder containing one or more git repositories")
 		port      = flag.Int("port", 7777, "port to listen on")
 		retention = flag.Int("retention-days", 30, "delete draft reviews older than this many days on startup")
 		noOpen    = flag.Bool("no-open", false, "do not open the browser on start")
 	)
 	flag.Parse()
 
-	absRepo, err := filepath.Abs(*repoPath)
+	absRoot, err := filepath.Abs(*rootPath)
 	if err != nil {
-		log.Fatalf("resolve repo path: %v", err)
+		log.Fatalf("resolve root path: %v", err)
 	}
-	repo := git.New(absRepo)
-	if _, err := repo.MergeBase("HEAD", "HEAD"); err != nil {
-		log.Fatalf("%s does not look like a git repository: %v", absRepo, err)
+	if info, err := os.Stat(absRoot); err != nil || !info.IsDir() {
+		log.Fatalf("%s is not a directory", absRoot)
 	}
 
 	dbPath := resolveDBPath()
@@ -54,12 +52,12 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	api.New(repo, st).Routes(mux)
+	api.New(absRoot, st).Routes(mux)
 	mountStatic(mux)
 
 	addr := fmt.Sprintf("127.0.0.1:%d", *port)
 	url := "http://" + addr
-	log.Printf("local-review reviewing %s", absRepo)
+	log.Printf("local-review serving repositories in %s", absRoot)
 	log.Printf("db: %s", dbPath)
 	log.Printf("listening on %s", url)
 

@@ -20,23 +20,28 @@ async function req<T>(url: string, opts?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  branches: () => req<{ branches: Branch[]; main: string }>("/api/branches"),
+  repos: () => req<{ repos: string[] }>("/api/repos"),
 
-  diff: (head: string, base?: string) => {
-    const p = new URLSearchParams({ head });
+  branches: (repo: string) => {
+    const p = new URLSearchParams({ repo });
+    return req<{ branches: Branch[]; main: string }>(`/api/branches?${p.toString()}`);
+  },
+
+  diff: (repo: string, head: string, base?: string) => {
+    const p = new URLSearchParams({ repo, head });
     if (base) p.set("base", base);
     return req<DiffResponse>(`/api/diff?${p.toString()}`);
   },
 
-  file: (path: string, ref: string) => {
-    const p = new URLSearchParams({ path, ref });
+  file: (repo: string, path: string, ref: string) => {
+    const p = new URLSearchParams({ repo, path, ref });
     return req<{ path: string; ref: string; content: string }>(`/api/file?${p.toString()}`);
   },
 
-  createReview: (head: string, base?: string) =>
+  createReview: (repo: string, head: string, base?: string) =>
     req<Review>("/api/reviews", {
       method: "POST",
-      body: JSON.stringify({ head, base: base ?? "" }),
+      body: JSON.stringify({ repo, head, base: base ?? "" }),
     }),
 
   getReview: (id: number) => req<Review>(`/api/reviews/${id}`),
