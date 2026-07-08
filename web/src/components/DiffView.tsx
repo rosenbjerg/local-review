@@ -413,17 +413,19 @@ export function DiffView({
           />
           Viewed
         </label>
-        <div className="view-toggle">
-          <button
-            className={mode === "changed" ? "active" : ""}
-            onClick={() => switchMode("changed")}
-          >
-            Changed
-          </button>
-          <button className={mode === "full" ? "active" : ""} onClick={() => switchMode("full")}>
-            Full
-          </button>
-        </div>
+        {file.newPath !== "" && (
+          <div className="view-toggle">
+            <button
+              className={mode === "changed" ? "active" : ""}
+              onClick={() => switchMode("changed")}
+            >
+              Changed
+            </button>
+            <button className={mode === "full" ? "active" : ""} onClick={() => switchMode("full")}>
+              Full
+            </button>
+          </div>
+        )}
       </div>
 
       {!collapsed && (
