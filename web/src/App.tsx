@@ -155,6 +155,40 @@ export default function App() {
       });
   }, [repo]);
 
+  // Re-pull the review's comments and reviewed-files when the tab regains
+  // focus, so changes made in another tab open on the same review show up.
+  // Coarse last-writer-wins sync; the diff isn't refetched (HEAD is pinned per
+  // review, so only comment/reviewed state can drift between tabs).
+  useEffect(() => {
+    if (!review) return;
+    const id = review.id;
+    let cancelled = false;
+    let inFlight = false;
+    async function refresh() {
+      if (inFlight || document.visibilityState !== "visible") return;
+      inFlight = true;
+      try {
+        const rev = await api.getReview(id);
+        if (!cancelled) {
+          setReview(rev);
+          setComments(rev.comments ?? []);
+          setReviewedFiles(new Set(rev.reviewedFiles ?? []));
+        }
+      } catch {
+        // Transient refresh failure — keep the current state.
+      } finally {
+        inFlight = false;
+      }
+    }
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [review?.id]);
+
   async function startReview() {
     if (!repo || !head) return;
     const seq = ++reqSeq.current;
