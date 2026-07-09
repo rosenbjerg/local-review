@@ -24,6 +24,23 @@ func TestFenceFor(t *testing.T) {
 	}
 }
 
+// Each comment heading carries its global id so a coding agent reading the
+// export can reference a specific comment (e.g. "comment #42 done").
+func TestRenderIncludesCommentID(t *testing.T) {
+	r := &store.Review{
+		HeadRef: "feature",
+		BaseRef: "main",
+		HeadSHA: "abc1234",
+		Comments: []store.Comment{
+			{ID: 42, FilePath: "main.go", StartLine: 12, EndLine: 15, Type: "bug", Body: "off-by-one"},
+		},
+	}
+	out := Render(r)
+	if !strings.Contains(out, "### #42 · L12–15 · bug") {
+		t.Fatalf("expected comment heading with id, got:\n%s", out)
+	}
+}
+
 // A snippet containing a triple-backtick fence must not prematurely close the
 // surrounding code block: the opening and closing fences the exporter emits
 // must be longer than any backtick run in the snippet.

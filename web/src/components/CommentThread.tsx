@@ -18,6 +18,7 @@ export function CommentThread({ comment, onUpdate, onDelete }: Props) {
   return (
     <div className="thread" id={`comment-${comment.id}`}>
       <div className="thread-meta">
+        <span className="muted">#{comment.id}</span>
         <span className={`badge badge-${comment.type}`}>{comment.type}</span>
         <span className="muted">{lineLabel(comment)}</span>
         <span className="spacer" />

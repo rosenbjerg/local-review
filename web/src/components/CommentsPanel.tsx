@@ -33,6 +33,7 @@ export function CommentsPanel({ comments, onJump }: Props) {
           {byFile.get(file)!.map((c) => (
             <button key={c.id} className="comment-nav" onClick={() => onJump(c.id)}>
               <div className="comment-meta">
+                <span className="muted">#{c.id}</span>
                 <span className={`badge badge-${c.type}`}>{c.type}</span>
                 <span className="muted">{lineLabel(c)}</span>
               </div>

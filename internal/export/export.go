@@ -38,7 +38,7 @@ func Render(r *store.Review) string {
 		})
 		lang := langForExt(name)
 		for _, c := range comments {
-			fmt.Fprintf(&b, "\n### %s · %s\n", lineLabel(c.StartLine, c.EndLine), c.Type)
+			fmt.Fprintf(&b, "\n### #%d · %s · %s\n", c.ID, lineLabel(c.StartLine, c.EndLine), c.Type)
 			if strings.TrimSpace(c.Snippet) != "" {
 				snippet := strings.TrimRight(c.Snippet, "\n")
 				fence := fenceFor(snippet)
