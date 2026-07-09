@@ -37,6 +37,18 @@ type Comment struct {
 	Body      string    `json:"body"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+	Replies   []Reply   `json:"replies"`
+}
+
+// Reply is a follow-up on a Comment. It carries no anchor or type of its own —
+// those belong to the parent comment (the thread root). Threads are exactly two
+// levels deep: replies reference a comment and nothing references a reply.
+type Reply struct {
+	ID        int64     `json:"id"`
+	CommentID int64     `json:"commentId"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 func Open(path string) (*Store, error) {
@@ -87,6 +99,14 @@ CREATE TABLE IF NOT EXISTS comments (
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_comments_review ON comments(review_id);
+CREATE TABLE IF NOT EXISTS replies (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  comment_id INTEGER NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+  body       TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_replies_comment ON replies(comment_id);
 CREATE TABLE IF NOT EXISTS reviewed_files (
   review_id   INTEGER NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
   file_path   TEXT NOT NULL,
@@ -157,6 +177,19 @@ func (s *Store) GetReview(id int64) (*Review, error) {
 	comments, err := s.listComments(id)
 	if err != nil {
 		return nil, err
+	}
+	replies, err := s.listReplies(id)
+	if err != nil {
+		return nil, err
+	}
+	byComment := make(map[int64][]Reply, len(replies))
+	for _, rep := range replies {
+		byComment[rep.CommentID] = append(byComment[rep.CommentID], rep)
+	}
+	for i := range comments {
+		if rs := byComment[comments[i].ID]; rs != nil {
+			comments[i].Replies = rs
+		}
 	}
 	r.Comments = comments
 	reviewed, err := s.listReviewedFiles(id)
@@ -248,6 +281,7 @@ func (s *Store) listComments(reviewID int64) ([]Comment, error) {
 		}
 		c.CreatedAt, _ = time.Parse(timeFmt, created)
 		c.UpdatedAt, _ = time.Parse(timeFmt, updated)
+		c.Replies = []Reply{} // never null in JSON; GetReview fills in any replies
 		out = append(out, c)
 	}
 	return out, rows.Err()
@@ -302,7 +336,119 @@ func (s *Store) getComment(id int64) (*Comment, error) {
 	}
 	c.CreatedAt, _ = time.Parse(timeFmt, created)
 	c.UpdatedAt, _ = time.Parse(timeFmt, updated)
+	replies, err := s.getReplies(id)
+	if err != nil {
+		return nil, err
+	}
+	c.Replies = replies
 	return &c, nil
+}
+
+// scanReplies collects reply rows from an already-executed query.
+func scanReplies(rows *sql.Rows) ([]Reply, error) {
+	defer rows.Close()
+	out := []Reply{}
+	for rows.Next() {
+		var rep Reply
+		var created, updated string
+		if err := rows.Scan(&rep.ID, &rep.CommentID, &rep.Body, &created, &updated); err != nil {
+			return nil, err
+		}
+		rep.CreatedAt, _ = time.Parse(timeFmt, created)
+		rep.UpdatedAt, _ = time.Parse(timeFmt, updated)
+		out = append(out, rep)
+	}
+	return out, rows.Err()
+}
+
+// listReplies returns every reply belonging to a review (joined via its
+// comments), ordered so GetReview can bucket them under each comment.
+func (s *Store) listReplies(reviewID int64) ([]Reply, error) {
+	rows, err := s.db.Query(
+		`SELECT r.id, r.comment_id, r.body, r.created_at, r.updated_at
+		 FROM replies r JOIN comments c ON c.id = r.comment_id
+		 WHERE c.review_id=? ORDER BY r.comment_id, r.created_at, r.id`, reviewID)
+	if err != nil {
+		return nil, err
+	}
+	return scanReplies(rows)
+}
+
+// getReplies returns the replies on a single comment, oldest first.
+func (s *Store) getReplies(commentID int64) ([]Reply, error) {
+	rows, err := s.db.Query(
+		`SELECT id, comment_id, body, created_at, updated_at
+		 FROM replies WHERE comment_id=? ORDER BY created_at, id`, commentID)
+	if err != nil {
+		return nil, err
+	}
+	return scanReplies(rows)
+}
+
+func (s *Store) getReply(id int64) (*Reply, error) {
+	var rep Reply
+	var created, updated string
+	err := s.db.QueryRow(
+		`SELECT id, comment_id, body, created_at, updated_at FROM replies WHERE id=?`, id).
+		Scan(&rep.ID, &rep.CommentID, &rep.Body, &created, &updated)
+	if err != nil {
+		return nil, err
+	}
+	rep.CreatedAt, _ = time.Parse(timeFmt, created)
+	rep.UpdatedAt, _ = time.Parse(timeFmt, updated)
+	return &rep, nil
+}
+
+// AddReply appends a reply to a comment and returns it along with the id of the
+// review it belongs to, so the caller can publish an SSE ping for that review.
+func (s *Store) AddReply(commentID int64, body string) (*Reply, int64, error) {
+	var reviewID int64
+	if err := s.db.QueryRow(`SELECT review_id FROM comments WHERE id=?`, commentID).Scan(&reviewID); err != nil {
+		return nil, 0, err
+	}
+	now := time.Now().UTC().Format(timeFmt)
+	res, err := s.db.Exec(
+		`INSERT INTO replies (comment_id, body, created_at, updated_at) VALUES (?,?,?,?)`,
+		commentID, body, now, now)
+	if err != nil {
+		return nil, 0, err
+	}
+	id, _ := res.LastInsertId()
+	rep, err := s.getReply(id)
+	return rep, reviewID, err
+}
+
+// UpdateReply edits a reply's body and returns it with its review id.
+func (s *Store) UpdateReply(id int64, body string) (*Reply, int64, error) {
+	now := time.Now().UTC().Format(timeFmt)
+	if _, err := s.db.Exec(`UPDATE replies SET body=?, updated_at=? WHERE id=?`, body, now, id); err != nil {
+		return nil, 0, err
+	}
+	rep, err := s.getReply(id)
+	if err != nil {
+		return nil, 0, err
+	}
+	reviewID, err := s.reviewIDForComment(rep.CommentID)
+	return rep, reviewID, err
+}
+
+// DeleteReply removes a reply and returns the id of the review it belonged to,
+// so the caller can notify that review's subscribers after the row is gone.
+func (s *Store) DeleteReply(id int64) (int64, error) {
+	var commentID int64
+	if err := s.db.QueryRow(`SELECT comment_id FROM replies WHERE id=?`, id).Scan(&commentID); err != nil {
+		return 0, err
+	}
+	if _, err := s.db.Exec(`DELETE FROM replies WHERE id=?`, id); err != nil {
+		return 0, err
+	}
+	return s.reviewIDForComment(commentID)
+}
+
+func (s *Store) reviewIDForComment(commentID int64) (int64, error) {
+	var reviewID int64
+	err := s.db.QueryRow(`SELECT review_id FROM comments WHERE id=?`, commentID).Scan(&reviewID)
+	return reviewID, err
 }
 
 // PruneDrafts deletes draft reviews not updated within the retention window.

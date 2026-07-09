@@ -96,6 +96,10 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/reviews/{id}/comments", s.handleAddComment)
 	mux.HandleFunc("PATCH /api/comments/{id}", s.handleUpdateComment)
 	mux.HandleFunc("DELETE /api/comments/{id}", s.handleDeleteComment)
+
+	mux.HandleFunc("POST /api/comments/{id}/replies", s.handleAddReply)
+	mux.HandleFunc("PATCH /api/replies/{id}", s.handleUpdateReply)
+	mux.HandleFunc("DELETE /api/replies/{id}", s.handleDeleteReply)
 }
 
 // --- git-reading ---
@@ -457,6 +461,65 @@ func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reviewID, err := s.Store.DeleteComment(id)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.hub.publish(reviewID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// --- replies ---
+
+type replyReq struct {
+	Body string `json:"body"`
+}
+
+func (s *Server) handleAddReply(w http.ResponseWriter, r *http.Request) {
+	commentID, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var req replyReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, err)
+		return
+	}
+	rep, reviewID, err := s.Store.AddReply(commentID, req.Body)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, err)
+		return
+	}
+	_ = s.Store.Touch(reviewID)
+	s.hub.publish(reviewID)
+	writeJSON(w, rep)
+}
+
+func (s *Server) handleUpdateReply(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var req replyReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, err)
+		return
+	}
+	rep, reviewID, err := s.Store.UpdateReply(id, req.Body)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.hub.publish(reviewID)
+	writeJSON(w, rep)
+}
+
+func (s *Server) handleDeleteReply(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	reviewID, err := s.Store.DeleteReply(id)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)
 		return
