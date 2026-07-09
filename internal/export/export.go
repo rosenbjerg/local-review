@@ -51,7 +51,7 @@ func Render(r *store.Review) string {
 		})
 		lang := langForExt(name)
 		for _, c := range comments {
-			fmt.Fprintf(&b, "\n### #%d · %s · %s\n", c.ID, lineLabel(c.StartLine, c.EndLine), c.Type)
+			fmt.Fprintf(&b, "\n### #%d · %s · %s · %s\n", c.ID, lineLabel(c.StartLine, c.EndLine), c.Type, c.Author)
 			if strings.TrimSpace(c.Snippet) != "" {
 				snippet := strings.TrimRight(c.Snippet, "\n")
 				fence := fenceFor(snippet)
@@ -75,7 +75,7 @@ func Render(r *store.Review) string {
 // stays inside the quote; a bare blank line between replies keeps each in its
 // own blockquote rather than merging them.
 func renderReply(b *strings.Builder, rep store.Reply) {
-	fmt.Fprintf(b, "\n> **↳ reply #%d**\n", rep.ID)
+	fmt.Fprintf(b, "\n> **↳ reply #%d · %s**\n", rep.ID, rep.Author)
 	body := strings.TrimSpace(rep.Body)
 	if body == "" {
 		return
