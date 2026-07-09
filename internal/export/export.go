@@ -48,10 +48,29 @@ func Render(r *store.Review) string {
 			if body != "" {
 				fmt.Fprintf(&b, "%s\n", body)
 			}
+			for _, rep := range c.Replies {
+				renderReply(&b, rep)
+			}
 		}
 	}
 
 	return b.String()
+}
+
+// renderReply writes a reply as an indented blockquote beneath its comment. The
+// body is emitted line-by-line with a "> " prefix so arbitrary multi-line text
+// stays inside the quote; a bare blank line between replies keeps each in its
+// own blockquote rather than merging them.
+func renderReply(b *strings.Builder, rep store.Reply) {
+	fmt.Fprintf(b, "\n> **↳ reply #%d**\n", rep.ID)
+	body := strings.TrimSpace(rep.Body)
+	if body == "" {
+		return
+	}
+	b.WriteString(">\n")
+	for _, line := range strings.Split(body, "\n") {
+		fmt.Fprintf(b, "> %s\n", line)
+	}
 }
 
 // fenceFor returns a backtick fence long enough to safely wrap s: one backtick
