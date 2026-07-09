@@ -68,7 +68,21 @@ web/src/
 - **Backend is source of truth** for review state; React caches it and mutates
   via the API. Discrete actions (add/delete/toggle) save immediately.
 - **Comments anchor to the new side** (HEAD path + line) and store a captured
-  `snippet` so feedback survives line drift.
+  `snippet` so feedback survives line drift. Each comment also records the
+  `commit_sha` it was anchored against (resolved live at add time; best-effort,
+  may be empty) — an immutable record of the original position and when it held.
+- **Comment staleness is derived, never persisted.** The stored line numbers are
+  the *original* anchor; the branch keeps moving, so `internal/api/annotate.go`
+  recomputes a live `anchorStatus` on every review read (`handleGetReview`,
+  `handleCreateReview`, `handleExport`, and the add-comment response) by comparing
+  the captured `snippet` against the current file at `head_ref`: matches at the
+  stored range → `current`; found at exactly one other place → `moved` (with
+  derived `currentStartLine`/`currentEndLine`); gone, ambiguous (multiple hits),
+  or file unreadable → `outdated`. The frontend renders the effective (relocated)
+  line and badges moved/outdated threads; the export reflects it too. These three
+  fields are computed on `store.Comment` in the API layer and carry `omitempty` —
+  the store never reads or writes them. Cost: one `git show head:path` per
+  distinct commented file per review read (deduped in `annotateComments`).
 - **Threads are two levels.** A comment is a thread root; the `replies` table
   holds follow-ups (body + timestamps only — anchor and `type` stay on the root).
   A reply's `comment_id` FK cascade-deletes it with its comment (and the comment

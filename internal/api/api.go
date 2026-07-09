@@ -244,6 +244,7 @@ func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusInternalServerError, err)
 		return
 	}
+	s.annotateReview(review)
 	writeJSON(w, review)
 }
 
@@ -266,6 +267,7 @@ func (s *Server) handleGetReview(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusNotFound, err)
 		return
 	}
+	s.annotateReview(review)
 	writeJSON(w, review)
 }
 
@@ -343,6 +345,7 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusNotFound, err)
 		return
 	}
+	s.annotateReview(review)
 	md := export.Render(review)
 	_ = s.Store.SetStatus(id, "exported")
 
@@ -415,6 +418,14 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		// in practice the coding agent. The browser app sends "reviewer".
 		req.Author = "agent"
 	}
+	// Record which head commit this comment anchors to. Best-effort: a comment
+	// is still valid if the repo can't be reached, so failures leave it empty.
+	var repo *git.Repo
+	var headRef, sha string
+	if repoPath, hr, err := s.Store.ReviewRepoHead(id); err == nil {
+		repo, headRef = git.New(repoPath), hr
+		sha, _ = repo.ResolveSHA(hr)
+	}
 	c, err := s.Store.AddComment(store.Comment{
 		ReviewID:  id,
 		FilePath:  req.FilePath,
@@ -424,10 +435,16 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		Type:      req.Type,
 		Body:      req.Body,
 		Author:    req.Author,
+		CommitSHA: sha,
 	})
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)
 		return
+	}
+	if repo != nil {
+		cs := []store.Comment{*c}
+		annotateComments(repo, headRef, cs)
+		c = &cs[0]
 	}
 	_ = s.Store.Touch(id)
 	s.hub.publish(id)
