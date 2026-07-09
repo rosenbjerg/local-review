@@ -21,14 +21,27 @@ func Render(r *store.Review) string {
 
 	fmt.Fprintf(&b, "# Review: %s → %s @ %s\n\n", r.HeadRef, r.BaseRef, shortSHA)
 
-	files := groupByFile(r.Comments)
+	// Resolved threads are the reviewer's way of saying "no agent action needed",
+	// so the export carries only the open ones.
+	unresolved := make([]store.Comment, 0, len(r.Comments))
+	for _, c := range r.Comments {
+		if !c.Resolved {
+			unresolved = append(unresolved, c)
+		}
+	}
+	resolvedCount := len(r.Comments) - len(unresolved)
+
+	files := groupByFile(unresolved)
 	fileNames := make([]string, 0, len(files))
 	for name := range files {
 		fileNames = append(fileNames, name)
 	}
 	sort.Strings(fileNames)
 
-	fmt.Fprintf(&b, "_%d comment(s) across %d file(s)_\n", len(r.Comments), len(fileNames))
+	fmt.Fprintf(&b, "_%d unresolved comment(s) across %d file(s)_\n", len(unresolved), len(fileNames))
+	if resolvedCount > 0 {
+		fmt.Fprintf(&b, "_%d resolved thread(s) omitted._\n", resolvedCount)
+	}
 
 	for _, name := range fileNames {
 		fmt.Fprintf(&b, "\n## %s\n", name)
