@@ -1,5 +1,9 @@
 import type { Branch, Comment, CommentType, DiffResponse, Reply, Review } from "./types";
 
+// The API defaults an omitted author to "agent", so the browser (the reviewer)
+// tags everything it creates explicitly.
+const REVIEWER = "reviewer";
+
 async function req<T>(url: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     headers: { "Content-Type": "application/json" },
@@ -60,7 +64,7 @@ export const api = {
   ) =>
     req<Comment>(`/api/reviews/${reviewId}/comments`, {
       method: "POST",
-      body: JSON.stringify(c),
+      body: JSON.stringify({ ...c, author: REVIEWER }),
     }),
 
   updateComment: (
@@ -83,7 +87,7 @@ export const api = {
   addReply: (commentId: number, body: string) =>
     req<Reply>(`/api/comments/${commentId}/replies`, {
       method: "POST",
-      body: JSON.stringify({ body }),
+      body: JSON.stringify({ body, author: REVIEWER }),
     }),
 
   updateReply: (id: number, body: string) =>

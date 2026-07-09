@@ -79,6 +79,12 @@ web/src/
   and **excluded from the export** (the artifact carries only open, actionable
   feedback). The column is backfilled onto older DBs by `store.ensureColumn`,
   the idempotent add-column helper to reuse when adding future columns.
+- **Comments and replies carry an `author`.** The API defaults an omitted
+  author to `"agent"` (so a coding agent posting via the API needn't set it);
+  the browser app tags its own creations `"reviewer"` explicitly (`api.ts`). The
+  columns' DDL/migration default is `'reviewer'`, so rows created before the
+  field existed backfill as the reviewer's. Author shows in the thread meta and
+  in the export heading/reply lines.
 - **Diff base** defaults to the main-branch *name* (stored on the review); the
   `/api/diff` handler resolves it to `merge-base(base, head)` at query time, so
   the review shows only what the branch introduces.

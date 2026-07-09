@@ -33,6 +33,7 @@ export interface Reply {
   id: number;
   commentId: number;
   body: string;
+  author: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,6 +47,7 @@ export interface Comment {
   snippet: string;
   type: CommentType;
   body: string;
+  author: string;
   resolved: boolean;
   createdAt: string;
   updatedAt: string;

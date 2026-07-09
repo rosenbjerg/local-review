@@ -33,6 +33,7 @@ function ReplyItem({
     <div className="reply" id={`reply-${reply.id}`}>
       <div className="reply-meta">
         <span className="muted">↳ #{reply.id}</span>
+        <span className="muted">{reply.author}</span>
         <span className="spacer" />
         <button className="link" onClick={() => setEditing((e) => !e)}>
           {editing ? "close" : "edit"}
@@ -78,6 +79,7 @@ export function CommentThread({
         <span className="muted">#{comment.id}</span>
         <span className={`badge badge-${comment.type}`}>{comment.type}</span>
         <span className="muted">{lineLabel(comment)}</span>
+        <span className="muted">{comment.author}</span>
         {comment.resolved && <span className="badge badge-resolved">✓ resolved</span>}
         <span className="spacer" />
         <button className="link" onClick={() => onResolve(comment.id, !comment.resolved)}>
