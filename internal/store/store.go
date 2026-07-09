@@ -35,6 +35,7 @@ type Comment struct {
 	Snippet   string    `json:"snippet"`
 	Type      string    `json:"type"` // bug | suggestion | question | nit
 	Body      string    `json:"body"`
+	Author    string    `json:"author"` // "reviewer" for browser-created; API clients may set their own
 	Resolved  bool      `json:"resolved"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
@@ -48,6 +49,7 @@ type Reply struct {
 	ID        int64     `json:"id"`
 	CommentID int64     `json:"commentId"`
 	Body      string    `json:"body"`
+	Author    string    `json:"author"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -96,6 +98,7 @@ CREATE TABLE IF NOT EXISTS comments (
   snippet    TEXT NOT NULL DEFAULT '',
   type       TEXT NOT NULL DEFAULT 'suggestion',
   body       TEXT NOT NULL DEFAULT '',
+  author     TEXT NOT NULL DEFAULT 'reviewer',
   resolved   INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -105,6 +108,7 @@ CREATE TABLE IF NOT EXISTS replies (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   comment_id INTEGER NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
   body       TEXT NOT NULL DEFAULT '',
+  author     TEXT NOT NULL DEFAULT 'reviewer',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -119,10 +123,16 @@ CREATE TABLE IF NOT EXISTS reviewed_files (
 	if err != nil {
 		return err
 	}
-	// `resolved` was added after the initial schema. CREATE TABLE IF NOT EXISTS
-	// won't backfill it onto a comments table created before it existed, so add
-	// it explicitly for older databases (no-op once present).
-	return s.ensureColumn("comments", "resolved", "resolved INTEGER NOT NULL DEFAULT 0")
+	// Columns added after the initial schema. CREATE TABLE IF NOT EXISTS won't
+	// backfill them onto tables created before they existed, so add them
+	// explicitly for older databases (each is a no-op once present).
+	if err := s.ensureColumn("comments", "resolved", "resolved INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("comments", "author", "author TEXT NOT NULL DEFAULT 'reviewer'"); err != nil {
+		return err
+	}
+	return s.ensureColumn("replies", "author", "author TEXT NOT NULL DEFAULT 'reviewer'")
 }
 
 // ensureColumn adds a column to a table if it is not already present, making a
@@ -302,7 +312,7 @@ func (s *Store) SetStatus(id int64, status string) error {
 
 func (s *Store) listComments(reviewID int64) ([]Comment, error) {
 	rows, err := s.db.Query(
-		`SELECT id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved
+		`SELECT id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved, author
 		 FROM comments WHERE review_id=? ORDER BY file_path, start_line`, reviewID)
 	if err != nil {
 		return nil, err
@@ -313,7 +323,7 @@ func (s *Store) listComments(reviewID int64) ([]Comment, error) {
 		var c Comment
 		var created, updated string
 		if err := rows.Scan(&c.ID, &c.ReviewID, &c.FilePath, &c.StartLine, &c.EndLine,
-			&c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved); err != nil {
+			&c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved, &c.Author); err != nil {
 			return nil, err
 		}
 		c.CreatedAt, _ = time.Parse(timeFmt, created)
@@ -327,9 +337,9 @@ func (s *Store) listComments(reviewID int64) ([]Comment, error) {
 func (s *Store) AddComment(c Comment) (*Comment, error) {
 	now := time.Now().UTC().Format(timeFmt)
 	res, err := s.db.Exec(
-		`INSERT INTO comments (review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at)
-		 VALUES (?,?,?,?,?,?,?,?,?)`,
-		c.ReviewID, c.FilePath, c.StartLine, c.EndLine, c.Snippet, c.Type, c.Body, now, now)
+		`INSERT INTO comments (review_id, file_path, start_line, end_line, snippet, type, body, author, created_at, updated_at)
+		 VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		c.ReviewID, c.FilePath, c.StartLine, c.EndLine, c.Snippet, c.Type, c.Body, c.Author, now, now)
 	if err != nil {
 		return nil, err
 	}
@@ -376,9 +386,9 @@ func (s *Store) getComment(id int64) (*Comment, error) {
 	var c Comment
 	var created, updated string
 	err := s.db.QueryRow(
-		`SELECT id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved
+		`SELECT id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved, author
 		 FROM comments WHERE id=?`, id).
-		Scan(&c.ID, &c.ReviewID, &c.FilePath, &c.StartLine, &c.EndLine, &c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved)
+		Scan(&c.ID, &c.ReviewID, &c.FilePath, &c.StartLine, &c.EndLine, &c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved, &c.Author)
 	if err != nil {
 		return nil, err
 	}
@@ -399,7 +409,7 @@ func scanReplies(rows *sql.Rows) ([]Reply, error) {
 	for rows.Next() {
 		var rep Reply
 		var created, updated string
-		if err := rows.Scan(&rep.ID, &rep.CommentID, &rep.Body, &created, &updated); err != nil {
+		if err := rows.Scan(&rep.ID, &rep.CommentID, &rep.Body, &created, &updated, &rep.Author); err != nil {
 			return nil, err
 		}
 		rep.CreatedAt, _ = time.Parse(timeFmt, created)
@@ -413,7 +423,7 @@ func scanReplies(rows *sql.Rows) ([]Reply, error) {
 // comments), ordered so GetReview can bucket them under each comment.
 func (s *Store) listReplies(reviewID int64) ([]Reply, error) {
 	rows, err := s.db.Query(
-		`SELECT r.id, r.comment_id, r.body, r.created_at, r.updated_at
+		`SELECT r.id, r.comment_id, r.body, r.created_at, r.updated_at, r.author
 		 FROM replies r JOIN comments c ON c.id = r.comment_id
 		 WHERE c.review_id=? ORDER BY r.comment_id, r.created_at, r.id`, reviewID)
 	if err != nil {
@@ -425,7 +435,7 @@ func (s *Store) listReplies(reviewID int64) ([]Reply, error) {
 // getReplies returns the replies on a single comment, oldest first.
 func (s *Store) getReplies(commentID int64) ([]Reply, error) {
 	rows, err := s.db.Query(
-		`SELECT id, comment_id, body, created_at, updated_at
+		`SELECT id, comment_id, body, created_at, updated_at, author
 		 FROM replies WHERE comment_id=? ORDER BY created_at, id`, commentID)
 	if err != nil {
 		return nil, err
@@ -437,8 +447,8 @@ func (s *Store) getReply(id int64) (*Reply, error) {
 	var rep Reply
 	var created, updated string
 	err := s.db.QueryRow(
-		`SELECT id, comment_id, body, created_at, updated_at FROM replies WHERE id=?`, id).
-		Scan(&rep.ID, &rep.CommentID, &rep.Body, &created, &updated)
+		`SELECT id, comment_id, body, created_at, updated_at, author FROM replies WHERE id=?`, id).
+		Scan(&rep.ID, &rep.CommentID, &rep.Body, &created, &updated, &rep.Author)
 	if err != nil {
 		return nil, err
 	}
@@ -449,15 +459,15 @@ func (s *Store) getReply(id int64) (*Reply, error) {
 
 // AddReply appends a reply to a comment and returns it along with the id of the
 // review it belongs to, so the caller can publish an SSE ping for that review.
-func (s *Store) AddReply(commentID int64, body string) (*Reply, int64, error) {
+func (s *Store) AddReply(commentID int64, body, author string) (*Reply, int64, error) {
 	var reviewID int64
 	if err := s.db.QueryRow(`SELECT review_id FROM comments WHERE id=?`, commentID).Scan(&reviewID); err != nil {
 		return nil, 0, err
 	}
 	now := time.Now().UTC().Format(timeFmt)
 	res, err := s.db.Exec(
-		`INSERT INTO replies (comment_id, body, created_at, updated_at) VALUES (?,?,?,?)`,
-		commentID, body, now, now)
+		`INSERT INTO replies (comment_id, body, author, created_at, updated_at) VALUES (?,?,?,?,?)`,
+		commentID, body, author, now, now)
 	if err != nil {
 		return nil, 0, err
 	}

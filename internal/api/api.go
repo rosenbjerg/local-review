@@ -391,6 +391,7 @@ type addCommentReq struct {
 	Snippet   string `json:"snippet"`
 	Type      string `json:"type"`
 	Body      string `json:"body"`
+	Author    string `json:"author"`
 }
 
 func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
@@ -409,6 +410,11 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 	if req.Type == "" {
 		req.Type = "suggestion"
 	}
+	if req.Author == "" {
+		// An omitted author means an API client that doesn't set the field —
+		// in practice the coding agent. The browser app sends "reviewer".
+		req.Author = "agent"
+	}
 	c, err := s.Store.AddComment(store.Comment{
 		ReviewID:  id,
 		FilePath:  req.FilePath,
@@ -417,6 +423,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		Snippet:   req.Snippet,
 		Type:      req.Type,
 		Body:      req.Body,
+		Author:    req.Author,
 	})
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)
@@ -497,7 +504,8 @@ func (s *Server) handleSetResolved(w http.ResponseWriter, r *http.Request) {
 // --- replies ---
 
 type replyReq struct {
-	Body string `json:"body"`
+	Body   string `json:"body"`
+	Author string `json:"author"`
 }
 
 func (s *Server) handleAddReply(w http.ResponseWriter, r *http.Request) {
@@ -510,7 +518,12 @@ func (s *Server) handleAddReply(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, err)
 		return
 	}
-	rep, reviewID, err := s.Store.AddReply(commentID, req.Body)
+	if req.Author == "" {
+		// An omitted author means an API client that doesn't set the field —
+		// in practice the coding agent. The browser app sends "reviewer".
+		req.Author = "agent"
+	}
+	rep, reviewID, err := s.Store.AddReply(commentID, req.Body, req.Author)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)
 		return
