@@ -74,7 +74,10 @@ jobs:
             range=""
             echo "no previous tag; using full history"
           fi
-          commits=$(git log --no-merges --pretty=format:'- %s' $range)
+          # Keep only commits that touched the application (mirrors the
+          # push-trigger paths above) so doc/config commits don't appear.
+          commits=$(git log --no-merges --pretty=format:'- %s' $range \
+            -- main.go internal go.mod go.sum web)
           {
             echo "## Changes"
             echo
