@@ -96,6 +96,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/reviews/{id}/comments", s.handleAddComment)
 	mux.HandleFunc("PATCH /api/comments/{id}", s.handleUpdateComment)
 	mux.HandleFunc("DELETE /api/comments/{id}", s.handleDeleteComment)
+	mux.HandleFunc("POST /api/comments/{id}/resolved", s.handleSetResolved)
 
 	mux.HandleFunc("POST /api/comments/{id}/replies", s.handleAddReply)
 	mux.HandleFunc("PATCH /api/replies/{id}", s.handleUpdateReply)
@@ -465,6 +466,30 @@ func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusInternalServerError, err)
 		return
 	}
+	s.hub.publish(reviewID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type setResolvedReq struct {
+	Resolved bool `json:"resolved"`
+}
+
+func (s *Server) handleSetResolved(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var req setResolvedReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, err)
+		return
+	}
+	reviewID, err := s.Store.SetCommentResolved(id, req.Resolved)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, err)
+		return
+	}
+	_ = s.Store.Touch(reviewID)
 	s.hub.publish(reviewID)
 	w.WriteHeader(http.StatusNoContent)
 }

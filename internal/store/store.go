@@ -35,6 +35,7 @@ type Comment struct {
 	Snippet   string    `json:"snippet"`
 	Type      string    `json:"type"` // bug | suggestion | question | nit
 	Body      string    `json:"body"`
+	Resolved  bool      `json:"resolved"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 	Replies   []Reply   `json:"replies"`
@@ -95,6 +96,7 @@ CREATE TABLE IF NOT EXISTS comments (
   snippet    TEXT NOT NULL DEFAULT '',
   type       TEXT NOT NULL DEFAULT 'suggestion',
   body       TEXT NOT NULL DEFAULT '',
+  resolved   INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -114,6 +116,41 @@ CREATE TABLE IF NOT EXISTS reviewed_files (
   PRIMARY KEY (review_id, file_path)
 );
 `)
+	if err != nil {
+		return err
+	}
+	// `resolved` was added after the initial schema. CREATE TABLE IF NOT EXISTS
+	// won't backfill it onto a comments table created before it existed, so add
+	// it explicitly for older databases (no-op once present).
+	return s.ensureColumn("comments", "resolved", "resolved INTEGER NOT NULL DEFAULT 0")
+}
+
+// ensureColumn adds a column to a table if it is not already present, making a
+// new column idempotent across upgrades (SQLite has no ADD COLUMN IF NOT EXISTS).
+// table/column/ddl are trusted code constants, not user input.
+func (s *Store) ensureColumn(table, column, ddl string) error {
+	rows, err := s.db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			cid, notnull, pk int
+			name, ctype      string
+			dflt             sql.NullString
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return err
+		}
+		if name == column {
+			return nil // already present
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	_, err = s.db.Exec("ALTER TABLE " + table + " ADD COLUMN " + ddl)
 	return err
 }
 
@@ -265,7 +302,7 @@ func (s *Store) SetStatus(id int64, status string) error {
 
 func (s *Store) listComments(reviewID int64) ([]Comment, error) {
 	rows, err := s.db.Query(
-		`SELECT id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at
+		`SELECT id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved
 		 FROM comments WHERE review_id=? ORDER BY file_path, start_line`, reviewID)
 	if err != nil {
 		return nil, err
@@ -276,7 +313,7 @@ func (s *Store) listComments(reviewID int64) ([]Comment, error) {
 		var c Comment
 		var created, updated string
 		if err := rows.Scan(&c.ID, &c.ReviewID, &c.FilePath, &c.StartLine, &c.EndLine,
-			&c.Snippet, &c.Type, &c.Body, &created, &updated); err != nil {
+			&c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved); err != nil {
 			return nil, err
 		}
 		c.CreatedAt, _ = time.Parse(timeFmt, created)
@@ -311,6 +348,17 @@ func (s *Store) UpdateComment(id int64, body, ctype string, start, end int) (*Co
 	return s.getComment(id)
 }
 
+// SetCommentResolved marks a comment (thread root) resolved or reopened and
+// returns the id of its review so the caller can publish an SSE ping.
+func (s *Store) SetCommentResolved(id int64, resolved bool) (int64, error) {
+	now := time.Now().UTC().Format(timeFmt)
+	if _, err := s.db.Exec(
+		`UPDATE comments SET resolved=?, updated_at=? WHERE id=?`, resolved, now, id); err != nil {
+		return 0, err
+	}
+	return s.reviewIDForComment(id)
+}
+
 // DeleteComment removes a comment and returns the id of the review it belonged
 // to, so the caller can notify subscribers of that review after the row is gone.
 func (s *Store) DeleteComment(id int64) (int64, error) {
@@ -328,9 +376,9 @@ func (s *Store) getComment(id int64) (*Comment, error) {
 	var c Comment
 	var created, updated string
 	err := s.db.QueryRow(
-		`SELECT id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at
+		`SELECT id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved
 		 FROM comments WHERE id=?`, id).
-		Scan(&c.ID, &c.ReviewID, &c.FilePath, &c.StartLine, &c.EndLine, &c.Snippet, &c.Type, &c.Body, &created, &updated)
+		Scan(&c.ID, &c.ReviewID, &c.FilePath, &c.StartLine, &c.EndLine, &c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved)
 	if err != nil {
 		return nil, err
 	}
