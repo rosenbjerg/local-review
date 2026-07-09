@@ -3,6 +3,15 @@ name: release
 on:
   push:
     branches: [main]
+    # Only cut a release when the actual application changes — server (Go)
+    # or frontend. Doc/config-only pushes (README, SPEC, start.sh, workflow
+    # tweaks, etc.) don't produce a new binary, so they shouldn't release.
+    paths:
+      - 'main.go'
+      - 'internal/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'web/**'
 
 # Needed to create tags/releases and upload assets.
 permissions:
