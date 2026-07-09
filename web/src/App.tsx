@@ -157,17 +157,19 @@ export default function App() {
       });
   }, [repo]);
 
-  // Re-pull the review's comments and reviewed-files when the tab regains
-  // focus, so changes made in another tab open on the same review show up.
-  // Coarse last-writer-wins sync; the diff isn't refetched (HEAD is pinned per
-  // review, so only comment/reviewed state can drift between tabs).
+  // Live-sync this review across tabs. The server pushes a "changed" ping over
+  // SSE whenever another tab mutates a comment or reviewed-file; we refetch the
+  // whole review (backend is source of truth — the diff isn't refetched since
+  // HEAD is pinned per review). Focus/visibility refetch stays as a catch-up for
+  // when the stream is down (sleep, server restart, dropped ping), gated on the
+  // stream not being OPEN so a healthy connection doesn't double-fetch.
   useEffect(() => {
     if (!review) return;
     const id = review.id;
     let cancelled = false;
     let inFlight = false;
     async function refresh() {
-      if (inFlight || document.visibilityState !== "visible") return;
+      if (inFlight || cancelled || document.visibilityState !== "visible") return;
       inFlight = true;
       try {
         const rev = await api.getReview(id);
@@ -182,12 +184,21 @@ export default function App() {
         inFlight = false;
       }
     }
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
+    const es = new EventSource(`/api/reviews/${id}/events`);
+    es.onmessage = () => refresh();
+    // onerror is left to EventSource's own auto-reconnect; the fallback covers
+    // the gap while it's down.
+    function onFocus() {
+      if (es.readyState === EventSource.OPEN) return; // stream live — it'll push
+      refresh();
+    }
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
     return () => {
       cancelled = true;
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", refresh);
+      es.close();
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
     };
   }, [review?.id]);
 
