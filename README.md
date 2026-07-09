@@ -31,9 +31,9 @@ directly under the root), then a head branch (base defaults to the merge-base wi
 `main`/`master`), review the diff, click/drag line numbers to comment, then
 **Export** to preview, copy, or download the markdown.
 
-The SQLite DB lives next to the binary (`local-review.db`), keyed by repo path, so
-one install serves many repos and resumes each independently; draft reviews are
-pruned after `-retention-days` (default 30).
+The SQLite DB lives in `~/.local-review/` by default (override with `-data-dir`),
+keyed by repo path, so one install serves many repos and resumes each
+independently; draft reviews are pruned after `-retention-days` (default 30).
 
 ### Flags
 

@@ -22,8 +22,8 @@ A local, single-user tool for reviewing a git branch (or specific commits on a b
 - **Git access by shelling out** to the real `git` binary (`os/exec`) — correct on renames, submodules, `.gitattributes` diff filters; less code than go-git.
 - **Backend is source of truth** for review state; the React app is a cache over it.
 - **SQLite** via `modernc.org/sqlite` (pure Go, no cgo). WAL mode enabled.
-  - DB file lives **next to the binary**, resolved via `os.Executable()` (not cwd), so one central DB serves every repo regardless of launch directory.
-  - If the binary's directory isn't writable, fall back to an app data dir.
+  - DB file lives in a **data directory**, `~/.local-review/` by default and overridable with `-data-dir`, so one central DB serves every repo regardless of launch directory.
+  - The data directory is created on startup (a leading `~` is expanded, relative paths are made absolute).
 - Rows are keyed by absolute `repo_path`, so the tool can serve many repos from one DB.
 
 ---

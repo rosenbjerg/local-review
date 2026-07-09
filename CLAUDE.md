@@ -71,8 +71,9 @@ web/src/
 - **Diff base** defaults to the main-branch *name* (stored on the review); the
   `/api/diff` handler resolves it to `merge-base(base, head)` at query time, so
   the review shows only what the branch introduces.
-- **DB lives next to the binary** (`os.Executable()`), falling back to an app
-  data dir if that's not writable. One DB serves many repos, keyed by abs path.
+- **DB lives in `~/.local-review/`** by default; override the directory with the
+  `-data-dir` flag (a leading `~` is expanded, relative paths are made absolute).
+  One DB serves many repos, keyed by abs path.
 - Reviews resume by `(repo_path, base_ref, head_ref)` regardless of status, so
   exporting (which sets status `exported`) never orphans an in-progress review.
 - `reviewed_files` persists per-file "reviewed" state; keyed by path within a

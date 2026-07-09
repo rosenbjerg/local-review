@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"local-review/internal/api"
@@ -27,6 +28,7 @@ func main() {
 		port      = flag.Int("port", 7777, "port to listen on")
 		retention = flag.Int("retention-days", 30, "delete draft reviews older than this many days on startup")
 		noOpen    = flag.Bool("no-open", false, "do not open the browser on start")
+		dataDir   = flag.String("data-dir", "", "directory for local-review's data (SQLite DB); defaults to ~/.local-review")
 	)
 	flag.Parse()
 
@@ -38,7 +40,10 @@ func main() {
 		log.Fatalf("%s is not a directory", absRoot)
 	}
 
-	dbPath := resolveDBPath()
+	dbPath, err := resolveDBPath(*dataDir)
+	if err != nil {
+		log.Fatal(err)
+	}
 	st, err := store.Open(dbPath)
 	if err != nil {
 		log.Fatalf("open store (%s): %v", dbPath, err)
@@ -69,34 +74,37 @@ func main() {
 	}
 }
 
-// resolveDBPath places the DB next to the binary, falling back to an app data
-// dir if that directory is not writable.
-func resolveDBPath() string {
-	if exe, err := os.Executable(); err == nil {
-		dir := filepath.Dir(exe)
-		candidate := filepath.Join(dir, "local-review.db")
-		if writable(dir) {
-			return candidate
+// resolveDBPath returns the SQLite DB path inside the data directory, creating
+// the directory if needed. An empty dir defaults to ~/.local-review; a leading
+// ~ is expanded, and the path is made absolute.
+func resolveDBPath(dir string) (string, error) {
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("resolve home directory: %w", err)
 		}
+		dir = filepath.Join(home, ".local-review")
+	} else {
+		dir = expandHome(dir)
 	}
-	if data, err := os.UserConfigDir(); err == nil {
-		dir := filepath.Join(data, "local-review")
-		if err := os.MkdirAll(dir, 0o755); err == nil {
-			return filepath.Join(dir, "local-review.db")
-		}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("resolve data dir %q: %w", dir, err)
 	}
-	return "local-review.db"
+	if err := os.MkdirAll(abs, 0o755); err != nil {
+		return "", fmt.Errorf("create data dir %s: %w", abs, err)
+	}
+	return filepath.Join(abs, "local-review.db"), nil
 }
 
-func writable(dir string) bool {
-	f, err := os.CreateTemp(dir, ".write-test-*")
-	if err != nil {
-		return false
+// expandHome resolves a leading ~ (or ~/…) to the user's home directory.
+func expandHome(p string) string {
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, strings.TrimPrefix(p, "~"))
+		}
 	}
-	name := f.Name()
-	f.Close()
-	os.Remove(name)
-	return true
+	return p
 }
 
 func mountStatic(mux *http.ServeMux) {
