@@ -40,6 +40,7 @@ main.go                  server: embeds web/dist, resolves DB path, prunes draft
 internal/git/git.go      git service (shells out to `git`): branches, merge-base, diff parser, file content
 internal/store/store.go  SQLite (modernc.org/sqlite, WAL): reviews, comments, reviewed_files
 internal/api/api.go      HTTP handlers (net/http, Go 1.22+ method+path routing)
+internal/api/events.go   in-memory SSE hub: per-review subscriber channels, publish/prune
 internal/export/export.go  renders a review → canonical markdown
 web/src/
   App.tsx                top-level state, repo/branch pickers, 3-column resizable layout, all handlers
@@ -78,6 +79,16 @@ web/src/
   exporting (which sets status `exported`) never orphans an in-progress review.
 - `reviewed_files` persists per-file "reviewed" state; keyed by path within a
   review (does NOT reset when a file changes in a later commit — known limitation).
+- **Live multi-tab sync** via SSE: `GET /api/reviews/{id}/events` streams a
+  `data: changed` ping whenever a comment or reviewed-file of that review is
+  mutated (the four mutation handlers call `hub.publish`). The client refetches
+  the whole review on a ping (ping-and-refetch — backend stays source of truth,
+  no per-event payloads). The hub (`internal/api/events.go`) is in-memory with
+  non-blocking coalescing sends, so a stalled tab never blocks a handler; empty
+  review entries are pruned on the last unsubscribe. A 25s keepalive comment
+  keeps the stream warm and turns a half-open connection into a write error so
+  it unsubscribes. The frontend keeps a focus/visibility refetch as a fallback
+  for the reconnect gap, gated on the stream not being `OPEN`.
 - **Syntax highlighting** (`highlight.ts`): Shiki with the **JS regex engine**
   (not oniguruma — avoids a browser wasm-load failure) and `github-dark`. All
   ~235 grammars are available, each lazily fetched per file. Extensions resolve

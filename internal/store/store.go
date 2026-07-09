@@ -277,9 +277,17 @@ func (s *Store) UpdateComment(id int64, body, ctype string, start, end int) (*Co
 	return s.getComment(id)
 }
 
-func (s *Store) DeleteComment(id int64) error {
-	_, err := s.db.Exec(`DELETE FROM comments WHERE id=?`, id)
-	return err
+// DeleteComment removes a comment and returns the id of the review it belonged
+// to, so the caller can notify subscribers of that review after the row is gone.
+func (s *Store) DeleteComment(id int64) (int64, error) {
+	var reviewID int64
+	if err := s.db.QueryRow(`SELECT review_id FROM comments WHERE id=?`, id).Scan(&reviewID); err != nil {
+		return 0, err
+	}
+	if _, err := s.db.Exec(`DELETE FROM comments WHERE id=?`, id); err != nil {
+		return 0, err
+	}
+	return reviewID, nil
 }
 
 func (s *Store) getComment(id int64) (*Comment, error) {
