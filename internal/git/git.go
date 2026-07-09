@@ -133,6 +133,12 @@ func parseDiff(text string) []FileDiff {
 				cur.Hunks = append(cur.Hunks, *hunk)
 				hunk = nil
 			}
+			if cur.Hunks == nil {
+				// Binary files, pure renames, and mode-only changes carry no
+				// hunks. Emit an empty slice (JSON []) rather than a nil slice
+				// (JSON null) so the frontend's hunks[] contract holds.
+				cur.Hunks = []Hunk{}
+			}
 			files = append(files, *cur)
 		}
 	}
