@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type 
 import { api } from "../api";
 import { langForPath, tokenize, type Token } from "../highlight";
 import type { Comment, CommentType, FileDiff, LineKind } from "../types";
+import { effectiveLines } from "../types";
 import { CommentComposer } from "./CommentComposer";
 import { CommentThread } from "./CommentThread";
 
@@ -166,13 +167,15 @@ export function DiffView({
     return s;
   }, [file]);
 
-  // Comments grouped by the line they anchor to (their endLine).
+  // Comments grouped by the line they currently anchor to (the effective end
+  // line — the relocated line for moved comments, else their stored endLine).
   const commentsByEndLine = useMemo(() => {
     const m = new Map<number, Comment[]>();
     for (const c of comments) {
-      const arr = m.get(c.endLine) ?? [];
+      const end = effectiveLines(c).end;
+      const arr = m.get(end) ?? [];
       arr.push(c);
-      m.set(c.endLine, arr);
+      m.set(end, arr);
     }
     return m;
   }, [comments]);
@@ -180,7 +183,8 @@ export function DiffView({
   const commentedLines = useMemo(() => {
     const s = new Set<number>();
     for (const c of comments) {
-      for (let n = c.startLine; n <= c.endLine; n++) s.add(n);
+      const { start, end } = effectiveLines(c);
+      for (let n = start; n <= end; n++) s.add(n);
     }
     return s;
   }, [comments]);

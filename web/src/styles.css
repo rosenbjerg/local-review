@@ -597,19 +597,36 @@ select {
   border-color: #238636;
   text-transform: none;
 }
+/* Anchor-drift badges: the commented code moved (relocated to a new line) or
+   went outdated (snippet no longer at head). */
+.badge-moved {
+  color: #58a6ff;
+  border-color: #1f6feb;
+  text-transform: none;
+}
+.badge-outdated {
+  color: #d29922;
+  border-color: #9e6a03;
+  text-transform: none;
+}
 
-/* A resolved thread is dimmed but still visible/actionable; hover restores it. */
-.thread-resolved {
+/* A resolved or outdated thread is dimmed but still visible/actionable; hover
+   restores it. */
+.thread-resolved,
+.thread-outdated {
   opacity: 0.55;
   transition: opacity 0.15s ease;
 }
-.thread-resolved:hover {
+.thread-resolved:hover,
+.thread-outdated:hover {
   opacity: 1;
 }
-.comment-nav-resolved {
+.comment-nav-resolved,
+.comment-nav-outdated {
   opacity: 0.55;
 }
-.comment-nav-resolved:hover {
+.comment-nav-resolved:hover,
+.comment-nav-outdated:hover {
   opacity: 1;
 }
 

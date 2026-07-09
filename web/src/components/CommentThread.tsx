@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { Comment, CommentType, Reply } from "../types";
+import { lineLabel } from "../types";
 import { CommentComposer } from "./CommentComposer";
+import { AnchorBadge } from "./AnchorBadge";
 
 interface Props {
   comment: Comment;
@@ -10,10 +12,6 @@ interface Props {
   onUpdateReply: (commentId: number, replyId: number, body: string) => Promise<boolean>;
   onDeleteReply: (commentId: number, replyId: number) => Promise<void>;
   onResolve: (id: number, resolved: boolean) => void;
-}
-
-function lineLabel(c: Comment) {
-  return c.endLine > c.startLine ? `L${c.startLine}–${c.endLine}` : `L${c.startLine}`;
 }
 
 // A single reply within a thread. Replies carry no type or anchor — just body —
@@ -73,12 +71,18 @@ export function CommentThread({
   const [replying, setReplying] = useState(false);
   const replies = comment.replies ?? [];
 
+  const outdated = comment.anchorStatus === "outdated";
+
   return (
-    <div className={`thread${comment.resolved ? " thread-resolved" : ""}`} id={`comment-${comment.id}`}>
+    <div
+      className={`thread${comment.resolved ? " thread-resolved" : ""}${outdated ? " thread-outdated" : ""}`}
+      id={`comment-${comment.id}`}
+    >
       <div className="thread-meta">
         <span className="muted">#{comment.id}</span>
         <span className={`badge badge-${comment.type}`}>{comment.type}</span>
         <span className="muted">{lineLabel(comment)}</span>
+        <AnchorBadge comment={comment} />
         <span className="muted">{comment.author}</span>
         {comment.resolved && <span className="badge badge-resolved">✓ resolved</span>}
         <span className="spacer" />

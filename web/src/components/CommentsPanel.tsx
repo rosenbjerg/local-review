@@ -1,12 +1,10 @@
 import type { Comment } from "../types";
+import { lineLabel } from "../types";
+import { AnchorBadge } from "./AnchorBadge";
 
 interface Props {
   comments: Comment[];
   onJump: (id: number) => void;
-}
-
-function lineLabel(c: Comment) {
-  return c.endLine > c.startLine ? `L${c.startLine}–${c.endLine}` : `L${c.startLine}`;
 }
 
 export function CommentsPanel({ comments, onJump }: Props) {
@@ -33,13 +31,16 @@ export function CommentsPanel({ comments, onJump }: Props) {
           {byFile.get(file)!.map((c) => (
             <button
               key={c.id}
-              className={`comment-nav${c.resolved ? " comment-nav-resolved" : ""}`}
+              className={`comment-nav${c.resolved ? " comment-nav-resolved" : ""}${
+                c.anchorStatus === "outdated" ? " comment-nav-outdated" : ""
+              }`}
               onClick={() => onJump(c.id)}
             >
               <div className="comment-meta">
                 <span className="muted">#{c.id}</span>
                 <span className={`badge badge-${c.type}`}>{c.type}</span>
                 <span className="muted">{lineLabel(c)}</span>
+                <AnchorBadge comment={c} compact />
                 {c.resolved && <span className="muted">✓</span>}
                 {(c.replies?.length ?? 0) > 0 && (
                   <span className="muted">💬 {c.replies.length}</span>
