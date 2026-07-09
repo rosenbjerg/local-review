@@ -9,10 +9,33 @@ import type { Branch, Comment, CommentType, FileDiff, Review } from "./types";
 
 const LS_LEFT = "lr.leftWidth";
 const LS_RIGHT = "lr.rightWidth";
+const LS_BASE_BY_REPO = "lr.baseByRepo";
 
 function readWidth(key: string, def: number): number {
   const v = Number(localStorage.getItem(key));
   return Number.isFinite(v) && v > 0 ? v : def;
+}
+
+// Remembered base branch per repo (empty string = auto). Branch names differ
+// across repos, so the preference is keyed by repo path.
+function readBasePref(repo: string): string {
+  try {
+    const map = JSON.parse(localStorage.getItem(LS_BASE_BY_REPO) || "{}");
+    const v = map[repo];
+    return typeof v === "string" ? v : "";
+  } catch {
+    return "";
+  }
+}
+
+function writeBasePref(repo: string, base: string): void {
+  try {
+    const map = JSON.parse(localStorage.getItem(LS_BASE_BY_REPO) || "{}");
+    map[repo] = base;
+    localStorage.setItem(LS_BASE_BY_REPO, JSON.stringify(map));
+  } catch {
+    // storage unavailable/full — preference is best-effort
+  }
 }
 
 function clamp(n: number, min: number, max: number): number {
@@ -120,6 +143,12 @@ export default function App() {
         setBranches(r.branches);
         const current = r.branches.find((b) => b.isCurrent);
         setHead(current?.name ?? r.branches[0]?.name ?? "");
+        // Restore the last base chosen for this repo, if it still exists
+        // (auto/"" is always valid).
+        const savedBase = readBasePref(repo);
+        if (savedBase === "" || r.branches.some((b) => b.name === savedBase)) {
+          setBase(savedBase);
+        }
       })
       .catch((e) => {
         if (reqSeq.current === seq) setError((e as Error).message);
@@ -280,7 +309,14 @@ export default function App() {
         </label>
         <label>
           base
-          <select value={base} onChange={(e) => setBase(e.target.value)} disabled={loading}>
+          <select
+            value={base}
+            onChange={(e) => {
+              setBase(e.target.value);
+              writeBasePref(repo, e.target.value);
+            }}
+            disabled={loading}
+          >
             <option value="">
               auto{mainBranch ? ` (${mainBranch})` : ""}
             </option>
