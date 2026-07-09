@@ -261,6 +261,7 @@ export default function App() {
   }
 
   const shortSha = review?.headSha.slice(0, 7);
+  const mainBranch = branches.find((b) => b.isMain)?.name;
 
   return (
     <div className="app">
@@ -280,7 +281,9 @@ export default function App() {
         <label>
           base
           <select value={base} onChange={(e) => setBase(e.target.value)} disabled={loading}>
-            <option value="">auto (merge-base)</option>
+            <option value="">
+              auto{mainBranch ? ` (${mainBranch})` : ""}
+            </option>
             {branches.map((b) => (
               <option key={b.name} value={b.name}>
                 {b.name}
