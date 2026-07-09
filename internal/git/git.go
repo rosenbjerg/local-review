@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -61,7 +62,33 @@ func (r *Repo) ListBranches() ([]Branch, error) {
 		}
 		branches = append(branches, Branch{Name: name, IsCurrent: current, IsMain: name == main})
 	}
+	sortBranches(branches)
 	return branches, sc.Err()
+}
+
+// pinnedBranches are long-lived trunk/development/environment branches that
+// make useful review bases; they sort to the top (in this order) ahead of the
+// alphabetically-ordered feature branches.
+var pinnedBranches = []string{"main", "master", "develop", "dev", "staging"}
+
+// sortBranches floats the pinned base branches to the top in pinnedBranches
+// order, leaving the rest sorted alphabetically.
+func sortBranches(branches []Branch) {
+	rank := func(name string) int {
+		for i, p := range pinnedBranches {
+			if name == p {
+				return i
+			}
+		}
+		return len(pinnedBranches)
+	}
+	sort.SliceStable(branches, func(i, j int) bool {
+		ri, rj := rank(branches[i].Name), rank(branches[j].Name)
+		if ri != rj {
+			return ri < rj
+		}
+		return branches[i].Name < branches[j].Name
+	})
 }
 
 // MainBranch returns "main" if it exists, else "master" if it exists, else "main".
