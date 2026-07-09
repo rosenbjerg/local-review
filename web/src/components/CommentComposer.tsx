@@ -7,6 +7,10 @@ interface Props {
   onSubmit: (body: string, type: CommentType) => void;
   onCancel: () => void;
   submitLabel?: string;
+  // Replies inherit their type from the thread root, so their composer hides the
+  // type picker (the type value is emitted but ignored by the caller).
+  hideType?: boolean;
+  placeholder?: string;
 }
 
 export function CommentComposer({
@@ -15,25 +19,29 @@ export function CommentComposer({
   onSubmit,
   onCancel,
   submitLabel = "Add comment",
+  hideType = false,
+  placeholder = "Leave a comment for the agent…",
 }: Props) {
   const [body, setBody] = useState(initialBody);
   const [type, setType] = useState<CommentType>(initialType);
 
   return (
     <div className="composer">
-      <div className="composer-row">
-        <select value={type} onChange={(e) => setType(e.target.value as CommentType)}>
-          {COMMENT_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      </div>
+      {!hideType && (
+        <div className="composer-row">
+          <select value={type} onChange={(e) => setType(e.target.value as CommentType)}>
+            {COMMENT_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <textarea
         autoFocus
         value={body}
-        placeholder="Leave a comment for the agent…"
+        placeholder={placeholder}
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={(e) => {
           if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && body.trim()) {

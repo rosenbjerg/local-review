@@ -1,4 +1,4 @@
-import type { Branch, Comment, CommentType, DiffResponse, Review } from "./types";
+import type { Branch, Comment, CommentType, DiffResponse, Reply, Review } from "./types";
 
 async function req<T>(url: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -73,6 +73,20 @@ export const api = {
     }),
 
   deleteComment: (id: number) => req<void>(`/api/comments/${id}`, { method: "DELETE" }),
+
+  addReply: (commentId: number, body: string) =>
+    req<Reply>(`/api/comments/${commentId}/replies`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    }),
+
+  updateReply: (id: number, body: string) =>
+    req<Reply>(`/api/replies/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ body }),
+    }),
+
+  deleteReply: (id: number) => req<void>(`/api/replies/${id}`, { method: "DELETE" }),
 
   setReviewed: (reviewId: number, filePath: string, reviewed: boolean) =>
     req<void>(`/api/reviews/${reviewId}/reviewed`, {

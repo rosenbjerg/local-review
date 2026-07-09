@@ -292,6 +292,58 @@ export default function App() {
     }
   }
 
+  // Reply handlers mutate the nested `replies` array of the parent comment. The
+  // commentId is threaded through (rather than looked up from the reply) so the
+  // state update stays a single map over comments.
+  async function handleAddReply(commentId: number, body: string): Promise<boolean> {
+    try {
+      const rep = await api.addReply(commentId, body);
+      setComments((cs) =>
+        cs.map((c) => (c.id === commentId ? { ...c, replies: [...(c.replies ?? []), rep] } : c))
+      );
+      return true;
+    } catch (e) {
+      setError((e as Error).message);
+      return false;
+    }
+  }
+
+  async function handleUpdateReply(
+    commentId: number,
+    replyId: number,
+    body: string
+  ): Promise<boolean> {
+    try {
+      const rep = await api.updateReply(replyId, body);
+      setComments((cs) =>
+        cs.map((c) =>
+          c.id === commentId
+            ? { ...c, replies: (c.replies ?? []).map((r) => (r.id === replyId ? rep : r)) }
+            : c
+        )
+      );
+      return true;
+    } catch (e) {
+      setError((e as Error).message);
+      return false;
+    }
+  }
+
+  async function handleDeleteReply(commentId: number, replyId: number) {
+    try {
+      await api.deleteReply(replyId);
+      setComments((cs) =>
+        cs.map((c) =>
+          c.id === commentId
+            ? { ...c, replies: (c.replies ?? []).filter((r) => r.id !== replyId) }
+            : c
+        )
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   function flashComment(id: number): boolean {
     const el = document.getElementById(`comment-${id}`);
     if (!el) return false;
@@ -491,6 +543,9 @@ export default function App() {
                     onAddComment={handleAddComment}
                     onUpdateComment={handleUpdate}
                     onDeleteComment={handleDelete}
+                    onAddReply={handleAddReply}
+                    onUpdateReply={handleUpdateReply}
+                    onDeleteReply={handleDeleteReply}
                     reviewed={reviewedFiles.has(path)}
                     onToggleReviewed={(r) => toggleReviewed(path, r)}
                     expandTarget={expandTarget}

@@ -451,6 +451,31 @@ select {
   white-space: pre-wrap;
   font-size: 13px;
 }
+/* Replies nested under a thread's root comment */
+.thread-replies {
+  margin-top: 6px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.reply-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.reply-body {
+  white-space: pre-wrap;
+  font-size: 13px;
+}
+.reply-add {
+  margin-top: 6px;
+}
+.thread-reply-composer {
+  margin-top: 6px;
+}
 .thread-flash {
   animation: flash 1.2s ease-out;
 }

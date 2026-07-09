@@ -29,6 +29,14 @@ export type CommentType = "bug" | "suggestion" | "question" | "nit";
 
 export const COMMENT_TYPES: CommentType[] = ["bug", "suggestion", "question", "nit"];
 
+export interface Reply {
+  id: number;
+  commentId: number;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Comment {
   id: number;
   reviewId: number;
@@ -40,6 +48,7 @@ export interface Comment {
   body: string;
   createdAt: string;
   updatedAt: string;
+  replies: Reply[];
 }
 
 export interface Review {

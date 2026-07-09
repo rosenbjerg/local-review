@@ -38,7 +38,7 @@ a throwaway git repo; verify pure frontend logic with a standalone node script.
 ```
 main.go                  server: embeds web/dist, resolves DB path, prunes drafts, opens browser
 internal/git/git.go      git service (shells out to `git`): branches, merge-base, diff parser, file content
-internal/store/store.go  SQLite (modernc.org/sqlite, WAL): reviews, comments, reviewed_files
+internal/store/store.go  SQLite (modernc.org/sqlite, WAL): reviews, comments, replies, reviewed_files
 internal/api/api.go      HTTP handlers (net/http, Go 1.22+ method+path routing)
 internal/api/events.go   in-memory SSE hub: per-review subscriber channels, publish/prune
 internal/export/export.go  renders a review → canonical markdown
@@ -51,7 +51,7 @@ web/src/
     DiffView.tsx         center: per-file diff, syntax highlight, inline threads/composer,
                          drag-select ranges, Changed/Full toggle, auto-collapse large files
     LazyFile.tsx         viewport lazy-mount wrapper (IntersectionObserver) + scroll anchor
-    CommentThread.tsx    a single inline comment (edit/delete)
+    CommentThread.tsx    a comment thread: root comment (edit/delete) + replies + reply composer
     CommentsPanel.tsx    right pane: cross-file comment overview, jump-to
     CommentComposer.tsx  type select + body textarea (reused for new/edit)
     ExportModal.tsx      rendered-markdown preview (markdown-it) + Raw toggle + copy/download
@@ -69,6 +69,11 @@ web/src/
   via the API. Discrete actions (add/delete/toggle) save immediately.
 - **Comments anchor to the new side** (HEAD path + line) and store a captured
   `snippet` so feedback survives line drift.
+- **Threads are two levels.** A comment is a thread root; the `replies` table
+  holds follow-ups (body + timestamps only — anchor and `type` stay on the root).
+  A reply's `comment_id` FK cascade-deletes it with its comment (and the comment
+  chain-cascades from its review), so replies never orphan. `GetReview` nests
+  `replies` under each comment; reply mutations publish the same SSE ping.
 - **Diff base** defaults to the main-branch *name* (stored on the review); the
   `/api/diff` handler resolves it to `merge-base(base, head)` at query time, so
   the review shows only what the branch introduces.

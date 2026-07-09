@@ -36,6 +36,9 @@ export function CommentsPanel({ comments, onJump }: Props) {
                 <span className="muted">#{c.id}</span>
                 <span className={`badge badge-${c.type}`}>{c.type}</span>
                 <span className="muted">{lineLabel(c)}</span>
+                {(c.replies?.length ?? 0) > 0 && (
+                  <span className="muted">💬 {c.replies.length}</span>
+                )}
               </div>
               <div className="comment-preview">{c.body || <em className="muted">(empty)</em>}</div>
             </button>

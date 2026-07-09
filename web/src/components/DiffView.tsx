@@ -28,6 +28,9 @@ interface Props {
   }) => Promise<boolean>;
   onUpdateComment: (id: number, body: string, type: CommentType) => Promise<boolean>;
   onDeleteComment: (id: number) => Promise<void>;
+  onAddReply: (commentId: number, body: string) => Promise<boolean>;
+  onUpdateReply: (commentId: number, replyId: number, body: string) => Promise<boolean>;
+  onDeleteReply: (commentId: number, replyId: number) => Promise<void>;
   reviewed: boolean;
   onToggleReviewed: (reviewed: boolean) => void;
   expandTarget: { path: string; n: number } | null;
@@ -46,6 +49,9 @@ export function DiffView({
   onAddComment,
   onUpdateComment,
   onDeleteComment,
+  onAddReply,
+  onUpdateReply,
+  onDeleteReply,
   reviewed,
   onToggleReviewed,
   expandTarget,
@@ -346,6 +352,9 @@ export function DiffView({
                 comment={c}
                 onUpdate={onUpdateComment}
                 onDelete={onDeleteComment}
+                onAddReply={onAddReply}
+                onUpdateReply={onUpdateReply}
+                onDeleteReply={onDeleteReply}
               />
             ))
           )
@@ -370,6 +379,9 @@ export function DiffView({
             comment={c}
             onUpdate={onUpdateComment}
             onDelete={onDeleteComment}
+            onAddReply={onAddReply}
+            onUpdateReply={onUpdateReply}
+            onDeleteReply={onDeleteReply}
           />
         ))
       )
