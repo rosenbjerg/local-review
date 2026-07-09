@@ -592,6 +592,26 @@ select {
 .badge-nit {
   color: var(--muted);
 }
+.badge-resolved {
+  color: #3fb950;
+  border-color: #238636;
+  text-transform: none;
+}
+
+/* A resolved thread is dimmed but still visible/actionable; hover restores it. */
+.thread-resolved {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+.thread-resolved:hover {
+  opacity: 1;
+}
+.comment-nav-resolved {
+  opacity: 0.55;
+}
+.comment-nav-resolved:hover {
+  opacity: 1;
+}
 
 /* Modal */
 .modal-backdrop {

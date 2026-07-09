@@ -344,6 +344,18 @@ export default function App() {
     }
   }
 
+  // Resolve/reopen is optimistic (the dim/label flips immediately), rolling back
+  // if the save fails — matching toggleReviewed.
+  async function handleResolve(id: number, resolved: boolean) {
+    setComments((cs) => cs.map((c) => (c.id === id ? { ...c, resolved } : c)));
+    try {
+      await api.setCommentResolved(id, resolved);
+    } catch (e) {
+      setComments((cs) => cs.map((c) => (c.id === id ? { ...c, resolved: !resolved } : c)));
+      setError((e as Error).message);
+    }
+  }
+
   function flashComment(id: number): boolean {
     const el = document.getElementById(`comment-${id}`);
     if (!el) return false;
@@ -493,8 +505,12 @@ export default function App() {
               {review.headRef} → {review.baseRef} @ {shortSha}
               {uncommitted && " + uncommitted"}
             </span>
-            <button className="btn" onClick={() => setShowExport(true)}>
-              Export ({comments.length})
+            <button
+              className="btn"
+              onClick={() => setShowExport(true)}
+              title="Exports unresolved threads"
+            >
+              Export ({comments.filter((c) => !c.resolved).length})
             </button>
           </>
         )}
@@ -546,6 +562,7 @@ export default function App() {
                     onAddReply={handleAddReply}
                     onUpdateReply={handleUpdateReply}
                     onDeleteReply={handleDeleteReply}
+                    onResolve={handleResolve}
                     reviewed={reviewedFiles.has(path)}
                     onToggleReviewed={(r) => toggleReviewed(path, r)}
                     expandTarget={expandTarget}

@@ -31,11 +31,16 @@ export function CommentsPanel({ comments, onJump }: Props) {
         <div key={file} className="comment-file-group">
           <div className="comment-file-name">{file}</div>
           {byFile.get(file)!.map((c) => (
-            <button key={c.id} className="comment-nav" onClick={() => onJump(c.id)}>
+            <button
+              key={c.id}
+              className={`comment-nav${c.resolved ? " comment-nav-resolved" : ""}`}
+              onClick={() => onJump(c.id)}
+            >
               <div className="comment-meta">
                 <span className="muted">#{c.id}</span>
                 <span className={`badge badge-${c.type}`}>{c.type}</span>
                 <span className="muted">{lineLabel(c)}</span>
+                {c.resolved && <span className="muted">✓</span>}
                 {(c.replies?.length ?? 0) > 0 && (
                   <span className="muted">💬 {c.replies.length}</span>
                 )}

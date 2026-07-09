@@ -74,6 +74,12 @@ export const api = {
 
   deleteComment: (id: number) => req<void>(`/api/comments/${id}`, { method: "DELETE" }),
 
+  setCommentResolved: (id: number, resolved: boolean) =>
+    req<void>(`/api/comments/${id}/resolved`, {
+      method: "POST",
+      body: JSON.stringify({ resolved }),
+    }),
+
   addReply: (commentId: number, body: string) =>
     req<Reply>(`/api/comments/${commentId}/replies`, {
       method: "POST",

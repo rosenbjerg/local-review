@@ -46,6 +46,7 @@ export interface Comment {
   snippet: string;
   type: CommentType;
   body: string;
+  resolved: boolean;
   createdAt: string;
   updatedAt: string;
   replies: Reply[];

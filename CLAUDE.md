@@ -74,6 +74,11 @@ web/src/
   A reply's `comment_id` FK cascade-deletes it with its comment (and the comment
   chain-cascades from its review), so replies never orphan. `GetReview` nests
   `replies` under each comment; reply mutations publish the same SSE ping.
+- **A thread can be resolved** — a `resolved` flag on the root comment (toggled
+  via `POST /api/comments/{id}/resolved`). Resolved threads are dimmed in the UI
+  and **excluded from the export** (the artifact carries only open, actionable
+  feedback). The column is backfilled onto older DBs by `store.ensureColumn`,
+  the idempotent add-column helper to reuse when adding future columns.
 - **Diff base** defaults to the main-branch *name* (stored on the review); the
   `/api/diff` handler resolves it to `merge-base(base, head)` at query time, so
   the review shows only what the branch introduces.

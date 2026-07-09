@@ -9,6 +9,7 @@ interface Props {
   onAddReply: (commentId: number, body: string) => Promise<boolean>;
   onUpdateReply: (commentId: number, replyId: number, body: string) => Promise<boolean>;
   onDeleteReply: (commentId: number, replyId: number) => Promise<void>;
+  onResolve: (id: number, resolved: boolean) => void;
 }
 
 function lineLabel(c: Comment) {
@@ -65,18 +66,23 @@ export function CommentThread({
   onAddReply,
   onUpdateReply,
   onDeleteReply,
+  onResolve,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [replying, setReplying] = useState(false);
   const replies = comment.replies ?? [];
 
   return (
-    <div className="thread" id={`comment-${comment.id}`}>
+    <div className={`thread${comment.resolved ? " thread-resolved" : ""}`} id={`comment-${comment.id}`}>
       <div className="thread-meta">
         <span className="muted">#{comment.id}</span>
         <span className={`badge badge-${comment.type}`}>{comment.type}</span>
         <span className="muted">{lineLabel(comment)}</span>
+        {comment.resolved && <span className="badge badge-resolved">✓ resolved</span>}
         <span className="spacer" />
+        <button className="link" onClick={() => onResolve(comment.id, !comment.resolved)}>
+          {comment.resolved ? "reopen" : "resolve"}
+        </button>
         <button className="link" onClick={() => setEditing((e) => !e)}>
           {editing ? "close" : "edit"}
         </button>
