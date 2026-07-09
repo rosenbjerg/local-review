@@ -51,7 +51,7 @@ func Render(r *store.Review) string {
 		})
 		lang := langForExt(name)
 		for _, c := range comments {
-			fmt.Fprintf(&b, "\n### #%d · %s · %s · %s\n", c.ID, lineLabel(c.StartLine, c.EndLine), c.Type, c.Author)
+			fmt.Fprintf(&b, "\n### #%d · %s · %s · %s\n", c.ID, anchorLabel(c), c.Type, c.Author)
 			if strings.TrimSpace(c.Snippet) != "" {
 				snippet := strings.TrimRight(c.Snippet, "\n")
 				fence := fenceFor(snippet)
@@ -122,6 +122,23 @@ func lineLabel(start, end int) string {
 		return fmt.Sprintf("L%d–%d", start, end)
 	}
 	return fmt.Sprintf("L%d", start)
+}
+
+// anchorLabel renders a comment's line reference, folding in any drift the API
+// detected: a moved comment reports its current line (noting where it came
+// from) so the agent looks in the right place; an outdated one is flagged since
+// its snippet no longer exists at head. The captured snippet is emitted either
+// way, so outdated feedback stays legible.
+func anchorLabel(c store.Comment) string {
+	switch c.AnchorStatus {
+	case store.AnchorMoved:
+		return fmt.Sprintf("%s (moved from %s)",
+			lineLabel(c.CurrentStartLine, c.CurrentEndLine), lineLabel(c.StartLine, c.EndLine))
+	case store.AnchorOutdated:
+		return fmt.Sprintf("%s (outdated)", lineLabel(c.StartLine, c.EndLine))
+	default:
+		return lineLabel(c.StartLine, c.EndLine)
+	}
 }
 
 func langForExt(path string) string {

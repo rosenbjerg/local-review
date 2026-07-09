@@ -7,13 +7,6 @@ import (
 	"local-review/internal/store"
 )
 
-// Anchor statuses reported to the client (Comment.AnchorStatus).
-const (
-	anchorCurrent  = "current"  // snippet still sits at the stored line range
-	anchorMoved    = "moved"    // snippet relocated to a unique new range (Current* lines)
-	anchorOutdated = "outdated" // snippet gone, ambiguous, or file unreadable
-)
-
 // annotateReview fills in each comment's live anchor status by comparing its
 // captured snippet against the current file content at the review's head. It is
 // derived state (never persisted): the branch keeps moving, so it is recomputed
@@ -54,7 +47,7 @@ func annotateComments(repo *git.Repo, headRef string, comments []store.Comment) 
 // current file lines. A comment with no captured snippet stays "current" — there
 // is nothing to verify drift against.
 func annotateComment(c *store.Comment, read func(string) ([]string, bool)) {
-	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = anchorCurrent, 0, 0
+	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorCurrent, 0, 0
 
 	snippet := strings.TrimRight(c.Snippet, "\n")
 	if strings.TrimSpace(snippet) == "" {
@@ -62,7 +55,7 @@ func annotateComment(c *store.Comment, read func(string) ([]string, bool)) {
 	}
 	lines, ok := read(c.FilePath)
 	if !ok {
-		c.AnchorStatus = anchorOutdated
+		c.AnchorStatus = store.AnchorOutdated
 		return
 	}
 	snip := strings.Split(snippet, "\n")
@@ -73,12 +66,12 @@ func annotateComment(c *store.Comment, read func(string) ([]string, bool)) {
 	// safely, so they read as outdated rather than guessing.
 	starts := findMatches(lines, snip)
 	if len(starts) == 1 {
-		c.AnchorStatus = anchorMoved
+		c.AnchorStatus = store.AnchorMoved
 		c.CurrentStartLine = starts[0] + 1
 		c.CurrentEndLine = starts[0] + len(snip)
 		return
 	}
-	c.AnchorStatus = anchorOutdated
+	c.AnchorStatus = store.AnchorOutdated
 }
 
 // matchAt reports whether snip appears in lines starting at 0-based index start.

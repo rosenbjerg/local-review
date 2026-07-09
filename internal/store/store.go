@@ -13,6 +13,15 @@ type Store struct {
 	db *sql.DB
 }
 
+// Anchor statuses for Comment.AnchorStatus, derived by the API layer from the
+// current head (see internal/api/annotate.go). Shared here because the field
+// lives on Comment and both the API and export packages compare against them.
+const (
+	AnchorCurrent  = "current"  // snippet still sits at the stored line range
+	AnchorMoved    = "moved"    // snippet relocated to a unique new range (Current* lines)
+	AnchorOutdated = "outdated" // snippet gone, ambiguous, or file unreadable
+)
+
 type Review struct {
 	ID        int64     `json:"id"`
 	RepoPath  string    `json:"repoPath"`
