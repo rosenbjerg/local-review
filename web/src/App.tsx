@@ -342,6 +342,18 @@ export default function App() {
           </select>
         </label>
         <label>
+          head
+          <select value={head} onChange={(e) => setHead(e.target.value)} disabled={loading}>
+            {branches.map((b) => (
+              <option key={b.name} value={b.name}>
+                {b.name}
+                {b.isCurrent ? " *" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="arrow">→</span>
+        <label>
           base
           <select
             value={base}
@@ -358,18 +370,6 @@ export default function App() {
               <option key={b.name} value={b.name}>
                 {b.name}
                 {b.isMain ? " (main)" : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="arrow">←</span>
-        <label>
-          head
-          <select value={head} onChange={(e) => setHead(e.target.value)} disabled={loading}>
-            {branches.map((b) => (
-              <option key={b.name} value={b.name}>
-                {b.name}
-                {b.isCurrent ? " *" : ""}
               </option>
             ))}
           </select>
