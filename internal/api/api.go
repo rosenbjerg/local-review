@@ -150,7 +150,15 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	base = mb
-	diff, err := repo.Diff(base, head)
+	// When uncommitted is set, diff base against the working tree (committed +
+	// staged + unstaged tracked changes) instead of the head commit.
+	uncommitted := r.URL.Query().Get("uncommitted") == "true"
+	var diff []git.FileDiff
+	if uncommitted {
+		diff, err = repo.DiffWorktree(base)
+	} else {
+		diff, err = repo.Diff(base, head)
+	}
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)
 		return

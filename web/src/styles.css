@@ -52,6 +52,10 @@ body {
   color: var(--muted);
   font-size: 12px;
 }
+.topbar label.checkbox,
+.topbar label.checkbox input {
+  cursor: pointer;
+}
 .arrow {
   color: var(--muted);
 }

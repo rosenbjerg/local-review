@@ -53,6 +53,7 @@ export default function App() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [reviewedFiles, setReviewedFiles] = useState<Set<string>>(new Set());
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [uncommitted, setUncommitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showExport, setShowExport] = useState(false);
@@ -136,6 +137,7 @@ export default function App() {
     setSelectedFile(null);
     setExpandTarget(null);
     setBase("");
+    setUncommitted(false);
     api
       .branches(repo)
       .then((r) => {
@@ -189,6 +191,27 @@ export default function App() {
     };
   }, [review?.id]);
 
+  // Refetch the diff when the "include uncommitted" toggle changes for an
+  // active review. The initial diff is loaded by startReview; keying on
+  // `uncommitted` alone means this only fires on a later toggle, not on load.
+  useEffect(() => {
+    if (!review) return;
+    const seq = ++reqSeq.current;
+    setLoading(true);
+    api
+      .diff(repo, review.headRef, review.baseRef, uncommitted)
+      .then((d) => {
+        if (reqSeq.current !== seq) return;
+        setFiles(d.files ?? []);
+      })
+      .catch((e) => {
+        if (reqSeq.current === seq) setError((e as Error).message);
+      })
+      .finally(() => {
+        if (reqSeq.current === seq) setLoading(false);
+      });
+  }, [uncommitted]);
+
   async function startReview() {
     if (!repo || !head) return;
     const seq = ++reqSeq.current;
@@ -200,7 +223,7 @@ export default function App() {
       setReview(rev);
       setComments(rev.comments ?? []);
       setReviewedFiles(new Set(rev.reviewedFiles ?? []));
-      const diff = await api.diff(repo, rev.headRef, rev.baseRef);
+      const diff = await api.diff(repo, rev.headRef, rev.baseRef, uncommitted);
       if (reqSeq.current !== seq) return;
       setFiles(diff.files ?? []);
     } catch (e) {
@@ -325,6 +348,10 @@ export default function App() {
 
   const shortSha = review?.headSha.slice(0, 7);
   const mainBranch = branches.find((b) => b.isMain)?.name;
+  // Uncommitted changes live in the working tree, which reflects the
+  // checked-out branch — so the toggle only makes sense when head is current.
+  const currentBranch = branches.find((b) => b.isCurrent)?.name;
+  const headIsCurrent = !!head && head === currentBranch;
 
   return (
     <div className="app">
@@ -343,7 +370,15 @@ export default function App() {
         </label>
         <label>
           head
-          <select value={head} onChange={(e) => setHead(e.target.value)} disabled={loading}>
+          <select
+            value={head}
+            onChange={(e) => {
+              setHead(e.target.value);
+              // Off the current branch there is no meaningful working tree.
+              if (e.target.value !== currentBranch) setUncommitted(false);
+            }}
+            disabled={loading}
+          >
             {branches.map((b) => (
               <option key={b.name} value={b.name}>
                 {b.name}
@@ -374,6 +409,17 @@ export default function App() {
             ))}
           </select>
         </label>
+        {headIsCurrent && (
+          <label className="checkbox" title="Diff against the working tree instead of the head commit (staged + unstaged tracked changes; excludes untracked files)">
+            <input
+              type="checkbox"
+              checked={uncommitted}
+              onChange={(e) => setUncommitted(e.target.checked)}
+              disabled={loading}
+            />
+            uncommitted
+          </label>
+        )}
         <button className="btn btn-primary" onClick={startReview} disabled={loading || !repo || !head}>
           {loading ? "Loading…" : review ? "Reload" : "Start review"}
         </button>
@@ -382,6 +428,7 @@ export default function App() {
           <>
             <span className="muted">
               {review.headRef} → {review.baseRef} @ {shortSha}
+              {uncommitted && " + uncommitted"}
             </span>
             <button className="btn" onClick={() => setShowExport(true)}>
               Export ({comments.length})

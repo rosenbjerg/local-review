@@ -148,6 +148,19 @@ func (r *Repo) Diff(base, head string) ([]FileDiff, error) {
 	return parseDiff(out), nil
 }
 
+// DiffWorktree returns the diff from base to the current working tree: the
+// committed changes on the checked-out branch plus staged and unstaged edits
+// to tracked files. Never-added untracked files are omitted (git diff does not
+// report them). Only meaningful when base's other side is the checked-out
+// branch, since the working tree reflects whatever HEAD is checked out.
+func (r *Repo) DiffWorktree(base string) ([]FileDiff, error) {
+	out, err := r.run("diff", "--no-color", "--find-renames", base)
+	if err != nil {
+		return nil, err
+	}
+	return parseDiff(out), nil
+}
+
 func parseDiff(text string) []FileDiff {
 	var files []FileDiff
 	var cur *FileDiff

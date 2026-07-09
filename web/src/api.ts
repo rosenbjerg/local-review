@@ -27,9 +27,10 @@ export const api = {
     return req<{ branches: Branch[]; main: string }>(`/api/branches?${p.toString()}`);
   },
 
-  diff: (repo: string, head: string, base?: string) => {
+  diff: (repo: string, head: string, base?: string, uncommitted?: boolean) => {
     const p = new URLSearchParams({ repo, head });
     if (base) p.set("base", base);
+    if (uncommitted) p.set("uncommitted", "true");
     return req<DiffResponse>(`/api/diff?${p.toString()}`);
   },
 
