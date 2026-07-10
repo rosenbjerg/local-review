@@ -61,6 +61,7 @@ export const api = {
       snippet: string;
       type: CommentType;
       body: string;
+      worktree: boolean;
     }
   ) =>
     req<Comment>(`/api/reviews/${reviewId}/comments`, {

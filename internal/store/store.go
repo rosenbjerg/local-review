@@ -47,6 +47,7 @@ type Comment struct {
 	Author    string    `json:"author"` // "reviewer" for browser-created; API clients may set their own
 	Resolved  bool      `json:"resolved"`
 	CommitSHA string    `json:"commitSha"` // head SHA the comment was anchored against (best-effort)
+	Worktree  bool      `json:"worktree"`  // anchored against the working tree (uncommitted diff), not head
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 	Replies   []Reply   `json:"replies"`
@@ -119,6 +120,7 @@ CREATE TABLE IF NOT EXISTS comments (
   author     TEXT NOT NULL DEFAULT 'reviewer',
   resolved   INTEGER NOT NULL DEFAULT 0,
   commit_sha TEXT NOT NULL DEFAULT '',
+  worktree   INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -149,6 +151,9 @@ CREATE TABLE IF NOT EXISTS reviewed_files (
 		return err
 	}
 	if err := s.ensureColumn("comments", "author", "author TEXT NOT NULL DEFAULT 'reviewer'"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("comments", "worktree", "worktree INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
 	if err := s.ensureColumn("comments", "commit_sha", "commit_sha TEXT NOT NULL DEFAULT ''"); err != nil {
@@ -342,7 +347,7 @@ func (s *Store) SetStatus(id int64, status string) error {
 
 func (s *Store) listComments(reviewID int64) ([]Comment, error) {
 	rows, err := s.db.Query(
-		`SELECT id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved, author, commit_sha
+		`SELECT id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved, author, commit_sha, worktree
 		 FROM comments WHERE review_id=? ORDER BY file_path, start_line`, reviewID)
 	if err != nil {
 		return nil, err
@@ -353,7 +358,7 @@ func (s *Store) listComments(reviewID int64) ([]Comment, error) {
 		var c Comment
 		var created, updated string
 		if err := rows.Scan(&c.ID, &c.ReviewID, &c.FilePath, &c.StartLine, &c.EndLine,
-			&c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved, &c.Author, &c.CommitSHA); err != nil {
+			&c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved, &c.Author, &c.CommitSHA, &c.Worktree); err != nil {
 			return nil, err
 		}
 		c.CreatedAt, _ = time.Parse(timeFmt, created)
@@ -367,9 +372,9 @@ func (s *Store) listComments(reviewID int64) ([]Comment, error) {
 func (s *Store) AddComment(c Comment) (*Comment, error) {
 	now := time.Now().UTC().Format(timeFmt)
 	res, err := s.db.Exec(
-		`INSERT INTO comments (review_id, file_path, start_line, end_line, snippet, type, body, author, commit_sha, created_at, updated_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-		c.ReviewID, c.FilePath, c.StartLine, c.EndLine, c.Snippet, c.Type, c.Body, c.Author, c.CommitSHA, now, now)
+		`INSERT INTO comments (review_id, file_path, start_line, end_line, snippet, type, body, author, commit_sha, worktree, created_at, updated_at)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+		c.ReviewID, c.FilePath, c.StartLine, c.EndLine, c.Snippet, c.Type, c.Body, c.Author, c.CommitSHA, c.Worktree, now, now)
 	if err != nil {
 		return nil, err
 	}
@@ -416,9 +421,9 @@ func (s *Store) getComment(id int64) (*Comment, error) {
 	var c Comment
 	var created, updated string
 	err := s.db.QueryRow(
-		`SELECT id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved, author, commit_sha
+		`SELECT id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved, author, commit_sha, worktree
 		 FROM comments WHERE id=?`, id).
-		Scan(&c.ID, &c.ReviewID, &c.FilePath, &c.StartLine, &c.EndLine, &c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved, &c.Author, &c.CommitSHA)
+		Scan(&c.ID, &c.ReviewID, &c.FilePath, &c.StartLine, &c.EndLine, &c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved, &c.Author, &c.CommitSHA, &c.Worktree)
 	if err != nil {
 		return nil, err
 	}

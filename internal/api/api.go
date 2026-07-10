@@ -413,6 +413,7 @@ type addCommentReq struct {
 	Type      string `json:"type"`
 	Body      string `json:"body"`
 	Author    string `json:"author"`
+	Worktree  bool   `json:"worktree"`
 }
 
 func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
@@ -454,6 +455,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		Body:      req.Body,
 		Author:    req.Author,
 		CommitSHA: sha,
+		Worktree:  req.Worktree,
 	})
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)

@@ -71,18 +71,25 @@ web/src/
   `snippet` so feedback survives line drift. Each comment also records the
   `commit_sha` it was anchored against (resolved live at add time; best-effort,
   may be empty) — an immutable record of the original position and when it held.
+  A `worktree` flag records whether it was anchored against an uncommitted
+  (working-tree) diff, which drives the staleness comparison side (see below).
 - **Comment staleness is derived, never persisted.** The stored line numbers are
   the *original* anchor; the branch keeps moving, so `internal/api/annotate.go`
   recomputes a live `anchorStatus` on every review read (`handleGetReview`,
   `handleCreateReview`, `handleExport`, and the add-comment response) by comparing
-  the captured `snippet` against the current file at `head_ref`: matches at the
+  the captured `snippet` against the current file: matches at the
   stored range → `current`; found at exactly one other place → `moved` (with
   derived `currentStartLine`/`currentEndLine`); gone, ambiguous (multiple hits),
-  or file unreadable → `outdated`. The frontend renders the effective (relocated)
-  line and badges moved/outdated threads; the export reflects it too. These three
-  fields are computed on `store.Comment` in the API layer and carry `omitempty` —
-  the store never reads or writes them. Cost: one `git show head:path` per
-  distinct commented file per review read (deduped in `annotateComments`).
+  or file unreadable → `outdated`. The comparison side depends on the persisted
+  `worktree` flag: comments made in uncommitted mode are checked against the
+  on-disk working tree (`repo.WorktreeFile`), the rest against `head_ref`
+  (`git show head:path`) — otherwise a working-tree snippet never matches the
+  committed head and reads as instantly outdated. The frontend renders the
+  effective (relocated) line and badges moved/outdated threads; the export
+  reflects it too. `anchorStatus`/`currentStartLine`/`currentEndLine` are
+  computed on `store.Comment` in the API layer and carry `omitempty` — the store
+  never reads or writes them. Cost: one file read per distinct commented file per
+  side per review read (deduped in `annotateComments`).
 - **Threads are two levels.** A comment is a thread root; the `replies` table
   holds follow-ups (body + timestamps only — anchor and `type` stay on the root).
   A reply's `comment_id` FK cascade-deletes it with its comment (and the comment

@@ -52,6 +52,7 @@ export interface Comment {
   author: string;
   resolved: boolean;
   commitSha: string;
+  worktree: boolean; // anchored against the working tree (uncommitted diff)
   // Derived server-side from the current head (see internal/api/annotate.go):
   // whether the comment still sits at its stored line range. Absent ⇒ current.
   anchorStatus?: AnchorStatus;

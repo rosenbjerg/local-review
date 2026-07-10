@@ -19,17 +19,33 @@ func (s *Server) annotateReview(review *store.Review) {
 }
 
 // annotateComments annotates comments in place, reading each distinct file at
-// headRef at most once.
+// most once per side. Comments made against the working tree (an uncommitted
+// diff) are compared to the on-disk content; the rest to headRef — otherwise a
+// working-tree snippet never matches the committed head and reads as outdated.
 func annotateComments(repo *git.Repo, headRef string, comments []store.Comment) {
+	readHead := fileReader(func(path string) (string, error) {
+		return repo.FileContent(headRef, path)
+	})
+	readWorktree := fileReader(repo.WorktreeFile)
+	for i := range comments {
+		read := readHead
+		if comments[i].Worktree {
+			read = readWorktree
+		}
+		annotateComment(&comments[i], read)
+	}
+}
+
+// fileReader returns a cached line-reader. A readable file always yields a
+// non-nil slice (min [""]); nil is cached to mark an unreadable path
+// (deleted/renamed) so it isn't re-fetched.
+func fileReader(fetch func(string) (string, error)) func(string) ([]string, bool) {
 	cache := map[string][]string{}
-	// read returns the file's lines at headRef and whether it was readable. A
-	// readable file always yields a non-nil slice (min [""]); nil is cached to
-	// mark an unreadable path (deleted/renamed) so it isn't re-fetched.
-	read := func(path string) ([]string, bool) {
+	return func(path string) ([]string, bool) {
 		if lines, ok := cache[path]; ok {
 			return lines, lines != nil
 		}
-		content, err := repo.FileContent(headRef, path)
+		content, err := fetch(path)
 		if err != nil {
 			cache[path] = nil
 			return nil, false
@@ -37,9 +53,6 @@ func annotateComments(repo *git.Repo, headRef string, comments []store.Comment) 
 		lines := splitLines(content)
 		cache[path] = lines
 		return lines, true
-	}
-	for i := range comments {
-		annotateComment(&comments[i], read)
 	}
 }
 

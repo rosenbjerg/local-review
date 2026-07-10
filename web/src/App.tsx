@@ -286,7 +286,10 @@ export default function App() {
   }): Promise<boolean> {
     if (!review) return false;
     try {
-      const c = await api.addComment(review.id, args);
+      // Tag the comment as working-tree-anchored when reviewing uncommitted
+      // changes, so its snippet is later checked against the working tree
+      // (not the committed head) and doesn't read as instantly outdated.
+      const c = await api.addComment(review.id, { ...args, worktree: effectiveUncommitted });
       setComments((cs) => [...cs, c]);
       return true;
     } catch (e) {
