@@ -294,22 +294,6 @@ func parseDiff(text string) []FileDiff {
 			cur.OldPath, cur.NewPath = parseGitHeaderPaths(line)
 		case cur == nil:
 			// preamble before first file; ignore
-		case strings.HasPrefix(line, "new file"):
-			cur.Status = "added"
-			cur.OldPath = "" // added: nothing on the old side (the header seeded both)
-		case strings.HasPrefix(line, "deleted file"):
-			cur.Status = "deleted"
-			cur.NewPath = "" // deleted: nothing on the new side
-		case strings.HasPrefix(line, "rename from "):
-			cur.OldPath = strings.TrimPrefix(line, "rename from ")
-			cur.Status = "renamed"
-		case strings.HasPrefix(line, "rename to "):
-			cur.NewPath = strings.TrimPrefix(line, "rename to ")
-			cur.Status = "renamed"
-		case strings.HasPrefix(line, "--- "):
-			cur.OldPath = stripDiffPath(strings.TrimPrefix(line, "--- "))
-		case strings.HasPrefix(line, "+++ "):
-			cur.NewPath = stripDiffPath(strings.TrimPrefix(line, "+++ "))
 		case strings.HasPrefix(line, "@@"):
 			if hunk != nil {
 				cur.Hunks = append(cur.Hunks, *hunk)
@@ -317,6 +301,11 @@ func parseDiff(text string) []FileDiff {
 			oldLn, newLn = parseHunkHeader(line)
 			hunk = &Hunk{Header: line}
 		case hunk != nil:
+			// Inside a hunk, every line is content. This must precede the ---/+++
+			// (and new file / rename) header cases: a deleted line whose content
+			// starts with "-- " (e.g. a SQL comment) becomes "--- …" in the diff,
+			// and an added "++ …" line becomes "+++ …" — matching those headers
+			// would drop the line and corrupt the line numbering.
 			if len(line) == 0 {
 				hunk.Lines = append(hunk.Lines, DiffLine{Kind: "context", OldLine: oldLn, NewLine: newLn, Content: ""})
 				oldLn++
@@ -337,6 +326,22 @@ func parseDiff(text string) []FileDiff {
 				oldLn++
 				newLn++
 			}
+		case strings.HasPrefix(line, "new file"):
+			cur.Status = "added"
+			cur.OldPath = "" // added: nothing on the old side (the header seeded both)
+		case strings.HasPrefix(line, "deleted file"):
+			cur.Status = "deleted"
+			cur.NewPath = "" // deleted: nothing on the new side
+		case strings.HasPrefix(line, "rename from "):
+			cur.OldPath = strings.TrimPrefix(line, "rename from ")
+			cur.Status = "renamed"
+		case strings.HasPrefix(line, "rename to "):
+			cur.NewPath = strings.TrimPrefix(line, "rename to ")
+			cur.Status = "renamed"
+		case strings.HasPrefix(line, "--- "):
+			cur.OldPath = stripDiffPath(strings.TrimPrefix(line, "--- "))
+		case strings.HasPrefix(line, "+++ "):
+			cur.NewPath = stripDiffPath(strings.TrimPrefix(line, "+++ "))
 		}
 	}
 	flush()

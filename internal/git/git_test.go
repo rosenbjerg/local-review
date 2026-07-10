@@ -144,6 +144,45 @@ func TestParseDiffAddedDeletedBinaryPaths(t *testing.T) {
 	}
 }
 
+// A hunk content line can look like a file header: a deleted "-- x" line becomes
+// "--- x" in the diff and an added "++ x" becomes "+++ x". These must be parsed
+// as content, not as the ---/+++ path headers (which would drop the line and
+// corrupt line numbers).
+func TestParseDiffContentLooksLikeHeader(t *testing.T) {
+	diff := "diff --git a/q.sql b/q.sql\n" +
+		"index 0000000..1111111 100644\n" +
+		"--- a/q.sql\n" +
+		"+++ b/q.sql\n" +
+		"@@ -1,3 +1,3 @@\n" +
+		" SELECT 1;\n" +
+		"--- old comment\n" +
+		"+++ new comment\n" +
+		" SELECT 2;\n"
+	files := parseDiff(diff)
+	if len(files) != 1 {
+		t.Fatalf("got %d files, want 1", len(files))
+	}
+	f := files[0]
+	if f.OldPath != "q.sql" || f.NewPath != "q.sql" {
+		t.Fatalf("paths corrupted by content: old=%q new=%q", f.OldPath, f.NewPath)
+	}
+	want := []DiffLine{
+		{Kind: "context", OldLine: 1, NewLine: 1, Content: "SELECT 1;"},
+		{Kind: "del", OldLine: 2, Content: "-- old comment"},
+		{Kind: "add", NewLine: 2, Content: "++ new comment"},
+		{Kind: "context", OldLine: 3, NewLine: 3, Content: "SELECT 2;"},
+	}
+	got := f.Hunks[0].Lines
+	if len(got) != len(want) {
+		t.Fatalf("got %d lines, want %d: %+v", len(got), len(want), got)
+	}
+	for i, w := range want {
+		if got[i] != w {
+			t.Errorf("line %d: got %+v, want %+v", i, got[i], w)
+		}
+	}
+}
+
 func TestParseGitHeaderPaths(t *testing.T) {
 	cases := []struct {
 		line, wantOld, wantNew string
