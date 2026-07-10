@@ -135,9 +135,11 @@ CREATE TABLE IF NOT EXISTS replies (
 );
 CREATE INDEX IF NOT EXISTS idx_replies_comment ON replies(comment_id);
 CREATE TABLE IF NOT EXISTS reviewed_files (
-  review_id   INTEGER NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
-  file_path   TEXT NOT NULL,
-  reviewed_at TEXT NOT NULL,
+  review_id    INTEGER NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+  file_path    TEXT NOT NULL,
+  reviewed_at  TEXT NOT NULL,
+  content_hash TEXT NOT NULL DEFAULT '',
+  worktree     INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (review_id, file_path)
 );
 `)
@@ -157,6 +159,14 @@ CREATE TABLE IF NOT EXISTS reviewed_files (
 		return err
 	}
 	if err := s.ensureColumn("comments", "commit_sha", "commit_sha TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	// reviewed_files gained a captured content fingerprint (+ the side it was
+	// captured on) so a file that changes after being reviewed reverts to unread.
+	if err := s.ensureColumn("reviewed_files", "content_hash", "content_hash TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("reviewed_files", "worktree", "worktree INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
 	return s.ensureColumn("replies", "author", "author TEXT NOT NULL DEFAULT 'reviewer'")
@@ -300,13 +310,48 @@ func (s *Store) listReviewedFiles(reviewID int64) ([]string, error) {
 	return out, rows.Err()
 }
 
-// SetFileReviewed marks (or unmarks) a file as reviewed within a review.
-func (s *Store) SetFileReviewed(reviewID int64, path string, reviewed bool) error {
+// ReviewedFile is a reviewed-file mark with the fingerprint captured when it was
+// set: ContentHash of the file's new-side content and the Worktree flag telling
+// which side (head vs on-disk working tree) that content came from. The API
+// layer re-derives whether the mark still holds by re-hashing that side.
+type ReviewedFile struct {
+	Path        string
+	ContentHash string
+	Worktree    bool
+}
+
+// ListReviewedFilesFull returns the reviewed-file marks with their captured
+// fingerprints, for the API's staleness check (listReviewedFiles returns just
+// the paths for the review payload).
+func (s *Store) ListReviewedFilesFull(reviewID int64) ([]ReviewedFile, error) {
+	rows, err := s.db.Query(
+		`SELECT file_path, content_hash, worktree FROM reviewed_files WHERE review_id=? ORDER BY file_path`, reviewID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []ReviewedFile{}
+	for rows.Next() {
+		var f ReviewedFile
+		if err := rows.Scan(&f.Path, &f.ContentHash, &f.Worktree); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// SetFileReviewed marks (or unmarks) a file as reviewed within a review. On mark
+// it records the content fingerprint (and its side) captured by the caller, so a
+// later change to the file can revert it to unread; re-marking refreshes the
+// fingerprint (DO UPDATE), which is what re-reviewing a changed file must do.
+func (s *Store) SetFileReviewed(reviewID int64, path string, reviewed bool, contentHash string, worktree bool) error {
 	if reviewed {
 		_, err := s.db.Exec(
-			`INSERT INTO reviewed_files (review_id, file_path, reviewed_at) VALUES (?,?,?)
-			 ON CONFLICT(review_id, file_path) DO NOTHING`,
-			reviewID, path, time.Now().UTC().Format(timeFmt))
+			`INSERT INTO reviewed_files (review_id, file_path, reviewed_at, content_hash, worktree) VALUES (?,?,?,?,?)
+			 ON CONFLICT(review_id, file_path) DO UPDATE SET
+			   reviewed_at=excluded.reviewed_at, content_hash=excluded.content_hash, worktree=excluded.worktree`,
+			reviewID, path, time.Now().UTC().Format(timeFmt), contentHash, worktree)
 		return err
 	}
 	_, err := s.db.Exec(`DELETE FROM reviewed_files WHERE review_id=? AND file_path=?`, reviewID, path)

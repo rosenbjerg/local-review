@@ -122,8 +122,18 @@ web/src/
   One DB serves many repos, keyed by abs path.
 - Reviews resume by `(repo_path, base_ref, head_ref)` regardless of status, so
   exporting (which sets status `exported`) never orphans an in-progress review.
-- `reviewed_files` persists per-file "reviewed" state; keyed by path within a
-  review (does NOT reset when a file changes in a later commit — known limitation).
+- `reviewed_files` persists per-file "reviewed" state, keyed by path within a
+  review. Each mark also captures a **content fingerprint** (SHA-256 of the
+  file's new-side content) and the side it was seen on (`worktree` flag: on-disk
+  working tree vs `head_ref`), mirroring how comments record their anchor side.
+  Like comment staleness, "still reviewed" is **derived, never trusted from the
+  flag alone**: on every review read `internal/api/reviewed.go` re-hashes the
+  current content of that side and drops any file whose fingerprint no longer
+  matches — so a file that changes after being marked reviewed reverts to unread.
+  An empty fingerprint (older rows, or a mark-time read failure) can't be checked
+  and stays reviewed. `SetFileReviewed` upserts (`DO UPDATE`), so re-reviewing a
+  changed file refreshes the fingerprint. (Surfaces on the next review refetch —
+  SSE ping or focus — not instantly on an out-of-band push, same as the diff.)
 - **Live multi-tab sync** via SSE: `GET /api/reviews/{id}/events` streams a
   `data: changed` ping whenever a comment or reviewed-file of that review is
   mutated (the four mutation handlers call `hub.publish`). The client refetches

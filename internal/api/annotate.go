@@ -7,15 +7,15 @@ import (
 	"local-review/internal/store"
 )
 
-// annotateReview fills in each comment's live anchor status by comparing its
-// captured snippet against the current file content at the review's head. It is
-// derived state (never persisted): the branch keeps moving, so it is recomputed
-// on every read rather than baked into the stored line numbers.
+// annotateReview fills in derived, never-persisted review state on read: each
+// comment's live anchor status (from its captured snippet vs the current file at
+// head) and which reviewed-file marks still hold (from their captured content
+// fingerprint). The branch keeps moving, so both are recomputed every read.
 func (s *Server) annotateReview(review *store.Review) {
-	if len(review.Comments) == 0 {
-		return
+	if len(review.Comments) > 0 {
+		annotateComments(git.New(review.RepoPath), review.HeadRef, review.Comments)
 	}
-	annotateComments(git.New(review.RepoPath), review.HeadRef, review.Comments)
+	s.annotateReviewedFiles(review)
 }
 
 // annotateComments annotates comments in place, reading each distinct file at

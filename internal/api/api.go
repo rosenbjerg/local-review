@@ -471,6 +471,7 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 type setReviewedReq struct {
 	FilePath string `json:"filePath"`
 	Reviewed bool   `json:"reviewed"`
+	Worktree bool   `json:"worktree"` // fingerprint the on-disk (uncommitted) side, not head
 }
 
 func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
@@ -487,7 +488,16 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, errString("filePath is required"))
 		return
 	}
-	if err := s.Store.SetFileReviewed(id, req.FilePath, req.Reviewed); err != nil {
+	// Capture a fingerprint of the file's current content so a later change can
+	// revert it to unread. Best-effort: an unreadable file leaves the hash empty,
+	// which the staleness check treats as "can't tell" and keeps reviewed.
+	var contentHash string
+	if req.Reviewed {
+		if repoPath, headRef, err := s.Store.ReviewRepoHead(id); err == nil {
+			contentHash = fileContentHash(git.New(repoPath), headRef, req.FilePath, req.Worktree)
+		}
+	}
+	if err := s.Store.SetFileReviewed(id, req.FilePath, req.Reviewed, contentHash, req.Worktree); err != nil {
 		httpError(w, http.StatusInternalServerError, err)
 		return
 	}
