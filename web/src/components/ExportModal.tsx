@@ -32,6 +32,15 @@ export function ExportModal({ reviewId, onClose }: Props) {
       .catch((e) => setError((e as Error).message));
   }, [reviewId, instructions]);
 
+  // Dismiss on Escape, matching the inline composer's Esc-to-cancel.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const html = useMemo(() => md.render(markdown), [markdown]);
 
   async function copy() {
