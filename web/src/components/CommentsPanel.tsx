@@ -16,7 +16,14 @@ export function CommentsPanel({ comments, onJump, onDelete }: Props) {
     arr.push(c);
     byFile.set(c.filePath, arr);
   }
-  for (const arr of byFile.values()) arr.sort((a, b) => a.startLine - b.startLine);
+  // Within a file, keep open threads on top (actionable feedback stays
+  // prominent) and resolved ones below, each sub-group ordered by line.
+  for (const arr of byFile.values()) {
+    arr.sort((a, b) => {
+      if (!!a.resolved !== !!b.resolved) return a.resolved ? 1 : -1;
+      return a.startLine - b.startLine;
+    });
+  }
   const files = [...byFile.keys()].sort();
 
   return (
