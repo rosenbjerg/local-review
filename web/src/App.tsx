@@ -667,7 +667,9 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
           </aside>
           <div className="resizer" onMouseDown={(e) => startResize(e, "left")} />
           <div className="diff-column" ref={diffColRef}>
-            {files.length === 0 && <div className="empty">No changes between base and head.</div>}
+            {files.length === 0 && !loading && (
+              <div className="empty">No changes between base and head.</div>
+            )}
             {orderedDiffFiles.map((f) => {
               const path = f.newPath || f.oldPath;
               return (
