@@ -214,7 +214,7 @@ export default function App() {
     const seq = ++reqSeq.current;
     setLoading(true);
     api
-      .diff(repo, review.headRef, review.baseRef, uncommitted)
+      .diff(repo, review.headRef, review.baseRef, effectiveUncommitted)
       .then((d) => {
         if (reqSeq.current !== seq) return;
         setFiles(d.files ?? []);
@@ -238,7 +238,7 @@ export default function App() {
       setReview(rev);
       setComments(rev.comments ?? []);
       setReviewedFiles(new Set(rev.reviewedFiles ?? []));
-      const diff = await api.diff(repo, rev.headRef, rev.baseRef, uncommitted);
+      const diff = await api.diff(repo, rev.headRef, rev.baseRef, effectiveUncommitted);
       if (reqSeq.current !== seq) return;
       setFiles(diff.files ?? []);
     } catch (e) {
@@ -465,6 +465,11 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
   // checked-out branch — so the toggle only makes sense when head is current.
   const currentBranch = branches.find((b) => b.isCurrent)?.name;
   const headIsCurrent = !!head && head === currentBranch;
+  // Effective toggle: uncommitted only applies on the checked-out branch. Kept
+  // separate from the raw checkbox state so hopping branches doesn't clear the
+  // user's choice — and, crucially, doesn't mutate `uncommitted` on a head
+  // change, which would fire the diff-refetch effect on top of the auto-start.
+  const effectiveUncommitted = uncommitted && headIsCurrent;
 
   return (
     <div className="app">
@@ -492,11 +497,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
           head
           <select
             value={head}
-            onChange={(e) => {
-              setHead(e.target.value);
-              // Off the current branch there is no meaningful working tree.
-              if (e.target.value !== currentBranch) setUncommitted(false);
-            }}
+            onChange={(e) => setHead(e.target.value)}
             disabled={loading}
           >
             {branches.map((b) => (
@@ -553,7 +554,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
           <>
             <span className="muted">
               {review.headRef} → {review.baseRef} @ {shortSha}
-              {uncommitted && " + uncommitted"}
+              {effectiveUncommitted && " + uncommitted"}
             </span>
             <button
               className="btn"
