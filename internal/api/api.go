@@ -93,6 +93,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/reviews/{id}/events", s.handleEvents)
 	mux.HandleFunc("DELETE /api/reviews/{id}", s.handleDeleteReview)
 	mux.HandleFunc("POST /api/reviews/{id}/export", s.handleExport)
+	mux.HandleFunc("POST /api/reviews/{id}/reset", s.handleResetReview)
 	mux.HandleFunc("POST /api/reviews/{id}/reviewed", s.handleSetReviewed)
 
 	mux.HandleFunc("POST /api/reviews/{id}/comments", s.handleAddComment)
@@ -425,6 +426,22 @@ func (s *Server) handleDeleteReview(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusInternalServerError, err)
 		return
 	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleResetReview clears all comments and reviewed-file marks from a review,
+// keeping the review itself. Notifies subscribers so other tabs empty out too.
+func (s *Server) handleResetReview(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	if err := s.Store.ResetReview(id); err != nil {
+		httpError(w, http.StatusInternalServerError, err)
+		return
+	}
+	_ = s.Store.Touch(id)
+	s.hub.publish(id)
 	w.WriteHeader(http.StatusNoContent)
 }
 

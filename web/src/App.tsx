@@ -392,6 +392,25 @@ export default function App() {
     }
   }
 
+  // Wipes the review clean: deletes every comment and unmarks every reviewed
+  // file, keeping the review itself (the same branch resumes empty). Guarded by
+  // a confirm since it's irreversible. Clears local state on success; the SSE
+  // ping keeps other tabs in sync.
+  async function handleReset() {
+    if (!review) return;
+    if (comments.length === 0 && reviewedFiles.size === 0) return;
+    if (!window.confirm("Delete all comments and unmark all reviewed files? This cannot be undone.")) {
+      return;
+    }
+    try {
+      await api.resetReview(review.id);
+      setComments([]);
+      setReviewedFiles(new Set());
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   function flashComment(id: number): boolean {
     const el = document.getElementById(`comment-${id}`);
     if (!el) return false;
@@ -597,6 +616,14 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
               title="Exports unresolved threads"
             >
               Export ({comments.filter((c) => !c.resolved).length})
+            </button>
+            <button
+              className="btn danger"
+              onClick={handleReset}
+              disabled={comments.length === 0 && reviewedFiles.size === 0}
+              title="Delete all comments and unmark all reviewed files"
+            >
+              Reset
             </button>
           </>
         )}

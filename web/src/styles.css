@@ -121,6 +121,17 @@ select {
 .btn:hover {
   background: var(--bg-hover);
 }
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn.danger {
+  color: #f85149;
+  border-color: #f85149;
+}
+.btn.danger:hover:not(:disabled) {
+  background: rgba(248, 81, 73, 0.1);
+}
 .btn-primary {
   background: var(--add-border);
   border-color: var(--add-border);

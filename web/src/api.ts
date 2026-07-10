@@ -59,6 +59,9 @@ export const api = {
 
   getReview: (id: number) => req<Review>(`/api/reviews/${id}`),
 
+  // Clears all comments and reviewed-file marks from a review (keeps the review).
+  resetReview: (id: number) => req<void>(`/api/reviews/${id}/reset`, { method: "POST" }),
+
   addComment: (
     reviewId: number,
     c: {

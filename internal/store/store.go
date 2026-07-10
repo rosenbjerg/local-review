@@ -339,6 +339,25 @@ func (s *Store) DeleteReview(id int64) error {
 	return err
 }
 
+// ResetReview clears a review's feedback in one transaction: every comment (its
+// replies cascade via the FK) and every reviewed-file mark. The review row
+// itself stays, so re-opening the same branch resumes it empty rather than
+// creating a fresh review.
+func (s *Store) ResetReview(id int64) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM comments WHERE review_id=?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM reviewed_files WHERE review_id=?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (s *Store) SetStatus(id int64, status string) error {
 	_, err := s.db.Exec(`UPDATE reviews SET status=?, updated_at=? WHERE id=?`,
 		status, time.Now().UTC().Format(timeFmt), id)
