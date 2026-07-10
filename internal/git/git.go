@@ -196,16 +196,65 @@ func (r *Repo) Diff(base, head string) ([]FileDiff, error) {
 
 // DiffWorktree returns the diff from base to the current working tree: the
 // committed changes on the checked-out branch plus staged and unstaged edits
-// to tracked files. Never-added untracked files are omitted (git diff does not
-// report them). Only meaningful when base's other side is the checked-out
-// branch, since the working tree reflects whatever HEAD is checked out.
+// to tracked files, and untracked (non-ignored) files as new files. Only
+// meaningful when base's other side is the checked-out branch, since the working
+// tree reflects whatever HEAD is checked out.
 func (r *Repo) DiffWorktree(base string) ([]FileDiff, error) {
 	args := append([]string{"diff", "--no-color", "--find-renames"}, diffPrefixArgs...)
 	out, err := r.run(append(args, base)...)
 	if err != nil {
 		return nil, err
 	}
-	return parseDiff(out), nil
+	files := parseDiff(out)
+	// git diff omits untracked files, so add them explicitly — otherwise the
+	// uncommitted view only shows tracked (staged/unstaged) changes and a brand
+	// new file doesn't appear until it's `git add`ed.
+	untracked, err := r.untrackedFiles()
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range untracked {
+		if fd, ok := r.newFileDiff(p); ok {
+			files = append(files, fd)
+		}
+	}
+	return files, nil
+}
+
+// untrackedFiles lists untracked, non-ignored files (NUL-separated so paths with
+// odd characters survive).
+func (r *Repo) untrackedFiles() ([]string, error) {
+	out, err := r.run("ls-files", "--others", "--exclude-standard", "-z")
+	if err != nil {
+		return nil, err
+	}
+	var paths []string
+	for _, p := range strings.Split(out, "\x00") {
+		if p != "" {
+			paths = append(paths, p)
+		}
+	}
+	return paths, nil
+}
+
+// newFileDiff synthesizes an added FileDiff for an untracked file from its
+// on-disk content. Binary and empty files get no hunks (mirroring git's diffs).
+func (r *Repo) newFileDiff(path string) (FileDiff, bool) {
+	content, err := r.WorktreeFile(path)
+	if err != nil {
+		return FileDiff{}, false // vanished or unreadable since ls-files listed it
+	}
+	fd := FileDiff{Status: "added", NewPath: path, Hunks: []Hunk{}}
+	if content == "" || strings.IndexByte(content, 0) >= 0 {
+		return fd, true
+	}
+	lines := strings.Split(strings.TrimSuffix(content, "\n"), "\n")
+	hunk := Hunk{Header: fmt.Sprintf("@@ -0,0 +1,%d @@", len(lines))}
+	for i, l := range lines {
+		hunk.Lines = append(hunk.Lines, DiffLine{Kind: "add", NewLine: i + 1, Content: l})
+	}
+	fd.Hunks = []Hunk{hunk}
+	return fd, true
 }
 
 func parseDiff(text string) []FileDiff {

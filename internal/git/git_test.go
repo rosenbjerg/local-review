@@ -25,6 +25,42 @@ func TestWorktreeFile(t *testing.T) {
 	}
 }
 
+// newFileDiff synthesizes an added diff for an untracked file: a text file gets
+// one all-add hunk; empty and binary files get none.
+func TestNewFileDiff(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, dir, "a.txt", "l1\nl2\n")
+	mustWrite(t, dir, "empty.txt", "")
+	if err := os.WriteFile(filepath.Join(dir, "bin.dat"), []byte{0, 1, 2}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := New(dir)
+
+	fd, ok := r.newFileDiff("a.txt")
+	if !ok || fd.Status != "added" || fd.NewPath != "a.txt" || len(fd.Hunks) != 1 {
+		t.Fatalf("text: got ok=%v status=%q hunks=%d", ok, fd.Status, len(fd.Hunks))
+	}
+	if ls := fd.Hunks[0].Lines; len(ls) != 2 || ls[0].Kind != "add" || ls[0].NewLine != 1 || ls[0].Content != "l1" {
+		t.Fatalf("text lines wrong: %+v", ls)
+	}
+	for _, name := range []string{"empty.txt", "bin.dat"} {
+		fd, ok := r.newFileDiff(name)
+		if !ok || len(fd.Hunks) != 0 {
+			t.Errorf("%s: expected added with no hunks, got ok=%v hunks=%d", name, ok, len(fd.Hunks))
+		}
+	}
+	if _, ok := r.newFileDiff("missing.txt"); ok {
+		t.Error("missing file should not produce a diff")
+	}
+}
+
+func mustWrite(t *testing.T, dir, name, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestParseHunkHeader(t *testing.T) {
 	cases := []struct {
 		name             string
