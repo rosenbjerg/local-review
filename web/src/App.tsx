@@ -7,6 +7,7 @@ import { FileExplorer, orderedFiles } from "./components/FileExplorer";
 import { LazyFile } from "./components/LazyFile";
 import type { Branch, Comment, CommentType, FileDiff, Review } from "./types";
 import { effectiveLines } from "./types";
+import { useFocusTrap } from "./useFocusTrap";
 
 const LS_LEFT = "lr.leftWidth";
 const LS_RIGHT = "lr.rightWidth";
@@ -76,6 +77,10 @@ export default function App() {
   // startReview bumps it; in-flight responses check it before applying state so
   // a stale repo's review/diff can't repopulate the UI for the new selection.
   const reqSeq = useRef(0);
+  // Focus traps for the two inline modals (the export modal manages its own).
+  // Only one is ever open at a time; each restores focus to its trigger on close.
+  const helpTrapRef = useFocusTrap<HTMLDivElement>(showHelp);
+  const resetTrapRef = useFocusTrap<HTMLDivElement>(confirmingReset);
 
   useEffect(() => {
     localStorage.setItem(LS_LEFT, String(leftW));
@@ -868,7 +873,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
 
       {showHelp && (
         <div className="modal-backdrop" onClick={() => setShowHelp(false)}>
-          <div className="modal help-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal help-modal" ref={helpTrapRef} onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <h2>Keyboard shortcuts</h2>
               <span className="spacer" />
@@ -924,7 +929,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
 
       {confirmingReset && (
         <div className="modal-backdrop" onClick={() => setConfirmingReset(false)}>
-          <div className="modal confirm-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal confirm-modal" ref={resetTrapRef} onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <h2>Reset review?</h2>
             </div>
@@ -942,7 +947,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
               </p>
             </div>
             <div className="confirm-actions">
-              <button className="btn" autoFocus onClick={() => setConfirmingReset(false)}>
+              <button className="btn" data-autofocus onClick={() => setConfirmingReset(false)}>
                 Cancel
               </button>
               <button className="btn danger" onClick={performReset}>

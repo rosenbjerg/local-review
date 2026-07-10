@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import MarkdownIt from "markdown-it";
 import { api } from "../api";
+import { useFocusTrap } from "../useFocusTrap";
 
 interface Props {
   reviewId: number;
@@ -21,6 +22,9 @@ export function ExportModal({ reviewId, onClose }: Props) {
   const [instructions, setInstructions] = useState(
     () => localStorage.getItem(LS_INSTRUCTIONS) === "true"
   );
+  // Mounted only while open, so the trap is always active for this component's
+  // lifetime; it restores focus to the trigger when the modal unmounts.
+  const trapRef = useFocusTrap<HTMLDivElement>(true);
 
   useEffect(() => {
     api
@@ -65,7 +69,7 @@ export function ExportModal({ reviewId, onClose }: Props) {
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal" ref={trapRef} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>Export review</h2>
           <div className="view-toggle" role="group" aria-label="Export view">

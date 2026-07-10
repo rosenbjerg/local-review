@@ -47,6 +47,7 @@ web/src/
   api.ts                 fetch wrappers    types.ts  shared types
   highlight.ts           Shiki wrapper: all languages, lazy-loaded, JS regex engine
   time.ts                relative/absolute timestamp + edited-marker helpers
+  useFocusTrap.ts        modal focus hook: focus-in, Tab trap, restore on close
   components/
     FileExplorer.tsx     left pane: hierarchical file tree, collapse, reviewed toggle
     DiffView.tsx         center: per-file diff, syntax highlight, inline threads/composer,
@@ -184,6 +185,11 @@ web/src/
 - Frontend: strict TS (`noUnusedLocals`/`noUnusedParameters` on) — no dead code.
   Match the existing component style; keep CSS in `web/src/styles.css` (no CSS-in-JS).
 - Persisted UI prefs (panel widths) go in `localStorage` under `lr.*` keys.
+- Modals (`.modal` inside a `.modal-backdrop`) close on Escape and backdrop
+  click, and use `useFocusTrap` for focus-in / Tab-trap / restore-on-close —
+  give a new modal the same treatment (mark its safe default control
+  `data-autofocus`). The global keyboard shortcuts in `App.tsx` must bail while
+  a modal is open (see the `showExport`/`showHelp`/`confirmingReset` guards).
 
 ## Gotchas
 
