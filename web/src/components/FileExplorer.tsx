@@ -87,8 +87,11 @@ export function FileExplorer({
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
+  // Per-file badge counts open threads only — a file whose feedback is all
+  // resolved shows no count, matching the diff header and Export button.
   const countByFile = new Map<string, number>();
   for (const c of comments) {
+    if (c.resolved) continue;
     countByFile.set(c.filePath, (countByFile.get(c.filePath) ?? 0) + 1);
   }
 

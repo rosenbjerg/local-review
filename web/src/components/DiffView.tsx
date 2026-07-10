@@ -91,6 +91,10 @@ export function DiffView({
 
   const path = file.newPath || file.oldPath;
   const lang = langForPath(path);
+  // The header badge reflects open (actionable) feedback only — resolved
+  // threads still render inline but shouldn't count against the file, matching
+  // what the Export button counts.
+  const openCount = comments.filter((c) => !c.resolved).length;
 
   // Media (image / non-previewable binary) files render an image or a placeholder
   // instead of a line-by-line diff, and take file-level comments (anchored at
@@ -525,7 +529,7 @@ export function DiffView({
         </button>
         <span className={`status status-${file.status}`}>{file.status}</span>
         <span className="file-path">{path}</span>
-        <span className="file-count">{comments.length > 0 ? `${comments.length} 💬` : ""}</span>
+        <span className="file-count">{openCount > 0 ? `${openCount} 💬` : ""}</span>
         <label className="viewed-check" title="Mark file reviewed">
           <input
             type="checkbox"
