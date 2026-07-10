@@ -254,6 +254,15 @@ select {
 .file-path {
   font-family: var(--font-mono);
   font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Only the path gives up space when the header is tight — the controls keep
+   their size, so a long path ellipsizes instead of overflowing the header. */
+.file-header > :not(.file-path) {
+  flex-shrink: 0;
 }
 .file-count {
   color: var(--muted);

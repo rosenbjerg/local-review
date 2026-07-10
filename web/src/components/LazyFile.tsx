@@ -41,7 +41,9 @@ export function LazyFile({ anchorId, label, estHeight, rootRef, children }: Prop
       ) : (
         <div className="file file-placeholder" style={{ height: estHeight }}>
           <div className="file-header">
-            <span className="file-path">{label}</span>
+            <span className="file-path" title={label}>
+              {label}
+            </span>
             <span className="muted">…</span>
           </div>
         </div>

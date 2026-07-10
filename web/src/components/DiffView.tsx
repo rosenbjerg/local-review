@@ -528,7 +528,9 @@ export function DiffView({
           {collapsed ? "▸" : "▾"}
         </button>
         <span className={`status status-${file.status}`}>{file.status}</span>
-        <span className="file-path">{path}</span>
+        <span className="file-path" title={path}>
+          {path}
+        </span>
         <span className="file-count">{openCount > 0 ? `${openCount} 💬` : ""}</span>
         <label className="viewed-check" title="Mark file reviewed">
           <input
