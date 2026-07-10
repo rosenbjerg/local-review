@@ -244,7 +244,8 @@ func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) {
 	}
 	sha, err := repo.ResolveSHA(req.Head)
 	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
+		httpError(w, http.StatusBadRequest, fmt.Errorf(
+			"could not resolve branch %q — it may have been deleted, renamed, or is mid-rebase; reload to refresh the branch list", req.Head))
 		return
 	}
 	review, err := s.Store.CreateOrGetReview(repo.Path, base, req.Head, sha)

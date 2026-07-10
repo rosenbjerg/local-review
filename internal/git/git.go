@@ -109,9 +109,12 @@ func (r *Repo) MergeBase(a, b string) (string, error) {
 	return strings.TrimSpace(out), err
 }
 
-// ResolveSHA returns the full commit SHA a ref points to.
+// ResolveSHA returns the full commit SHA a ref points to. --verify + ^{commit}
+// resolves exactly one commit and fails cleanly when the ref is gone, instead
+// of git's confusing "ambiguous argument … unknown revision or path" message a
+// bare rev-parse emits for a non-existent ref.
 func (r *Repo) ResolveSHA(ref string) (string, error) {
-	out, err := r.run("rev-parse", ref)
+	out, err := r.run("rev-parse", "--verify", ref+"^{commit}")
 	return strings.TrimSpace(out), err
 }
 
