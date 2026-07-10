@@ -6,9 +6,10 @@ import { Markdown } from "./Markdown";
 interface Props {
   comments: Comment[];
   onJump: (id: number) => void;
+  onDelete: (id: number) => void;
 }
 
-export function CommentsPanel({ comments, onJump }: Props) {
+export function CommentsPanel({ comments, onJump, onDelete }: Props) {
   const byFile = new Map<string, Comment[]>();
   for (const c of comments) {
     const arr = byFile.get(c.filePath) ?? [];
@@ -30,31 +31,42 @@ export function CommentsPanel({ comments, onJump }: Props) {
         <div key={file} className="comment-file-group">
           <div className="comment-file-name">{file}</div>
           {byFile.get(file)!.map((c) => (
-            <button
-              key={c.id}
-              className={`comment-nav${c.resolved ? " comment-nav-resolved" : ""}${
-                c.anchorStatus === "outdated" ? " comment-nav-outdated" : ""
-              }`}
-              onClick={() => onJump(c.id)}
-            >
-              <div className="comment-meta">
-                <span className="muted">#{c.id}</span>
-                <span className={`badge badge-${c.type}`}>{c.type}</span>
-                <span className="muted">{lineLabel(c)}</span>
-                <AnchorBadge comment={c} compact />
-                {c.resolved && <span className="muted">✓</span>}
-                {(c.replies?.length ?? 0) > 0 && (
-                  <span className="muted">💬 {c.replies.length}</span>
-                )}
-              </div>
-              {c.body ? (
-                <Markdown className="comment-preview md-body" source={c.body} inline />
-              ) : (
-                <div className="comment-preview">
-                  <em className="muted">(empty)</em>
+            // Positioned wrapper so the delete button can sit in the corner as a
+            // sibling of the jump button — a <button> can't be nested in another.
+            <div key={c.id} className="comment-nav-item">
+              <button
+                className={`comment-nav${c.resolved ? " comment-nav-resolved" : ""}${
+                  c.anchorStatus === "outdated" ? " comment-nav-outdated" : ""
+                }`}
+                onClick={() => onJump(c.id)}
+              >
+                <div className="comment-meta">
+                  <span className="muted">#{c.id}</span>
+                  <span className={`badge badge-${c.type}`}>{c.type}</span>
+                  <span className="muted">{lineLabel(c)}</span>
+                  <AnchorBadge comment={c} compact />
+                  {c.resolved && <span className="muted">✓</span>}
+                  {(c.replies?.length ?? 0) > 0 && (
+                    <span className="muted">💬 {c.replies.length}</span>
+                  )}
                 </div>
-              )}
-            </button>
+                {c.body ? (
+                  <Markdown className="comment-preview md-body" source={c.body} inline />
+                ) : (
+                  <div className="comment-preview">
+                    <em className="muted">(empty)</em>
+                  </div>
+                )}
+              </button>
+              <button
+                className="comment-nav-delete"
+                title="Delete comment"
+                aria-label="Delete comment"
+                onClick={() => onDelete(c.id)}
+              >
+                ×
+              </button>
+            </div>
           ))}
         </div>
       ))}

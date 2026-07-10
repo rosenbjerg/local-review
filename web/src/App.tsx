@@ -702,7 +702,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
           </div>
           <div className="resizer" onMouseDown={(e) => startResize(e, "right")} />
           <aside className="side-column">
-            <CommentsPanel comments={comments} onJump={jumpTo} />
+            <CommentsPanel comments={comments} onJump={jumpTo} onDelete={handleDelete} />
           </aside>
         </div>
       )}
