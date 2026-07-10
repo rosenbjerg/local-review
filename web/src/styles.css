@@ -164,7 +164,15 @@ select {
 }
 .diff-column {
   overflow-y: auto;
-  padding: 16px;
+  /* No top padding: the file headers are sticky at top:0, so a top padding
+     would leave a band where scrolling content shows above the stuck header.
+     The ::before restores the top gap as scrollable space instead. */
+  padding: 0 16px 16px;
+}
+.diff-column::before {
+  content: "";
+  display: block;
+  height: 16px;
 }
 .side-column {
   border-left: 1px solid var(--border);
@@ -186,7 +194,8 @@ select {
   border: 1px solid var(--border);
   border-radius: 8px;
   margin-bottom: 16px;
-  overflow: hidden;
+  /* No overflow:hidden here — it would scope the sticky header to this
+     (non-scrolling) box. Corner clipping lives on .file-body / the header. */
 }
 .file-placeholder {
   opacity: 0.5;
@@ -198,9 +207,20 @@ select {
   padding: 8px 12px;
   background: var(--bg-elev);
   border-bottom: 1px solid var(--border);
+  border-radius: 8px 8px 0 0;
   position: sticky;
   top: 0;
   z-index: 1;
+}
+/* Collapsed file (header is the only child) — round all corners. */
+.file-header:last-child {
+  border-radius: 8px;
+  border-bottom: none;
+}
+/* Clips the diff/media to the rounded bottom without breaking header sticky. */
+.file-body {
+  overflow: hidden;
+  border-radius: 0 0 8px 8px;
 }
 .file-toggle {
   background: none;

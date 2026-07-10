@@ -555,14 +555,17 @@ export function DiffView({
         )}
       </div>
 
-      {!collapsed &&
-        (mediaView ? (
-          renderMedia()
-        ) : (
-          <table className="diff">
-            <tbody>{body}</tbody>
-          </table>
-        ))}
+      {!collapsed && (
+        <div className="file-body">
+          {mediaView ? (
+            renderMedia()
+          ) : (
+            <table className="diff">
+              <tbody>{body}</tbody>
+            </table>
+          )}
+        </div>
+      )}
     </div>
   );
 }
