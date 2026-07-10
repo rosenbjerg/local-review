@@ -10,6 +10,7 @@ import type { Branch, Comment, CommentType, FileDiff, Review } from "./types";
 const LS_LEFT = "lr.leftWidth";
 const LS_RIGHT = "lr.rightWidth";
 const LS_BASE_BY_REPO = "lr.baseByRepo";
+const LS_REPO = "lr.repo";
 
 function readWidth(key: string, def: number): number {
   const v = Number(localStorage.getItem(key));
@@ -114,7 +115,9 @@ export default function App() {
       .repos()
       .then((r) => {
         setRepos(r.repos);
-        setRepo(r.repos[0] ?? "");
+        // Restore the last-used repo if it still exists, else the first.
+        const saved = localStorage.getItem(LS_REPO);
+        setRepo(saved && r.repos.includes(saved) ? saved : (r.repos[0] ?? ""));
       })
       .catch((e) => setError((e as Error).message));
   }, []);
@@ -244,6 +247,14 @@ export default function App() {
       if (reqSeq.current === seq) setLoading(false);
     }
   }
+
+  // Auto-start (or restart) the review whenever the repo/head/base selection is
+  // complete — selecting a branch is enough, no "Start review" click. Keyed on
+  // the selection only; the uncommitted toggle has its own diff-refetch effect.
+  useEffect(() => {
+    if (repo && head) startReview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repo, head, base]);
 
   // Returns true on success so the caller only closes its composer when the
   // comment actually saved (otherwise the typed text would be lost).
@@ -461,7 +472,14 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
         <span className="logo">local-review</span>
         <label>
           repo
-          <select value={repo} onChange={(e) => setRepo(e.target.value)} disabled={loading}>
+          <select
+            value={repo}
+            onChange={(e) => {
+              setRepo(e.target.value);
+              localStorage.setItem(LS_REPO, e.target.value);
+            }}
+            disabled={loading}
+          >
             {repos.length === 0 && <option value="">(none found)</option>}
             {repos.map((r) => (
               <option key={r} value={r}>
@@ -522,8 +540,13 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
             uncommitted
           </label>
         )}
-        <button className="btn btn-primary" onClick={startReview} disabled={loading || !repo || !head}>
-          {loading ? "Loading…" : review ? "Reload" : "Start review"}
+        <button
+          className="btn"
+          onClick={startReview}
+          disabled={loading || !repo || !head}
+          title="Re-run the review to pick up new commits"
+        >
+          {loading ? "Loading…" : "Reload"}
         </button>
         <span className="spacer" />
         {review && (
@@ -553,7 +576,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
       {error && <div className="error banner">{error}</div>}
 
       {!review && !error && (
-        <div className="empty">Pick a branch and start a review.</div>
+        <div className="empty">Select a branch to start a review.</div>
       )}
 
       {review && (

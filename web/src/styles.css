@@ -11,10 +11,47 @@
   --del-bg: #25171c;
   --sel-bg: #2a2f1a;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  /* Render native controls (checkboxes, selects, default scrollbars) dark. */
+  color-scheme: dark;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Checkboxes: tint the checked state with the accent instead of the OS blue. */
+input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+/* Slim, theme-matched scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 6px;
+  /* Transparent border + padding-box clip gives the thumb breathing room on any
+     background without hardcoding the surface color. */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 body {
