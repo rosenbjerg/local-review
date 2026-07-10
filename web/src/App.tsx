@@ -505,19 +505,22 @@ export default function App() {
     return Math.min(lines, 400) * 18 + 44;
   }
 
-  // Copies a short prompt pointing a coding agent at this review's API: fetch
-  // the markdown directly and reply to comments by id. Uses the browser's own
+  // Copies a prompt pointing a coding agent at this review's API: what to do
+  // with each comment (change + reply), how to read the type/anchor cues, and
+  // the curl calls to fetch the markdown and reply by id. Uses the browser's own
   // origin so the URLs match wherever the server is reachable.
   async function copyAgentInstructions() {
     if (!review) return;
     const origin = window.location.origin;
-    const text = `This is a code review produced with local-review. Fetch it from the API and address each comment.
+    const text = `This is a code review produced with local-review. Fetch it from the API and work through every open comment.
+
+For each comment: if you agree, make the change and reply noting what you did; if you disagree or need clarification, reply explaining why or asking a question. Comment types signal intent — bug and suggestion want a fix (or a reason it's declined), question wants an answer, nit is optional. A comment marked (outdated) or (moved from …) means the code shifted since it was written — trust the quoted snippet over the line number.
 
 # Fetch the review as markdown. The response is JSON; read its "markdown" field.
 # Each comment is headed with an id like "#42".
 curl -s -X POST ${origin}/api/reviews/${review.id}/export | jq -r .markdown
 
-# Reply to a comment by its id (e.g. ask a question or note what you changed).
+# Reply to a comment by its id (the #42 in each heading; different per comment).
 curl -s -X POST ${origin}/api/comments/<id>/replies \\
   -H 'Content-Type: application/json' \\
   -d '{"body": "your reply here"}'

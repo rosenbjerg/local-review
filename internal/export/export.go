@@ -91,10 +91,15 @@ func renderAgentInstructions(b *strings.Builder, baseURL string, exampleID int64
 	if exampleID > 0 {
 		id = fmt.Sprintf("%d", exampleID)
 	}
-	b.WriteString("\n---\n\n## Replying to these comments\n\n")
-	b.WriteString("Each comment above is tagged with an id (shown as `#<id>` in its heading). " +
-		"You can reply to a comment over HTTP — to ask a clarifying question or record what you " +
-		"changed — by POSTing to the local-review API.\n\n")
+	b.WriteString("\n---\n\n## Addressing these comments\n\n")
+	b.WriteString("Work through every comment above. For each: if you agree, make the change and reply " +
+		"noting what you did; if you disagree or need clarification, reply explaining why or asking a " +
+		"question. Comment types signal intent — bug and suggestion want a fix (or a reason it's " +
+		"declined), question wants an answer, nit is optional. A comment marked (outdated) or " +
+		"(moved from …) means the code shifted since it was written — trust the quoted snippet over " +
+		"the line number.\n\n")
+	b.WriteString("Each comment is tagged with an id (the `#<id>` in its heading). Reply to one over " +
+		"HTTP — to record what you changed or ask a question — by POSTing to the local-review API:\n\n")
 	fmt.Fprintf(b, "```sh\ncurl -X POST %s/api/comments/%s/replies \\\n"+
 		"  -H 'Content-Type: application/json' \\\n"+
 		"  -d '{\"body\": \"your reply here\"}'\n```\n", baseURL, id)

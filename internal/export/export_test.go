@@ -51,12 +51,20 @@ func TestRenderAgentInstructions(t *testing.T) {
 			{ID: 42, FilePath: "main.go", StartLine: 12, EndLine: 15, Type: "bug", Body: "off-by-one"},
 		},
 	}
-	if out := Render(r, false, "http://127.0.0.1:7777"); strings.Contains(out, "Replying to these comments") {
+	if out := Render(r, false, "http://127.0.0.1:7777"); strings.Contains(out, "Addressing these comments") {
 		t.Fatalf("instructions should be absent when disabled, got:\n%s", out)
 	}
 	out := Render(r, true, "http://127.0.0.1:7777")
-	if !strings.Contains(out, "## Replying to these comments") {
+	if !strings.Contains(out, "## Addressing these comments") {
 		t.Fatalf("expected instructions section, got:\n%s", out)
+	}
+	// The section states the task contract and the type/anchor legend, not just
+	// the reply mechanism.
+	if !strings.Contains(out, "make the change and reply") {
+		t.Fatalf("expected the task contract, got:\n%s", out)
+	}
+	if !strings.Contains(out, "trust the quoted snippet over the line number") {
+		t.Fatalf("expected the anchor-drift legend, got:\n%s", out)
 	}
 	if !strings.Contains(out, "curl -X POST http://127.0.0.1:7777/api/comments/42/replies") {
 		t.Fatalf("expected concrete curl example, got:\n%s", out)
