@@ -205,6 +205,10 @@ func parseDiff(text string) []FileDiff {
 			flush()
 			cur = &FileDiff{Status: "modified"}
 			hunk = nil
+			// Seed paths from the header so binary and mode-only changes (which
+			// emit no ---/+++ or rename lines) still get a name. The
+			// authoritative ---/+++/rename lines below override when present.
+			cur.OldPath, cur.NewPath = parseGitHeaderPaths(line)
 		case cur == nil:
 			// preamble before first file; ignore
 		case strings.HasPrefix(line, "new file"):
@@ -252,6 +256,20 @@ func parseDiff(text string) []FileDiff {
 	}
 	flush()
 	return files
+}
+
+// parseGitHeaderPaths extracts the old and new paths from a
+// "diff --git a/<old> b/<new>" header. We force a/ and b/ prefixes (see
+// diffPrefixArgs), so splitting on the " b/" separator is reliable except for
+// the rare path containing " b/" — which, being a text/rename case, is
+// corrected by the authoritative ---/+++/rename lines anyway.
+func parseGitHeaderPaths(line string) (oldPath, newPath string) {
+	rest := strings.TrimPrefix(line, "diff --git ")
+	i := strings.Index(rest, " b/")
+	if i < 0 {
+		return "", ""
+	}
+	return strings.TrimPrefix(rest[:i], "a/"), rest[i+len(" b/"):]
 }
 
 func stripDiffPath(p string) string {

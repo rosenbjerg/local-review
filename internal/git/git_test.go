@@ -26,3 +26,52 @@ func TestParseHunkHeader(t *testing.T) {
 		})
 	}
 }
+
+// Binary and mode-only changes emit no ---/+++ or rename lines, so their paths
+// must come from the "diff --git" header — otherwise they render with an empty
+// name in the file list.
+func TestParseDiffHeaderOnlyPaths(t *testing.T) {
+	diff := "diff --git a/.claude/hook.sh b/.claude/hook.sh\n" +
+		"old mode 100755\n" +
+		"new mode 100644\n" +
+		"diff --git a/asset.bin b/asset.bin\n" +
+		"index e69de29..d95f3ad 100644\n" +
+		"Binary files a/asset.bin and b/asset.bin differ\n" +
+		"diff --git a/normal.txt b/normal.txt\n" +
+		"--- a/normal.txt\n" +
+		"+++ b/normal.txt\n" +
+		"@@ -1 +1,2 @@\n" +
+		" text\n" +
+		"+more\n"
+	files := parseDiff(diff)
+	want := []string{".claude/hook.sh", "asset.bin", "normal.txt"}
+	if len(files) != len(want) {
+		t.Fatalf("got %d files, want %d", len(files), len(want))
+	}
+	for i, f := range files {
+		name := f.NewPath
+		if name == "" {
+			name = f.OldPath
+		}
+		if name != want[i] {
+			t.Errorf("file %d: name %q, want %q", i, name, want[i])
+		}
+	}
+}
+
+func TestParseGitHeaderPaths(t *testing.T) {
+	cases := []struct {
+		line, wantOld, wantNew string
+	}{
+		{"diff --git a/foo.txt b/foo.txt", "foo.txt", "foo.txt"},
+		{"diff --git a/.claude/hook.sh b/.claude/hook.sh", ".claude/hook.sh", ".claude/hook.sh"},
+		{"diff --git a/old/name.go b/new/name.go", "old/name.go", "new/name.go"},
+	}
+	for _, c := range cases {
+		gotOld, gotNew := parseGitHeaderPaths(c.line)
+		if gotOld != c.wantOld || gotNew != c.wantNew {
+			t.Errorf("parseGitHeaderPaths(%q) = (%q, %q), want (%q, %q)",
+				c.line, gotOld, gotNew, c.wantOld, c.wantNew)
+		}
+	}
+}
