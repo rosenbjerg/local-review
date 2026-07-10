@@ -6,6 +6,7 @@ import { ExportModal } from "./components/ExportModal";
 import { FileExplorer, orderedFiles } from "./components/FileExplorer";
 import { LazyFile } from "./components/LazyFile";
 import type { Branch, Comment, CommentType, FileDiff, Review } from "./types";
+import { effectiveLines } from "./types";
 
 const LS_LEFT = "lr.leftWidth";
 const LS_RIGHT = "lr.rightWidth";
@@ -59,6 +60,9 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showExport, setShowExport] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  // The comment last jumped to (via click or n/p), so n/p can step from it.
+  const [activeComment, setActiveComment] = useState<number | null>(null);
   const [promptCopied, setPromptCopied] = useState(false);
   const [leftW, setLeftW] = useState(() => readWidth(LS_LEFT, 260));
   const [rightW, setRightW] = useState(() => readWidth(LS_RIGHT, 380));
@@ -421,6 +425,7 @@ export default function App() {
   }
 
   function jumpTo(id: number) {
+    setActiveComment(id);
     if (flashComment(id)) return;
     // The comment's file may be unmounted (lazy rendering) and/or collapsed
     // (large/reviewed file). Signal its DiffView to expand, scroll to trigger
@@ -519,6 +524,119 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
   const effectiveUncommitted = uncommitted && headIsCurrent;
   // Render the middle pane in the same order the left-pane tree shows.
   const orderedDiffFiles = useMemo(() => orderedFiles(files), [files]);
+
+  // Comment ids in reading order (file order, then line) — the sequence n/p
+  // steps through. Comments whose file isn't in the diff trail at the end.
+  const orderedCommentIds = useMemo(() => {
+    const ids: number[] = [];
+    const seen = new Set<number>();
+    for (const f of orderedDiffFiles) {
+      const p = f.newPath || f.oldPath;
+      const inFile = comments
+        .filter((c) => c.filePath === p)
+        .sort((a, b) => effectiveLines(a).start - effectiveLines(b).start);
+      for (const c of inFile) {
+        ids.push(c.id);
+        seen.add(c.id);
+      }
+    }
+    for (const c of comments) if (!seen.has(c.id)) ids.push(c.id);
+    return ids;
+  }, [orderedDiffFiles, comments]);
+
+  // Global keyboard shortcuts. Suppressed while typing in a field or with a
+  // modifier held (so browser shortcuts still work); the help overlay and
+  // export modal capture keys while open. See the `?` overlay for the list.
+  useEffect(() => {
+    if (!review) return;
+    const fileList = orderedDiffFiles.map((f) => f.newPath || f.oldPath);
+    const moveFile = (delta: number) => {
+      if (fileList.length === 0) return;
+      const cur = selectedFile ? fileList.indexOf(selectedFile) : -1;
+      const next =
+        cur === -1 ? (delta > 0 ? 0 : fileList.length - 1) : clamp(cur + delta, 0, fileList.length - 1);
+      jumpToFile(fileList[next]);
+    };
+    const moveComment = (delta: number) => {
+      if (orderedCommentIds.length === 0) return;
+      const cur = activeComment != null ? orderedCommentIds.indexOf(activeComment) : -1;
+      const next =
+        cur === -1
+          ? delta > 0
+            ? 0
+            : orderedCommentIds.length - 1
+          : clamp(cur + delta, 0, orderedCommentIds.length - 1);
+      jumpTo(orderedCommentIds[next]);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.tagName === "SELECT" ||
+          t.isContentEditable)
+      ) {
+        return;
+      }
+      if (showHelp) {
+        if (e.key === "Escape" || e.key === "?") {
+          e.preventDefault();
+          setShowHelp(false);
+        }
+        return;
+      }
+      if (showExport) return; // the export modal handles its own Escape
+      switch (e.key) {
+        case "j":
+          e.preventDefault();
+          moveFile(1);
+          break;
+        case "k":
+          e.preventDefault();
+          moveFile(-1);
+          break;
+        case "n":
+          e.preventDefault();
+          moveComment(1);
+          break;
+        case "p":
+          e.preventDefault();
+          moveComment(-1);
+          break;
+        case "e":
+          e.preventDefault();
+          setShowExport(true);
+          break;
+        case "r":
+          if (!loading) {
+            e.preventDefault();
+            startReview();
+          }
+          break;
+        case "?":
+          e.preventDefault();
+          setShowHelp(true);
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    review,
+    showExport,
+    showHelp,
+    loading,
+    repo,
+    head,
+    base,
+    orderedDiffFiles,
+    orderedCommentIds,
+    selectedFile,
+    activeComment,
+  ]);
 
   return (
     <div className="app">
@@ -629,6 +747,14 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
             </button>
           </>
         )}
+        <button
+          className="btn btn-icon"
+          onClick={() => setShowHelp(true)}
+          title="Keyboard shortcuts (?)"
+          aria-label="Keyboard shortcuts"
+        >
+          ?
+        </button>
         <a
           className="btn btn-icon"
           href="https://github.com/rosenbjerg/local-review"
@@ -711,6 +837,62 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
 
       {showExport && review && (
         <ExportModal reviewId={review.id} onClose={() => setShowExport(false)} />
+      )}
+
+      {showHelp && (
+        <div className="modal-backdrop" onClick={() => setShowHelp(false)}>
+          <div className="modal help-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Keyboard shortcuts</h2>
+              <span className="spacer" />
+              <button className="btn" onClick={() => setShowHelp(false)}>
+                Close
+              </button>
+            </div>
+            <div className="help-body">
+              <table className="shortcuts">
+                <tbody>
+                  <tr>
+                    <td>
+                      <kbd>j</kbd> / <kbd>k</kbd>
+                    </td>
+                    <td>Next / previous file</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <kbd>n</kbd> / <kbd>p</kbd>
+                    </td>
+                    <td>Next / previous comment</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <kbd>e</kbd>
+                    </td>
+                    <td>Export review</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <kbd>r</kbd>
+                    </td>
+                    <td>Reload review</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <kbd>?</kbd>
+                    </td>
+                    <td>Toggle this help</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <kbd>Esc</kbd>
+                    </td>
+                    <td>Close a dialog / cancel a comment</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

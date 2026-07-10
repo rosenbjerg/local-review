@@ -900,6 +900,43 @@ select {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
 }
+/* Compact modal for the keyboard-shortcuts overlay — sized to its content
+   rather than the export modal's full-height preview. */
+.help-modal {
+  width: min(440px, 94vw);
+  height: auto;
+  max-height: 88vh;
+}
+.help-body {
+  padding: 8px 8px 12px;
+  overflow: auto;
+}
+.shortcuts {
+  border-collapse: collapse;
+  width: 100%;
+}
+.shortcuts td {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+.shortcuts td:first-child {
+  white-space: nowrap;
+  width: 1%;
+  text-align: right;
+  color: var(--muted);
+}
+kbd {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.4;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 6px;
+  color: var(--text);
+}
 .modal-head h2 {
   margin: 0;
   font-size: 15px;
