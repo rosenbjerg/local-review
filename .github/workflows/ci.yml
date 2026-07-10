@@ -1,0 +1,58 @@
+name: ci
+
+# Verify every pull request into main, and main itself after merge, so a
+# broken build, failing test, or unformatted code never lands.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A newer push to the same branch/PR supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Frontend first: `npm run build` runs tsc (typecheck) and vite, producing
+      # web/dist — which the root Go package embeds via go:embed, so every Go
+      # step below needs it present to compile.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-clean; run 'gofmt -w':"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      # -race needs cgo (default-on for this native build) and catches data
+      # races in the SSE hub and store under concurrent access.
+      - name: go test
+        run: go test -race ./...

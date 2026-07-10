@@ -5,7 +5,7 @@
 **Review a git branch locally, leave line-level comments, and hand the result to your coding agent as clean markdown.**
 
 [![Release](https://img.shields.io/github/v/release/rosenbjerg/local-review?sort=semver)](https://github.com/rosenbjerg/local-review/releases/latest)
-[![Release build](https://github.com/rosenbjerg/local-review/actions/workflows/release.yml/badge.svg)](https://github.com/rosenbjerg/local-review/actions/workflows/release.yml)
+[![CI](https://github.com/rosenbjerg/local-review/actions/workflows/ci.yml/badge.svg)](https://github.com/rosenbjerg/local-review/actions/workflows/ci.yml)
 [![Go](https://img.shields.io/github/go-mod/go-version/rosenbjerg/local-review)](go.mod)
 [![License: GPL v3](https://img.shields.io/github/license/rosenbjerg/local-review)](LICENSE)
 
