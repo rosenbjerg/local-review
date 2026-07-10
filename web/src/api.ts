@@ -110,10 +110,12 @@ export const api = {
 
   deleteReply: (id: number) => req<void>(`/api/replies/${id}`, { method: "DELETE" }),
 
-  setReviewed: (reviewId: number, filePath: string, reviewed: boolean) =>
+  // worktree records which side the fingerprint is captured on (on-disk working
+  // tree vs head), so a later change to that side reverts the file to unread.
+  setReviewed: (reviewId: number, filePath: string, reviewed: boolean, worktree: boolean) =>
     req<void>(`/api/reviews/${reviewId}/reviewed`, {
       method: "POST",
-      body: JSON.stringify({ filePath, reviewed }),
+      body: JSON.stringify({ filePath, reviewed, worktree }),
     }),
 
   export: (reviewId: number, instructions?: boolean) => {

@@ -453,7 +453,9 @@ export default function App() {
     });
     if (!review) return;
     try {
-      await api.setReviewed(review.id, path, reviewed);
+      // Tag the fingerprint side to match what's on screen (uncommitted view ⇒
+      // working tree), mirroring how new comments are anchored (see addComment).
+      await api.setReviewed(review.id, path, reviewed, effectiveUncommitted);
     } catch (e) {
       // Roll back the optimistic change so the file isn't left marked
       // reviewed/collapsed when the save didn't actually land.
