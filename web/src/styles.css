@@ -132,6 +132,17 @@ select {
 .btn.danger:hover:not(:disabled) {
   background: rgba(248, 81, 73, 0.1);
 }
+/* Square button holding a single icon (e.g. the GitHub link) */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 8px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.btn-icon:hover {
+  color: var(--text);
+}
 .btn-primary {
   background: var(--add-border);
   border-color: var(--add-border);
