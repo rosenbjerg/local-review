@@ -114,6 +114,14 @@ export default function App() {
     document.body.style.cursor = "col-resize";
   }
 
+  // Reflect the active review in the tab title so several open reviews (the
+  // whole point of the SSE multi-tab sync) are tellable apart at a glance.
+  useEffect(() => {
+    document.title = review
+      ? `${repo} · ${review.headRef} → ${review.baseRef} — local-review`
+      : "local-review";
+  }, [review, repo]);
+
   // Discover repositories under the root once on load.
   useEffect(() => {
     api
@@ -720,7 +728,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
         {review && (
           <>
             <span className="muted">
-              {review.headRef} → {review.baseRef} @ {shortSha}
+              {shortSha}
               {effectiveUncommitted && " + uncommitted"}
             </span>
             <button
