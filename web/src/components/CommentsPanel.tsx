@@ -1,6 +1,7 @@
 import type { Comment } from "../types";
 import { lineLabel } from "../types";
 import { AnchorBadge } from "./AnchorBadge";
+import { Markdown } from "./Markdown";
 
 interface Props {
   comments: Comment[];
@@ -46,7 +47,13 @@ export function CommentsPanel({ comments, onJump }: Props) {
                   <span className="muted">💬 {c.replies.length}</span>
                 )}
               </div>
-              <div className="comment-preview">{c.body || <em className="muted">(empty)</em>}</div>
+              {c.body ? (
+                <Markdown className="comment-preview md-body" source={c.body} inline />
+              ) : (
+                <div className="comment-preview">
+                  <em className="muted">(empty)</em>
+                </div>
+              )}
             </button>
           ))}
         </div>
