@@ -46,6 +46,7 @@ web/src/
   App.tsx                top-level state, repo/branch pickers, 3-column resizable layout, all handlers
   api.ts                 fetch wrappers    types.ts  shared types
   highlight.ts           Shiki wrapper: all languages, lazy-loaded, JS regex engine
+  time.ts                relative/absolute timestamp + edited-marker helpers
   components/
     FileExplorer.tsx     left pane: hierarchical file tree, collapse, reviewed toggle
     DiffView.tsx         center: per-file diff, syntax highlight, inline threads/composer,
@@ -104,6 +105,10 @@ web/src/
   and **excluded from the export** (the artifact carries only open, actionable
   feedback). The column is backfilled onto older DBs by `store.ensureColumn`,
   the idempotent add-column helper to reuse when adding future columns.
+  **Resolving deliberately does not bump `updated_at`** — that column tracks the
+  last body/type edit, which the UI surfaces as an `(edited)` marker (`time.ts`
+  `wasEdited`), and resolving isn't an edit (it has its own flag). Keep it that
+  way if you touch `SetCommentResolved`, or the marker will fire on resolve.
 - **Comments and replies carry an `author`.** The API defaults an omitted
   author to `"agent"` (so a coding agent posting via the API needn't set it);
   the browser app tags its own creations `"reviewer"` explicitly (`api.ts`). The
@@ -166,6 +171,12 @@ web/src/
   `grid-template-columns` to the DOM via ref (no per-mousemove re-render). Export
   markdown preview is rendered with `markdown-it` (`html:false`, so safe);
   Copy/Download always emit the raw markdown.
+- **Keyboard shortcuts** live in one window `keydown` effect in `App.tsx`:
+  `j`/`k` next/prev file, `n`/`p` next/prev comment (reading order via
+  `orderedCommentIds`, stepping from `activeComment`), `e` export, `r` reload,
+  `?` help overlay. The handler bails when the target is an input/textarea/select
+  or a modifier is held, and while a modal is open, so it never fights the
+  composer or the browser. The `?` header button opens the same overlay.
 
 ## Conventions
 
