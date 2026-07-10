@@ -23,11 +23,11 @@ const (
 )
 
 type Review struct {
-	ID        int64     `json:"id"`
-	RepoPath  string    `json:"repoPath"`
-	BaseRef   string    `json:"baseRef"`
-	HeadRef   string    `json:"headRef"`
-	HeadSHA   string    `json:"headSha"`
+	ID            int64     `json:"id"`
+	RepoPath      string    `json:"repoPath"`
+	BaseRef       string    `json:"baseRef"`
+	HeadRef       string    `json:"headRef"`
+	HeadSHA       string    `json:"headSha"`
 	Status        string    `json:"status"` // draft | exported
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`

@@ -194,9 +194,9 @@ func TestMapOldLine(t *testing.T) {
 		old, wantNew int
 		wantAlive    bool
 	}{
-		{1, 3, true}, // 'a' shifted down by 2
-		{2, 4, true}, // 'b'
-		{3, 5, true}, // 'c'
+		{1, 3, true},   // 'a' shifted down by 2
+		{2, 4, true},   // 'b'
+		{3, 5, true},   // 'c'
 		{10, 12, true}, // past the hunk: shifted by net +2
 	} {
 		got, alive := MapOldLine(hunks, c.old)
