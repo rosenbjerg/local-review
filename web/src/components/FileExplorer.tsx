@@ -43,6 +43,21 @@ function buildTree(files: FileDiff[]): TreeNode[] {
   return root.children.map((c) => (c.kind === "dir" ? compress(c) : c));
 }
 
+// orderedFiles returns the files in the same top-to-bottom order the tree
+// renders them (dirs first, then files, alphabetically), so the middle pane's
+// list matches the left pane's tree.
+export function orderedFiles(files: FileDiff[]): FileDiff[] {
+  const out: FileDiff[] = [];
+  const walk = (nodes: TreeNode[]) => {
+    for (const n of nodes) {
+      if (n.kind === "dir") walk(n.children);
+      else out.push(n.file);
+    }
+  };
+  walk(buildTree(files));
+  return out;
+}
+
 function sortDir(dir: DirNode) {
   dir.children.sort((a, b) => {
     if (a.kind !== b.kind) return a.kind === "dir" ? -1 : 1;

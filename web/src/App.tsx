@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { api } from "./api";
 import { CommentsPanel } from "./components/CommentsPanel";
 import { DiffView, LARGE_FILE_LINES } from "./components/DiffView";
 import { ExportModal } from "./components/ExportModal";
-import { FileExplorer } from "./components/FileExplorer";
+import { FileExplorer, orderedFiles } from "./components/FileExplorer";
 import { LazyFile } from "./components/LazyFile";
 import type { Branch, Comment, CommentType, FileDiff, Review } from "./types";
 
@@ -488,6 +488,8 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
   // user's choice — and, crucially, doesn't mutate `uncommitted` on a head
   // change, which would fire the diff-refetch effect on top of the auto-start.
   const effectiveUncommitted = uncommitted && headIsCurrent;
+  // Render the middle pane in the same order the left-pane tree shows.
+  const orderedDiffFiles = useMemo(() => orderedFiles(files), [files]);
 
   return (
     <div className="app">
@@ -617,7 +619,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
           <div className="resizer" onMouseDown={(e) => startResize(e, "left")} />
           <div className="diff-column" ref={diffColRef}>
             {files.length === 0 && <div className="empty">No changes between base and head.</div>}
-            {files.map((f) => {
+            {orderedDiffFiles.map((f) => {
               const path = f.newPath || f.oldPath;
               return (
                 <LazyFile
