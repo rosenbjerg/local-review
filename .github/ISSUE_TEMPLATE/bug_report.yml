@@ -1,0 +1,71 @@
+name: Bug report
+description: Something isn't working the way it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report. local-review is a local,
+        single-user tool — please include enough detail to reproduce the problem
+        against a throwaway git repo.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, and what you expected instead.
+      placeholder: I marked a file reviewed, then the badge disappeared after…
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The exact sequence, ideally against a small/throwaway repo.
+      placeholder: |
+        1. `./local-review -root ~/code`
+        2. Pick repo `foo`, branch `feature/x`
+        3. Drag-select lines 10–14 and add a comment
+        4. …
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - Windows
+        - Other (note it below)
+    validations:
+      required: true
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: How did you install it?
+      options:
+        - Prebuilt binary from Releases
+        - Built from source (start.sh / go build)
+        - Other (note it below)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release tag (e.g. v0.0.9), or the commit SHA if built from source.
+      placeholder: v0.0.9
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      description: The UI runs in your browser — which one, and roughly what version?
+      placeholder: Firefox 141, Chrome 138, Safari 18…
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server logs / console errors
+      description: Relevant output from the terminal running local-review, or the browser devtools console. Automatically formatted as code — no backticks needed.
+      render: shell

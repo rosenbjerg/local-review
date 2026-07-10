@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/rosenbjerg/local-review/discussions
+    about: Ask a question, share how you use it, or float an idea before filing a request.
+  - name: Security report
+    url: https://github.com/rosenbjerg/local-review/security/advisories/new
+    about: Report a vulnerability privately — please don't open a public issue for it.
