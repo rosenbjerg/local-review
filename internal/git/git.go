@@ -91,15 +91,30 @@ func sortBranches(branches []Branch) {
 	})
 }
 
-// MainBranch returns "main" if it exists, else "master" if it exists, else "main".
+// MainBranch returns the trunk to diff against: local "main" or "master" if
+// present, else the remote default (origin/HEAD) or remote "origin/main"/
+// "origin/master", else "" when nothing resolves.
 func (r *Repo) MainBranch() string {
 	for _, name := range []string{"main", "master"} {
 		if _, err := r.run("rev-parse", "--verify", "--quiet", name); err == nil {
 			return name
 		}
 	}
-	// No conventional trunk exists; return "" rather than a fabricated "main"
-	// that would fail merge-base. Callers require an explicit base in that case.
+	// No local trunk — fall back to the remote's default branch, then to a
+	// remote main/master. This covers working off origin/main without a local
+	// main (e.g. a branch started from a detached `git checkout origin/main`).
+	if out, err := r.run("rev-parse", "--abbrev-ref", "origin/HEAD"); err == nil {
+		if name := strings.TrimSpace(out); name != "" && name != "origin/HEAD" {
+			return name
+		}
+	}
+	for _, name := range []string{"origin/main", "origin/master"} {
+		if _, err := r.run("rev-parse", "--verify", "--quiet", name); err == nil {
+			return name
+		}
+	}
+	// Nothing resolvable; return "" rather than a fabricated "main" that would
+	// fail merge-base. Callers require an explicit base in that case.
 	return ""
 }
 

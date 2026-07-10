@@ -101,7 +101,11 @@ web/src/
   in the export heading/reply lines.
 - **Diff base** defaults to the main-branch *name* (stored on the review); the
   `/api/diff` handler resolves it to `merge-base(base, head)` at query time, so
-  the review shows only what the branch introduces.
+  the review shows only what the branch introduces. `MainBranch()` prefers a
+  local `main`/`master`, then falls back to the remote default
+  (`origin/HEAD`) / `origin/main` / `origin/master` — so a branch worked off
+  `origin/main` with no local trunk still gets an auto base. If nothing
+  resolves it returns `""` and create-review/diff ask for an explicit base.
 - **DB lives in `~/.local-review/`** by default; override the directory with the
   `-data-dir` flag (a leading `~` is expanded, relative paths are made absolute).
   One DB serves many repos, keyed by abs path.
