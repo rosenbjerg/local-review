@@ -10,22 +10,27 @@ interface Props {
 // html:false escapes any raw HTML in comment bodies — safe to render.
 const md = new MarkdownIt({ html: false, linkify: true, breaks: false });
 
+const LS_INSTRUCTIONS = "lr.exportInstructions";
+
 export function ExportModal({ reviewId, onClose }: Props) {
   const [markdown, setMarkdown] = useState("");
   const [filename, setFilename] = useState("review.md");
   const [error, setError] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "ok" | "fail">("idle");
   const [view, setView] = useState<"preview" | "raw">("preview");
+  const [instructions, setInstructions] = useState(
+    () => localStorage.getItem(LS_INSTRUCTIONS) === "true"
+  );
 
   useEffect(() => {
     api
-      .export(reviewId)
+      .export(reviewId, instructions)
       .then((r) => {
         setMarkdown(r.markdown);
         setFilename(r.filename);
       })
       .catch((e) => setError((e as Error).message));
-  }, [reviewId]);
+  }, [reviewId, instructions]);
 
   const html = useMemo(() => md.render(markdown), [markdown]);
 
@@ -66,6 +71,20 @@ export function ExportModal({ reviewId, onClose }: Props) {
             </button>
           </div>
           <span className="spacer" />
+          <label
+            className="checkbox"
+            title="Append instructions telling a coding agent how to reply to these comments over HTTP"
+          >
+            <input
+              type="checkbox"
+              checked={instructions}
+              onChange={(e) => {
+                setInstructions(e.target.checked);
+                localStorage.setItem(LS_INSTRUCTIONS, String(e.target.checked));
+              }}
+            />
+            agent reply instructions
+          </label>
           <button className="btn" onClick={copy}>
             {copyState === "ok" ? "Copied ✓" : copyState === "fail" ? "Copy failed" : "Copy markdown"}
           </button>

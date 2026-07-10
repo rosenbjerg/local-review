@@ -346,7 +346,8 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.annotateReview(review)
-	md := export.Render(review)
+	instructions := r.URL.Query().Get("instructions") == "true"
+	md := export.Render(review, instructions, "http://"+r.Host)
 	_ = s.Store.SetStatus(id, "exported")
 
 	shortSHA := review.HeadSHA

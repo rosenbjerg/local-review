@@ -104,8 +104,13 @@ export const api = {
       body: JSON.stringify({ filePath, reviewed }),
     }),
 
-  export: (reviewId: number) =>
-    req<{ markdown: string; filename: string }>(`/api/reviews/${reviewId}/export`, {
-      method: "POST",
-    }),
+  export: (reviewId: number, instructions?: boolean) => {
+    const p = new URLSearchParams();
+    if (instructions) p.set("instructions", "true");
+    const qs = p.toString();
+    return req<{ markdown: string; filename: string }>(
+      `/api/reviews/${reviewId}/export${qs ? `?${qs}` : ""}`,
+      { method: "POST" }
+    );
+  },
 };

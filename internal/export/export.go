@@ -10,8 +10,10 @@ import (
 	"local-review/internal/store"
 )
 
-// Render produces the markdown artifact for a review.
-func Render(r *store.Review) string {
+// Render produces the markdown artifact for a review. When agentInstructions is
+// set, a trailing section explains how to reply to comments over HTTP, using
+// baseURL (e.g. "http://127.0.0.1:7777") in the curl example.
+func Render(r *store.Review, agentInstructions bool, baseURL string) string {
 	var b strings.Builder
 
 	shortSHA := r.HeadSHA
@@ -67,7 +69,35 @@ func Render(r *store.Review) string {
 		}
 	}
 
+	if agentInstructions {
+		var exampleID int64
+		if len(unresolved) > 0 {
+			exampleID = unresolved[0].ID
+		}
+		renderAgentInstructions(&b, baseURL, exampleID)
+	}
+
 	return b.String()
+}
+
+// renderAgentInstructions appends a section telling a coding agent how to reply
+// to a comment over HTTP. exampleID (when > 0) makes the curl example concrete;
+// otherwise a placeholder is used.
+func renderAgentInstructions(b *strings.Builder, baseURL string, exampleID int64) {
+	if baseURL == "" {
+		baseURL = "http://127.0.0.1:7777"
+	}
+	id := "<comment-id>"
+	if exampleID > 0 {
+		id = fmt.Sprintf("%d", exampleID)
+	}
+	b.WriteString("\n---\n\n## Replying to these comments\n\n")
+	b.WriteString("Each comment above is tagged with an id (shown as `#<id>` in its heading). " +
+		"You can reply to a comment over HTTP — to ask a clarifying question or record what you " +
+		"changed — by POSTing to the local-review API.\n\n")
+	fmt.Fprintf(b, "```sh\ncurl -X POST %s/api/comments/%s/replies \\\n"+
+		"  -H 'Content-Type: application/json' \\\n"+
+		"  -d '{\"body\": \"your reply here\"}'\n```\n", baseURL, id)
 }
 
 // renderReply writes a reply as an indented blockquote beneath its comment. The

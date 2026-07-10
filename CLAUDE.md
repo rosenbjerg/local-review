@@ -148,6 +148,11 @@ web/src/
 - `web/dist` bundle and `local-review.db*` are gitignored; don't commit them.
 - Changing the markdown output? `internal/export` is the single canonical
   formatter — the frontend never generates markdown (the preview only *renders* it).
+  `Render` can optionally append **agent reply instructions** (a curl example
+  against `/api/comments/{id}/replies`), gated by the `instructions` query param
+  on `POST /api/reviews/{id}/export`; the export modal's checkbox drives it and
+  remembers the last choice in `localStorage` under `lr.exportInstructions`. The
+  curl base URL comes from the export request's `Host`.
 - Go's build cache has occasionally embedded a **stale `web/dist`**; if the served
   bundle doesn't match disk, `rm` the binary and rebuild. `start.sh` (vite → go)
   is the reliable path.

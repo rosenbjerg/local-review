@@ -661,6 +661,17 @@ select {
   margin: 0;
   font-size: 15px;
 }
+.modal-head label.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.modal-head label.checkbox input {
+  cursor: pointer;
+}
 .markdown-preview {
   margin: 0;
   padding: 16px;
