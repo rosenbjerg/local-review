@@ -426,6 +426,10 @@ select {
 .tree-dir:hover {
   background: var(--bg-hover);
 }
+.tree-dir:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
 .tree-chevron {
   flex: none;
   width: 12px;

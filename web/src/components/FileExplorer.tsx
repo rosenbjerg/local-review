@@ -135,9 +135,21 @@ export function FileExplorer({
             key={`d:${n.path}`}
             className="tree-row tree-dir"
             style={indent}
+            role="button"
+            tabIndex={0}
+            aria-expanded={!isCollapsed}
+            aria-label={`${n.name} folder, ${stats.reviewed} of ${stats.total} reviewed`}
             onClick={() => toggle(n.path)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                toggle(n.path);
+              }
+            }}
           >
-            <span className="tree-chevron">{isCollapsed ? "▸" : "▾"}</span>
+            <span className="tree-chevron" aria-hidden="true">
+              {isCollapsed ? "▸" : "▾"}
+            </span>
             <span className={`tree-folder${done ? " reviewed" : ""}`}>{n.name}</span>
             <span className="muted tree-progress">
               {stats.reviewed}/{stats.total}
