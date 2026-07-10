@@ -202,6 +202,14 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		content, err = repo.FileContent(ref, path)
+		if err != nil {
+			// The ref may not have the file — e.g. an uncommitted new file shown
+			// in an uncommitted diff, or a stale request mid-mode-switch. If it's
+			// on disk, serve that instead of failing.
+			if wt, wtErr := repo.WorktreeFile(path); wtErr == nil {
+				content, err = wt, nil
+			}
+		}
 	}
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)
