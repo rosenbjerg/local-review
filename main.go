@@ -69,7 +69,7 @@ func main() {
 	if !*noOpen {
 		go openBrowser(url)
 	}
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, api.WithErrorLogging(mux)); err != nil {
 		log.Fatal(err)
 	}
 }
