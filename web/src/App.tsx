@@ -46,6 +46,7 @@ function clamp(n: number, min: number, max: number): number {
 
 export default function App() {
   const [repos, setRepos] = useState<string[]>([]);
+  const [reposLoaded, setReposLoaded] = useState(false); // repo discovery finished
   const [repo, setRepo] = useState("");
   const [branches, setBranches] = useState<Branch[]>([]);
   const [head, setHead] = useState("");
@@ -132,7 +133,8 @@ export default function App() {
         const saved = localStorage.getItem(LS_REPO);
         setRepo(saved && r.repos.includes(saved) ? saved : (r.repos[0] ?? ""));
       })
-      .catch((e) => setError((e as Error).message));
+      .catch((e) => setError((e as Error).message))
+      .finally(() => setReposLoaded(true));
   }, []);
 
   // When the active repo changes, load its branches and clear any prior review.
@@ -780,7 +782,11 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
       {error && <div className="error banner">{error}</div>}
 
       {!review && !error && (
-        <div className="empty">Select a branch to start a review.</div>
+        <div className="empty">
+          {reposLoaded && repos.length === 0
+            ? "No git repositories found under the served folder."
+            : "Select a branch to start a review."}
+        </div>
       )}
 
       {review && (
