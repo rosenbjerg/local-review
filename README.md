@@ -39,9 +39,10 @@ no runtime dependencies beyond `git`.
   matching otherwise — badging threads that *moved* or went *outdated*.
 - **Reviewed-file tracking** that un-checks a file automatically when its content
   changes after you reviewed it.
-- **Agent handoff.** One canonical markdown export, grouped by file, ready to
-  hand off. Optionally include reply instructions so the agent can respond to
-  each comment via the API.
+- **Agent handoff, two ways.** Copy a short prompt that points the agent at the
+  review's API so it *pulls* the markdown and replies to comments itself, or
+  export the rendered markdown to paste in directly. Either way the agent can
+  reply to each comment through the API.
 - **Live multi-tab sync** over SSE — comments and reviewed state stay in sync
   across browser tabs.
 - **Handles real repos.** Syntax highlighting for ~235 languages, before/after
@@ -107,17 +108,23 @@ each review independently. Draft reviews older than `-retention-days` (default
 
 ### The agent handoff loop
 
-The point of the export is to feed a coding agent:
+The review is a markdown artifact — each comment as a file path, line(s),
+captured snippet, and your note, grouped by file, with resolved threads excluded
+so the agent only sees open, actionable feedback. There are two ways to get it
+to a coding agent:
 
-1. Review the branch and leave your comments.
-2. **Export** — you get one markdown artifact: each comment as a file path,
-   line(s), captured snippet, and your note, grouped by file. Resolved threads
-   are excluded, so the agent only sees open, actionable feedback.
-3. Paste it into your agent. If you enable **reply instructions** on export, the
-   markdown includes a `curl` example so the agent can post replies back to each
-   comment (`POST /api/comments/{id}/replies`).
-4. The agent's replies appear **live in the UI** — read them, resolve what's
-   addressed, and re-export what's left.
+- **Copy agent instructions** (toolbar) — copies a short prompt that points the
+  agent at *this review's* API. The agent pulls the review itself
+  (`POST /api/reviews/{id}/export`, reading the `markdown` field) and replies to
+  comments by id. Best for iterating: after you add or change comments, the agent
+  just re-fetches the latest — no re-paste.
+- **Export** (modal) — preview, then copy or download the rendered markdown to
+  paste in directly. Optionally include **reply instructions**, a `curl` example
+  so a paste-only agent can still post replies.
+
+Either way the agent posts replies back to each comment
+(`POST /api/comments/{id}/replies`), and they appear **live in the UI** — read
+them, resolve what's addressed, and hand off what's left with one more fetch.
 
 ### Flags
 
