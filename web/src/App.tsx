@@ -62,6 +62,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [showExport, setShowExport] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [confirmingReset, setConfirmingReset] = useState(false);
   // The comment last jumped to (via click or n/p), so n/p can step from it.
   const [activeComment, setActiveComment] = useState<number | null>(null);
   const [promptCopied, setPromptCopied] = useState(false);
@@ -407,15 +408,19 @@ export default function App() {
   }
 
   // Wipes the review clean: deletes every comment and unmarks every reviewed
-  // file, keeping the review itself (the same branch resumes empty). Guarded by
-  // a confirm since it's irreversible. Clears local state on success; the SSE
-  // ping keeps other tabs in sync.
-  async function handleReset() {
+  // file, keeping the review itself (the same branch resumes empty). It's
+  // irreversible, so the Reset button opens a confirmation dialog first.
+  function requestReset() {
     if (!review) return;
     if (comments.length === 0 && reviewedFiles.size === 0) return;
-    if (!window.confirm("Delete all comments and unmark all reviewed files? This cannot be undone.")) {
-      return;
-    }
+    setConfirmingReset(true);
+  }
+
+  // Runs the wipe after the dialog is confirmed. Clears local state on success;
+  // the SSE ping keeps other tabs in sync.
+  async function performReset() {
+    setConfirmingReset(false);
+    if (!review) return;
     try {
       await api.resetReview(review.id);
       setComments([]);
@@ -597,6 +602,13 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
         }
         return;
       }
+      if (confirmingReset) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setConfirmingReset(false);
+        }
+        return;
+      }
       if (showExport) return; // the export modal handles its own Escape
       switch (e.key) {
         case "j":
@@ -638,6 +650,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
     review,
     showExport,
     showHelp,
+    confirmingReset,
     loading,
     repo,
     head,
@@ -749,7 +762,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
             </button>
             <button
               className="btn danger"
-              onClick={handleReset}
+              onClick={requestReset}
               disabled={comments.length === 0 && reviewedFiles.size === 0}
               title="Delete all comments and unmark all reviewed files"
             >
@@ -904,6 +917,37 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmingReset && (
+        <div className="modal-backdrop" onClick={() => setConfirmingReset(false)}>
+          <div className="modal confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Reset review?</h2>
+            </div>
+            <div className="confirm-body">
+              <p>
+                This deletes{" "}
+                <strong>
+                  {comments.length} comment{comments.length === 1 ? "" : "s"}
+                </strong>{" "}
+                and unmarks{" "}
+                <strong>
+                  {reviewedFiles.size} reviewed file{reviewedFiles.size === 1 ? "" : "s"}
+                </strong>{" "}
+                in this review. It can't be undone.
+              </p>
+            </div>
+            <div className="confirm-actions">
+              <button className="btn" autoFocus onClick={() => setConfirmingReset(false)}>
+                Cancel
+              </button>
+              <button className="btn danger" onClick={performReset}>
+                Delete everything
+              </button>
             </div>
           </div>
         </div>

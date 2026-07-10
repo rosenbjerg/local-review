@@ -922,6 +922,26 @@ select {
   padding: 8px 8px 12px;
   overflow: auto;
 }
+/* Confirmation dialog (e.g. Reset) — small, content-sized, matching the app. */
+.confirm-modal {
+  width: min(420px, 94vw);
+  height: auto;
+  max-height: 88vh;
+}
+.confirm-body {
+  padding: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.confirm-body p {
+  margin: 0;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
 .shortcuts {
   border-collapse: collapse;
   width: 100%;
