@@ -481,6 +481,14 @@ select {
   color: var(--muted);
   font-style: italic;
 }
+/* Inline load error inside a file body (e.g. Full view fetch failed). */
+.file-error {
+  margin: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elev);
+  font-size: 13px;
+}
 .file-comments {
   margin-top: 12px;
   display: flex;

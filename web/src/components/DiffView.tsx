@@ -87,6 +87,7 @@ export function DiffView({
   const [delTokens, setDelTokens] = useState<Map<string, Token[]> | null>(null);
   const [svgAsImage, setSvgAsImage] = useState(false);
   const [fileComposer, setFileComposer] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const path = file.newPath || file.oldPath;
   const lang = langForPath(path);
@@ -253,10 +254,13 @@ export function DiffView({
         const res = await api.file(repo, file.newPath, headRef, uncommitted);
         setSource(res.content.replace(/\n$/, "").split("\n"));
       } catch (e) {
-        alert(`Could not load full file: ${(e as Error).message}`);
+        // Surface inline (not a native alert) so it matches the app's error
+        // style and doesn't steal focus. Stay in the current view.
+        setLoadError(`Could not load full file: ${(e as Error).message}`);
         return;
       }
     }
+    setLoadError(null);
     setMode(next);
   }
 
@@ -557,6 +561,7 @@ export function DiffView({
 
       {!collapsed && (
         <div className="file-body">
+          {loadError && <div className="error file-error">{loadError}</div>}
           {mediaView ? (
             renderMedia()
           ) : (
