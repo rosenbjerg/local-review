@@ -3,6 +3,7 @@ import type { Comment, CommentType, Reply } from "../types";
 import { lineLabel } from "../types";
 import { CommentComposer } from "./CommentComposer";
 import { AnchorBadge } from "./AnchorBadge";
+import { Markdown } from "./Markdown";
 
 interface Props {
   comment: Comment;
@@ -52,7 +53,7 @@ function ReplyItem({
           }}
         />
       ) : (
-        <div className="reply-body">{reply.body}</div>
+        <Markdown className="reply-body md-body" source={reply.body} />
       )}
     </div>
   );
@@ -107,7 +108,7 @@ export function CommentThread({
           }}
         />
       ) : (
-        <div className="thread-body">{comment.body}</div>
+        <Markdown className="thread-body md-body" source={comment.body} />
       )}
 
       {replies.length > 0 && (

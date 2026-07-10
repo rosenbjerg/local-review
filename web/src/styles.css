@@ -567,7 +567,6 @@ select {
   margin-bottom: 6px;
 }
 .thread-body {
-  white-space: pre-wrap;
   font-size: 13px;
 }
 /* Replies nested under a thread's root comment */
@@ -586,8 +585,88 @@ select {
   margin-bottom: 2px;
 }
 .reply-body {
-  white-space: pre-wrap;
   font-size: 13px;
+}
+/* Rendered markdown inside comment & reply bodies. Kept tight — these live in
+   the narrow inline threads, not the full-width export preview. */
+.md-body {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.md-body > *:first-child {
+  margin-top: 0;
+}
+.md-body > *:last-child {
+  margin-bottom: 0;
+}
+.md-body p {
+  margin: 0.4em 0;
+}
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4,
+.md-body h5,
+.md-body h6 {
+  font-size: 1.05em;
+  font-weight: 600;
+  margin: 0.7em 0 0.3em;
+}
+.md-body ul,
+.md-body ol {
+  margin: 0.4em 0;
+  padding-left: 1.4em;
+}
+.md-body li {
+  margin: 0.15em 0;
+}
+.md-body a {
+  color: var(--accent);
+}
+.md-body code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.md-body pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  margin: 0.4em 0;
+}
+.md-body pre code {
+  font-size: 12px;
+  background: none;
+  border: none;
+  padding: 0;
+}
+.md-body blockquote {
+  margin: 0.4em 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+.md-body img {
+  max-width: 100%;
+}
+.md-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0.7em 0;
+}
+.md-body table {
+  border-collapse: collapse;
+  margin: 0.4em 0;
+}
+.md-body th,
+.md-body td {
+  border: 1px solid var(--border);
+  padding: 3px 8px;
 }
 .reply-add {
   margin-top: 6px;
