@@ -242,7 +242,25 @@ export default function App() {
       if (reqSeq.current !== seq) return;
       setFiles(diff.files ?? []);
     } catch (e) {
-      if (reqSeq.current === seq) setError((e as Error).message);
+      if (reqSeq.current !== seq) return;
+      // The selected head may have gone stale (deleted/renamed/mid-rebase since
+      // the branch list loaded). Refetch branches; if head vanished, drop it and
+      // fall back to the current branch — the head change re-fires this review
+      // via the auto-start effect. If head still exists, the failure was
+      // something else, so surface it.
+      let recovered = false;
+      try {
+        const r = await api.branches(repo);
+        if (reqSeq.current === seq && !r.branches.some((b) => b.name === head)) {
+          setBranches(r.branches);
+          const current = r.branches.find((b) => b.isCurrent);
+          setHead(current?.name ?? r.branches[0]?.name ?? "");
+          recovered = true;
+        }
+      } catch {
+        // Ignore; fall through to surfacing the original error.
+      }
+      if (!recovered && reqSeq.current === seq) setError((e as Error).message);
     } finally {
       if (reqSeq.current === seq) setLoading(false);
     }
