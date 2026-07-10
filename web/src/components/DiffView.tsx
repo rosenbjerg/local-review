@@ -6,6 +6,15 @@ import { effectiveLines } from "../types";
 import { CommentComposer } from "./CommentComposer";
 import { CommentThread } from "./CommentThread";
 
+const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif"]);
+
+function extOf(path: string): string {
+  const dot = path.lastIndexOf(".");
+  return dot < 0 ? "" : path.slice(dot + 1).toLowerCase();
+}
+const isRasterImage = (path: string) => IMAGE_EXTS.has(extOf(path));
+const isSvg = (path: string) => extOf(path) === "svg";
+
 interface Row {
   key: string;
   kind: LineKind | "hunk";
@@ -18,6 +27,7 @@ interface Props {
   file: FileDiff;
   repo: string;
   headRef: string;
+  baseRef: string;
   uncommitted: boolean;
   comments: Comment[];
   onAddComment: (args: {
@@ -48,6 +58,7 @@ export function DiffView({
   file,
   repo,
   headRef,
+  baseRef,
   uncommitted,
   comments,
   onAddComment,
@@ -74,9 +85,19 @@ export function DiffView({
   const [dragAnchor, setDragAnchor] = useState<number | null>(null);
   const [newTokens, setNewTokens] = useState<Map<number, Token[]> | null>(null);
   const [delTokens, setDelTokens] = useState<Map<string, Token[]> | null>(null);
+  const [svgAsImage, setSvgAsImage] = useState(false);
+  const [fileComposer, setFileComposer] = useState(false);
 
   const path = file.newPath || file.oldPath;
   const lang = langForPath(path);
+
+  // Media (image / non-previewable binary) files render an image or a placeholder
+  // instead of a line-by-line diff, and take file-level comments (anchored at
+  // line 0) since they have no lines. SVGs are text by default with an opt-in
+  // image view.
+  const svg = isSvg(path);
+  const asImage = isRasterImage(path) || (svg && svgAsImage);
+  const mediaView = asImage || (!!file.binary && !svg);
 
   // Auto-collapse when marked reviewed; large files stay collapsed regardless.
   useEffect(() => {
@@ -99,7 +120,7 @@ export function DiffView({
   // Fetch the full new-side file (once expanded) for both the Full view and
   // syntax highlighting of add/context lines. Skipped for deleted files.
   useEffect(() => {
-    if (collapsed || source || file.status === "deleted" || !file.newPath) return;
+    if (collapsed || source || file.status === "deleted" || !file.newPath || mediaView) return;
     let cancelled = false;
     api
       .file(repo, file.newPath, headRef, uncommitted)
@@ -110,7 +131,7 @@ export function DiffView({
     return () => {
       cancelled = true;
     };
-  }, [collapsed, source, file, headRef, repo, uncommitted]);
+  }, [collapsed, source, file, headRef, repo, uncommitted, mediaView]);
 
   // Tokenize the full source → one token array per line (keyed by new line no).
   // Skipped for very large files to avoid blocking the main thread.
@@ -288,6 +309,19 @@ export function DiffView({
     if (ok) setSelection(null); // keep the composer open (with the text) on failure
   }
 
+  // File-level comment (binary/image files have no lines) — anchored at line 0.
+  async function submitFileComment(body: string, type: CommentType) {
+    const ok = await onAddComment({
+      filePath: path,
+      startLine: 0,
+      endLine: 0,
+      snippet: "",
+      body,
+      type,
+    });
+    if (ok) setFileComposer(false);
+  }
+
   function renderContent(kind: LineKind | "hunk", newLine: number | undefined, content: string) {
     const toks = kind === "del" ? delTokens?.get(content) : newLine ? newTokens?.get(newLine) : undefined;
     if (!toks || toks.length === 0) return content;
@@ -425,6 +459,60 @@ export function DiffView({
     );
   }
 
+  function renderImages() {
+    const showBefore = file.status !== "added" && file.oldPath && baseRef;
+    const showAfter = file.status !== "deleted" && file.newPath;
+    return (
+      <div className="image-diff">
+        {showBefore && (
+          <figure className="image-side">
+            <figcaption>before</figcaption>
+            <img src={api.blobURL(repo, file.oldPath, baseRef)} alt="before" />
+          </figure>
+        )}
+        {showAfter && (
+          <figure className="image-side">
+            <figcaption>after</figcaption>
+            <img src={api.blobURL(repo, file.newPath, headRef, uncommitted)} alt="after" />
+          </figure>
+        )}
+      </div>
+    );
+  }
+
+  function renderMedia() {
+    return (
+      <div className="media-body">
+        {asImage ? renderImages() : <div className="binary-note">Binary file — no preview</div>}
+        <div className="file-comments">
+          {comments.map((c) => (
+            <CommentThread
+              key={c.id}
+              comment={c}
+              onUpdate={onUpdateComment}
+              onDelete={onDeleteComment}
+              onAddReply={onAddReply}
+              onUpdateReply={onUpdateReply}
+              onDeleteReply={onDeleteReply}
+              onResolve={onResolve}
+            />
+          ))}
+          {fileComposer ? (
+            <CommentComposer
+              submitLabel="Add comment"
+              onSubmit={submitFileComment}
+              onCancel={() => setFileComposer(false)}
+            />
+          ) : (
+            <button className="btn add-file-comment" onClick={() => setFileComposer(true)}>
+              + Add file comment
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`file${reviewed ? " file-reviewed" : ""}`}>
       <div className="file-header">
@@ -442,7 +530,17 @@ export function DiffView({
           />
           Viewed
         </label>
-        {file.newPath !== "" && (
+        {svg && (
+          <div className="view-toggle">
+            <button className={!svgAsImage ? "active" : ""} onClick={() => setSvgAsImage(false)}>
+              Text
+            </button>
+            <button className={svgAsImage ? "active" : ""} onClick={() => setSvgAsImage(true)}>
+              Image
+            </button>
+          </div>
+        )}
+        {!mediaView && file.newPath !== "" && (
           <div className="view-toggle">
             <button
               className={mode === "changed" ? "active" : ""}
@@ -457,11 +555,14 @@ export function DiffView({
         )}
       </div>
 
-      {!collapsed && (
-        <table className="diff">
-          <tbody>{body}</tbody>
-        </table>
-      )}
+      {!collapsed &&
+        (mediaView ? (
+          renderMedia()
+        ) : (
+          <table className="diff">
+            <tbody>{body}</tbody>
+          </table>
+        ))}
     </div>
   );
 }

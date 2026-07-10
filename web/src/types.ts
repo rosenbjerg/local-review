@@ -22,6 +22,7 @@ export interface FileDiff {
   oldPath: string;
   newPath: string;
   status: string; // added | modified | deleted | renamed
+  binary?: boolean;
   hunks: Hunk[];
 }
 

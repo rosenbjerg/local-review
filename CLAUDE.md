@@ -130,6 +130,16 @@ web/src/
   keeps the stream warm and turns a half-open connection into a write error so
   it unsubscribes. The frontend keeps a focus/visibility refetch as a fallback
   for the reconnect gap, gated on the stream not being `OPEN`.
+- **Image & binary files.** `parseDiff` flags binary files (`Binary` on
+  `FileDiff`, from git's "Binary files … differ" line; also set for untracked
+  binaries). `DiffView` renders raster images (png/jpg/gif/webp/bmp/ico/avif) as
+  a **before/after** pair via `GET /api/blob` (raw bytes + image `Content-Type`;
+  before = the resolved merge-base `diff.base`, after = head or the working tree);
+  non-image binaries show a "no preview" note. **SVGs are a text diff by default**
+  with a per-file Text/Image toggle. These media files have no lines, so they take
+  **file-level comments anchored at line 0** (empty snippet ⇒ always `current`;
+  exported and labelled as `file`, not `L0`). `/api/blob` shares `/api/file`'s
+  ref/worktree resolution and working-tree fallback.
 - **Syntax highlighting** (`highlight.ts`): Shiki with the **JS regex engine**
   (not oniguruma — avoids a browser wasm-load failure) and `github-dark`. All
   ~235 grammars are available, each lazily fetched per file. Extensions resolve

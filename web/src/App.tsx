@@ -51,6 +51,7 @@ export default function App() {
   const [base, setBase] = useState("");
   const [review, setReview] = useState<Review | null>(null);
   const [files, setFiles] = useState<FileDiff[]>([]);
+  const [baseSha, setBaseSha] = useState(""); // resolved merge-base, for image "before"
   const [comments, setComments] = useState<Comment[]>([]);
   const [reviewedFiles, setReviewedFiles] = useState<Set<string>>(new Set());
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -218,6 +219,7 @@ export default function App() {
       .then((d) => {
         if (reqSeq.current !== seq) return;
         setFiles(d.files ?? []);
+        setBaseSha(d.base ?? "");
       })
       .catch((e) => {
         if (reqSeq.current === seq) setError((e as Error).message);
@@ -241,6 +243,7 @@ export default function App() {
       const diff = await api.diff(repo, rev.headRef, rev.baseRef, effectiveUncommitted);
       if (reqSeq.current !== seq) return;
       setFiles(diff.files ?? []);
+      setBaseSha(diff.base ?? "");
     } catch (e) {
       if (reqSeq.current !== seq) return;
       // The selected head may have gone stale (deleted/renamed/mid-rebase since
@@ -451,7 +454,9 @@ export default function App() {
     const path = f.newPath || f.oldPath;
     const lines = f.hunks.reduce((n, h) => n + h.lines.length, 0);
     const collapsed = reviewedFiles.has(path) || lines > LARGE_FILE_LINES;
-    return collapsed ? 44 : Math.min(lines, 400) * 18 + 44;
+    if (collapsed) return 44;
+    if (f.binary) return 400; // image/binary media view is roughly this tall
+    return Math.min(lines, 400) * 18 + 44;
   }
 
   // Copies a short prompt pointing a coding agent at this review's API: fetch
@@ -636,6 +641,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
                     file={f}
                     repo={repo}
                     headRef={review.headRef}
+                    baseRef={baseSha}
                     uncommitted={effectiveUncommitted}
                     comments={comments.filter((c) => c.filePath === path)}
                     onAddComment={handleAddComment}

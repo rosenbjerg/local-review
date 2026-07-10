@@ -175,6 +175,7 @@ type FileDiff struct {
 	OldPath string `json:"oldPath"`
 	NewPath string `json:"newPath"`
 	Status  string `json:"status"` // added | modified | deleted | renamed
+	Binary  bool   `json:"binary,omitempty"`
 	Hunks   []Hunk `json:"hunks"`
 }
 
@@ -245,7 +246,11 @@ func (r *Repo) newFileDiff(path string) (FileDiff, bool) {
 		return FileDiff{}, false // vanished or unreadable since ls-files listed it
 	}
 	fd := FileDiff{Status: "added", NewPath: path, Hunks: []Hunk{}}
-	if content == "" || strings.IndexByte(content, 0) >= 0 {
+	if strings.IndexByte(content, 0) >= 0 {
+		fd.Binary = true
+		return fd, true
+	}
+	if content == "" {
 		return fd, true
 	}
 	lines := strings.Split(strings.TrimSuffix(content, "\n"), "\n")
@@ -342,6 +347,8 @@ func parseDiff(text string) []FileDiff {
 			cur.OldPath = stripDiffPath(strings.TrimPrefix(line, "--- "))
 		case strings.HasPrefix(line, "+++ "):
 			cur.NewPath = stripDiffPath(strings.TrimPrefix(line, "+++ "))
+		case strings.HasPrefix(line, "Binary files "):
+			cur.Binary = true
 		}
 	}
 	flush()

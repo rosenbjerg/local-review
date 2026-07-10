@@ -4,6 +4,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -84,6 +85,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/branches", s.handleBranches)
 	mux.HandleFunc("GET /api/diff", s.handleDiff)
 	mux.HandleFunc("GET /api/file", s.handleFile)
+	mux.HandleFunc("GET /api/blob", s.handleBlob)
 
 	mux.HandleFunc("POST /api/reviews", s.handleCreateReview)
 	mux.HandleFunc("GET /api/reviews", s.handleListReviews)
@@ -216,6 +218,72 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"path": path, "ref": ref, "content": content})
+}
+
+// handleBlob serves a file's raw bytes with an image-friendly Content-Type, for
+// <img> rendering of image files. Same ref/worktree resolution (and working-tree
+// fallback) as handleFile.
+func (s *Server) handleBlob(w http.ResponseWriter, r *http.Request) {
+	repo, ok := s.repoParam(w, r)
+	if !ok {
+		return
+	}
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		httpError(w, http.StatusBadRequest, errString("path is required"))
+		return
+	}
+	var content string
+	var err error
+	if r.URL.Query().Get("worktree") == "true" {
+		content, err = repo.WorktreeFile(path)
+	} else {
+		ref := r.URL.Query().Get("ref")
+		if err = validRef(ref); err != nil {
+			httpError(w, http.StatusBadRequest, err)
+			return
+		}
+		content, err = repo.FileContent(ref, path)
+		if err != nil {
+			if wt, wtErr := repo.WorktreeFile(path); wtErr == nil {
+				content, err = wt, nil
+			}
+		}
+	}
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.Header().Set("Content-Type", mimeForPath(path))
+	w.Header().Set("Cache-Control", "no-cache")
+	_, _ = w.Write([]byte(content))
+}
+
+// mimeForPath maps a file extension to a Content-Type, covering the image types
+// the UI renders; falls back to the stdlib table, then octet-stream.
+func mimeForPath(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".bmp":
+		return "image/bmp"
+	case ".ico":
+		return "image/x-icon"
+	case ".avif":
+		return "image/avif"
+	case ".svg":
+		return "image/svg+xml"
+	}
+	if t := mime.TypeByExtension(filepath.Ext(path)); t != "" {
+		return t
+	}
+	return "application/octet-stream"
 }
 
 // --- reviews ---

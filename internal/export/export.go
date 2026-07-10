@@ -160,6 +160,9 @@ func lineLabel(start, end int) string {
 // its snippet no longer exists at head. The captured snippet is emitted either
 // way, so outdated feedback stays legible.
 func anchorLabel(c store.Comment) string {
+	if c.StartLine == 0 {
+		return "file" // file-level comment (binary/image), not anchored to a line
+	}
 	switch c.AnchorStatus {
 	case store.AnchorMoved:
 		return fmt.Sprintf("%s (moved from %s)",

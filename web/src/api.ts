@@ -44,6 +44,13 @@ export const api = {
     return req<{ path: string; ref: string; content: string }>(`/api/file?${p.toString()}`);
   },
 
+  // URL for an <img> src: raw bytes of a file at a ref (or the working tree).
+  blobURL: (repo: string, path: string, ref: string, worktree?: boolean) => {
+    const p = new URLSearchParams({ repo, path, ref });
+    if (worktree) p.set("worktree", "true");
+    return `/api/blob?${p.toString()}`;
+  },
+
   createReview: (repo: string, head: string, base?: string) =>
     req<Review>("/api/reviews", {
       method: "POST",
