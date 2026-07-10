@@ -57,6 +57,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showExport, setShowExport] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
   const [leftW, setLeftW] = useState(() => readWidth(LS_LEFT, 260));
   const [rightW, setRightW] = useState(() => readWidth(LS_RIGHT, 380));
   const mainRef = useRef<HTMLDivElement>(null);
@@ -421,6 +422,32 @@ export default function App() {
     return collapsed ? 44 : Math.min(lines, 400) * 18 + 44;
   }
 
+  // Copies a short prompt pointing a coding agent at this review's API: fetch
+  // the markdown directly and reply to comments by id. Uses the browser's own
+  // origin so the URLs match wherever the server is reachable.
+  async function copyAgentInstructions() {
+    if (!review) return;
+    const origin = window.location.origin;
+    const text = `This is a code review produced with local-review. Fetch it from the API and address each comment.
+
+# Fetch the review as markdown. The response is JSON; read its "markdown" field.
+# Each comment is headed with an id like "#42".
+curl -s -X POST ${origin}/api/reviews/${review.id}/export | jq -r .markdown
+
+# Reply to a comment by its id (e.g. ask a question or note what you changed).
+curl -s -X POST ${origin}/api/comments/<id>/replies \\
+  -H 'Content-Type: application/json' \\
+  -d '{"body": "your reply here"}'
+`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 1500);
+    } catch {
+      setError("Copy failed — clipboard unavailable");
+    }
+  }
+
   const shortSha = review?.headSha.slice(0, 7);
   const mainBranch = branches.find((b) => b.isMain)?.name;
   // Uncommitted changes live in the working tree, which reflects the
@@ -505,6 +532,13 @@ export default function App() {
               {review.headRef} → {review.baseRef} @ {shortSha}
               {uncommitted && " + uncommitted"}
             </span>
+            <button
+              className="btn"
+              onClick={copyAgentInstructions}
+              title="Copy a prompt telling a coding agent how to fetch this review from the API and reply to comments"
+            >
+              {promptCopied ? "Copied ✓" : "Copy agent instructions"}
+            </button>
             <button
               className="btn"
               onClick={() => setShowExport(true)}
