@@ -184,6 +184,12 @@ web/src/
 - Go: standard library only for HTTP; errors bubble up as JSON via `httpError`.
 - Frontend: strict TS (`noUnusedLocals`/`noUnusedParameters` on) — no dead code.
   Match the existing component style; keep CSS in `web/src/styles.css` (no CSS-in-JS).
+- CSS colors come from the `:root` custom properties — never raw hex in a rule.
+  Surfaces (`--bg`, `--bg-elev`, `--bg-hover`, `--border`, `--text`, `--muted`,
+  `--accent`), the diff-row shades (`--add-bg`/`--add-border`/`--del-bg`/
+  `--sel-bg`), and the semantic status palette (`--danger`/`--success`/`--warn`/
+  `--info`, each with a matching `-border` shade) used by `.status-*`/`.fstat-*`/
+  `.badge-*` and danger controls. Add a var rather than reintroduce a literal.
 - Persisted UI prefs (panel widths) go in `localStorage` under `lr.*` keys.
 - Modals (`.modal` inside a `.modal-backdrop`) close on Escape and backdrop
   click, and use `useFocusTrap` for focus-in / Tab-trap / restore-on-close —

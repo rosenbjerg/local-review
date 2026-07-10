@@ -10,6 +10,16 @@
   --add-border: #238636;
   --del-bg: #25171c;
   --sel-bg: #2a2f1a;
+  /* Semantic status/feedback colors — text shade + matching border shade.
+     Used by status/fstat marks, comment-type badges, and danger controls. */
+  --danger: #f85149;
+  --danger-border: #da3633;
+  --success: #3fb950;
+  --success-border: #238636;
+  --warn: #d29922;
+  --warn-border: #9e6a03;
+  --info: #58a6ff;
+  --info-border: #1f6feb;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   /* Render native controls (checkboxes, selects, default scrollbars) dark. */
   color-scheme: dark;
@@ -126,8 +136,8 @@ select {
   cursor: not-allowed;
 }
 .btn.danger {
-  color: #f85149;
-  border-color: #f85149;
+  color: var(--danger);
+  border-color: var(--danger);
 }
 .btn.danger:hover:not(:disabled) {
   background: rgba(248, 81, 73, 0.1);
@@ -148,10 +158,6 @@ select {
   border-color: var(--add-border);
   color: #fff;
 }
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 .link {
   background: none;
   border: none;
@@ -161,7 +167,7 @@ select {
   padding: 0 4px;
 }
 .link.danger {
-  color: #f85149;
+  color: var(--danger);
 }
 
 /* Layout */
@@ -312,16 +318,16 @@ select {
   color: var(--muted);
 }
 .status-added {
-  color: #3fb950;
-  border-color: #238636;
+  color: var(--success);
+  border-color: var(--success-border);
 }
 .status-deleted {
-  color: #f85149;
-  border-color: #da3633;
+  color: var(--danger);
+  border-color: var(--danger-border);
 }
 .status-renamed {
-  color: #d29922;
-  border-color: #9e6a03;
+  color: var(--warn);
+  border-color: var(--warn-border);
 }
 
 /* File explorer */
@@ -382,13 +388,13 @@ select {
   font-weight: 700;
 }
 .fstat-added {
-  color: #3fb950;
+  color: var(--success);
 }
 .fstat-deleted {
-  color: #f85149;
+  color: var(--danger);
 }
 .fstat-renamed {
-  color: #d29922;
+  color: var(--warn);
 }
 .fstat-modified {
   color: var(--accent);
@@ -654,10 +660,14 @@ select {
 .md-body li {
   margin: 0.15em 0;
 }
-.md-body a {
+/* Links and inline-code chips render the same in both markdown scopes (inline
+   threads and the export preview), so the two share these rules. */
+.md-body a,
+.markdown-body a {
   color: var(--accent);
 }
-.md-body code {
+.md-body code,
+.markdown-body code {
   font-family: var(--font-mono);
   font-size: 0.9em;
   background: var(--bg);
@@ -754,7 +764,7 @@ select {
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: #f85149;
+  color: var(--danger);
   font-size: 17px;
   line-height: 1;
   cursor: pointer;
@@ -786,10 +796,13 @@ select {
 .composer-row {
   margin-bottom: 6px;
 }
-.composer-actions {
+.composer-actions,
+.confirm-actions {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+.composer-actions {
   margin-top: 8px;
 }
 
@@ -811,22 +824,11 @@ select {
   margin-bottom: 6px;
   word-break: break-all;
 }
-.comment-card {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 10px;
-  margin-bottom: 8px;
-  background: var(--bg);
-}
 .comment-meta {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
-}
-.comment-body {
-  white-space: pre-wrap;
-  font-size: 13px;
 }
 .badge {
   font-size: 11px;
@@ -836,53 +838,49 @@ select {
   border: 1px solid var(--border);
 }
 .badge-bug {
-  color: #f85149;
-  border-color: #da3633;
+  color: var(--danger);
+  border-color: var(--danger-border);
 }
 .badge-suggestion {
-  color: #3fb950;
-  border-color: #238636;
+  color: var(--success);
+  border-color: var(--success-border);
 }
 .badge-question {
-  color: #d29922;
-  border-color: #9e6a03;
+  color: var(--warn);
+  border-color: var(--warn-border);
 }
 .badge-nit {
   color: var(--muted);
 }
 .badge-resolved {
-  color: #3fb950;
-  border-color: #238636;
+  color: var(--success);
+  border-color: var(--success-border);
   text-transform: none;
 }
 /* Anchor-drift badges: the commented code moved (relocated to a new line) or
    went outdated (snippet no longer at head). */
 .badge-moved {
-  color: #58a6ff;
-  border-color: #1f6feb;
+  color: var(--info);
+  border-color: var(--info-border);
   text-transform: none;
 }
 .badge-outdated {
-  color: #d29922;
-  border-color: #9e6a03;
+  color: var(--warn);
+  border-color: var(--warn-border);
   text-transform: none;
 }
 
-/* A resolved or outdated thread is dimmed but still visible/actionable; hover
-   restores it. */
+/* A resolved or outdated thread / nav item is dimmed but still visible and
+   actionable; hover restores it. */
 .thread-resolved,
-.thread-outdated {
+.thread-outdated,
+.comment-nav-resolved,
+.comment-nav-outdated {
   opacity: 0.55;
   transition: opacity 0.15s ease;
 }
 .thread-resolved:hover,
-.thread-outdated:hover {
-  opacity: 1;
-}
-.comment-nav-resolved,
-.comment-nav-outdated {
-  opacity: 0.55;
-}
+.thread-outdated:hover,
 .comment-nav-resolved:hover,
 .comment-nav-outdated:hover {
   opacity: 1;
@@ -915,9 +913,9 @@ select {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
 }
-/* Compact modal for the keyboard-shortcuts overlay — sized to its content
-   rather than the export modal's full-height preview. */
-.help-modal {
+/* Compact, content-sized modal (help overlay, confirm dialogs) — overrides the
+   export modal's full-height default. */
+.modal-sm {
   width: min(440px, 94vw);
   height: auto;
   max-height: 88vh;
@@ -925,12 +923,6 @@ select {
 .help-body {
   padding: 8px 8px 12px;
   overflow: auto;
-}
-/* Confirmation dialog (e.g. Reset) — small, content-sized, matching the app. */
-.confirm-modal {
-  width: min(420px, 94vw);
-  height: auto;
-  max-height: 88vh;
 }
 .confirm-body {
   padding: 16px;
@@ -941,9 +933,6 @@ select {
   margin: 0;
 }
 .confirm-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
   padding: 0 16px 16px;
 }
 .shortcuts {
@@ -1033,9 +1022,6 @@ kbd {
 .markdown-body em {
   color: var(--muted);
 }
-.markdown-body a {
-  color: var(--accent);
-}
 .markdown-body pre {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -1049,14 +1035,6 @@ kbd {
   background: none;
   padding: 0;
 }
-.markdown-body code {
-  font-family: var(--font-mono);
-  font-size: 0.9em;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 0.1em 0.35em;
-}
 .markdown-body ul,
 .markdown-body ol {
   margin: 0.5em 0;
@@ -1067,6 +1045,6 @@ kbd {
   color: var(--muted);
 }
 .error {
-  color: #f85149;
+  color: var(--danger);
   padding: 10px 16px;
 }

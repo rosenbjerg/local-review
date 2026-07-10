@@ -873,7 +873,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
 
       {showHelp && (
         <div className="modal-backdrop" onClick={() => setShowHelp(false)}>
-          <div className="modal help-modal" ref={helpTrapRef} onClick={(e) => e.stopPropagation()}>
+          <div className="modal modal-sm" ref={helpTrapRef} onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <h2>Keyboard shortcuts</h2>
               <span className="spacer" />
@@ -929,7 +929,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
 
       {confirmingReset && (
         <div className="modal-backdrop" onClick={() => setConfirmingReset(false)}>
-          <div className="modal confirm-modal" ref={resetTrapRef} onClick={(e) => e.stopPropagation()}>
+          <div className="modal modal-sm" ref={resetTrapRef} onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <h2>Reset review?</h2>
             </div>
