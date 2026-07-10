@@ -59,6 +59,32 @@ func TestParseDiffHeaderOnlyPaths(t *testing.T) {
 	}
 }
 
+// Added and deleted binary files carry no ---/+++ lines, so the header seeds
+// both sides; the new-file/deleted-file lines must then clear the side that
+// doesn't exist, matching how text add/delete resolve via /dev/null.
+func TestParseDiffAddedDeletedBinaryPaths(t *testing.T) {
+	diff := "diff --git a/new.bin b/new.bin\n" +
+		"new file mode 100644\n" +
+		"index 0000000..d95f3ad\n" +
+		"Binary files /dev/null and b/new.bin differ\n" +
+		"diff --git a/gone.bin b/gone.bin\n" +
+		"deleted file mode 100644\n" +
+		"index d95f3ad..0000000\n" +
+		"Binary files a/gone.bin and /dev/null differ\n"
+	files := parseDiff(diff)
+	if len(files) != 2 {
+		t.Fatalf("got %d files, want 2", len(files))
+	}
+	if files[0].Status != "added" || files[0].OldPath != "" || files[0].NewPath != "new.bin" {
+		t.Errorf("added binary: got status=%q old=%q new=%q, want added/\"\"/new.bin",
+			files[0].Status, files[0].OldPath, files[0].NewPath)
+	}
+	if files[1].Status != "deleted" || files[1].NewPath != "" || files[1].OldPath != "gone.bin" {
+		t.Errorf("deleted binary: got status=%q old=%q new=%q, want deleted/gone.bin/\"\"",
+			files[1].Status, files[1].OldPath, files[1].NewPath)
+	}
+}
+
 func TestParseGitHeaderPaths(t *testing.T) {
 	cases := []struct {
 		line, wantOld, wantNew string

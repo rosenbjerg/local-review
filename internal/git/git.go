@@ -213,8 +213,10 @@ func parseDiff(text string) []FileDiff {
 			// preamble before first file; ignore
 		case strings.HasPrefix(line, "new file"):
 			cur.Status = "added"
+			cur.OldPath = "" // added: nothing on the old side (the header seeded both)
 		case strings.HasPrefix(line, "deleted file"):
 			cur.Status = "deleted"
+			cur.NewPath = "" // deleted: nothing on the new side
 		case strings.HasPrefix(line, "rename from "):
 			cur.OldPath = strings.TrimPrefix(line, "rename from ")
 			cur.Status = "renamed"
