@@ -139,9 +139,16 @@ type FileDiff struct {
 	Hunks   []Hunk `json:"hunks"`
 }
 
+// diffPrefixArgs forces canonical a/ and b/ path prefixes so parseDiff can
+// strip them, regardless of the user's git config (diff.mnemonicPrefix uses
+// c//w//i//o/ on worktree diffs, diff.noprefix drops prefixes, and
+// diff.srcprefix/dstprefix set custom ones).
+var diffPrefixArgs = []string{"--src-prefix=a/", "--dst-prefix=b/"}
+
 // Diff returns the parsed diff introduced between base and head.
 func (r *Repo) Diff(base, head string) ([]FileDiff, error) {
-	out, err := r.run("diff", "--no-color", "--find-renames", base, head)
+	args := append([]string{"diff", "--no-color", "--find-renames"}, diffPrefixArgs...)
+	out, err := r.run(append(args, base, head)...)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +161,8 @@ func (r *Repo) Diff(base, head string) ([]FileDiff, error) {
 // report them). Only meaningful when base's other side is the checked-out
 // branch, since the working tree reflects whatever HEAD is checked out.
 func (r *Repo) DiffWorktree(base string) ([]FileDiff, error) {
-	out, err := r.run("diff", "--no-color", "--find-renames", base)
+	args := append([]string{"diff", "--no-color", "--find-renames"}, diffPrefixArgs...)
+	out, err := r.run(append(args, base)...)
 	if err != nil {
 		return nil, err
 	}
