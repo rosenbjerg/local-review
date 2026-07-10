@@ -153,6 +153,10 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 	if baseRef == "" {
 		baseRef = repo.MainBranch()
 	}
+	if baseRef == "" {
+		httpError(w, http.StatusBadRequest, errString("no main or master branch found; select a base branch"))
+		return
+	}
 	mb, err := repo.MergeBase(baseRef, head)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)
@@ -233,6 +237,10 @@ func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) {
 		// endpoint resolves it to the merge-base with head at query time,
 		// so the review still shows only what head introduces.
 		base = repo.MainBranch()
+	}
+	if base == "" {
+		httpError(w, http.StatusBadRequest, errString("no main or master branch found; select a base branch"))
+		return
 	}
 	sha, err := repo.ResolveSHA(req.Head)
 	if err != nil {

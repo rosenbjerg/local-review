@@ -98,7 +98,9 @@ func (r *Repo) MainBranch() string {
 			return name
 		}
 	}
-	return "main"
+	// No conventional trunk exists; return "" rather than a fabricated "main"
+	// that would fail merge-base. Callers require an explicit base in that case.
+	return ""
 }
 
 // MergeBase returns the common ancestor of a and b.
