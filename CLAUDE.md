@@ -75,21 +75,25 @@ web/src/
   (working-tree) diff, which drives the staleness comparison side (see below).
 - **Comment staleness is derived, never persisted.** The stored line numbers are
   the *original* anchor; the branch keeps moving, so `internal/api/annotate.go`
-  recomputes a live `anchorStatus` on every review read (`handleGetReview`,
-  `handleCreateReview`, `handleExport`, and the add-comment response) by comparing
-  the captured `snippet` against the current file: matches at the
-  stored range → `current`; found at exactly one other place → `moved` (with
-  derived `currentStartLine`/`currentEndLine`); gone, ambiguous (multiple hits),
-  or file unreadable → `outdated`. The comparison side depends on the persisted
-  `worktree` flag: comments made in uncommitted mode are checked against the
-  on-disk working tree (`repo.WorktreeFile`), the rest against `head_ref`
-  (`git show head:path`) — otherwise a working-tree snippet never matches the
-  committed head and reads as instantly outdated. The frontend renders the
-  effective (relocated) line and badges moved/outdated threads; the export
-  reflects it too. `anchorStatus`/`currentStartLine`/`currentEndLine` are
-  computed on `store.Comment` in the API layer and carry `omitempty` — the store
-  never reads or writes them. Cost: one file read per distinct commented file per
-  side per review read (deduped in `annotateComments`).
+  recomputes a live `anchorStatus` (`current` | `moved` | `outdated`) on every
+  review read (`handleGetReview`, `handleCreateReview`, `handleExport`, and the
+  add-comment response). **Primary method: precise line tracking via git.** For a
+  committed comment with a `commit_sha`, `annotateByDiff` runs
+  `git diff <commit_sha> head -- path` and maps the original range through the
+  hunks (`git.MapOldLine`): every line surviving contiguously → `current` (same
+  position) or `moved` (shifted, with derived `currentStartLine`/`currentEndLine`);
+  any line deleted/modified → `outdated`. This beats snippet matching, which can't
+  tell a real move from a coincidental reappearance of the same lines.
+  **Fallback: snippet matching** — used for worktree comments, comments without a
+  `commit_sha`, and binary/renamed files — compares the captured `snippet` against
+  the current file (working tree for `worktree` comments via `repo.WorktreeFile`,
+  else `head_ref` via `git show head:path`): match at the stored range → `current`;
+  a unique match elsewhere → `moved`; gone/ambiguous/unreadable → `outdated`.
+  The frontend renders the effective (relocated) line and badges moved/outdated
+  threads; the export reflects it too. `anchorStatus`/`currentStartLine`/
+  `currentEndLine` are computed on `store.Comment` in the API layer with
+  `omitempty` — the store never reads or writes them. Diffs/file reads are cached
+  per distinct commit_sha+path (or path) per review read.
 - **Threads are two levels.** A comment is a thread root; the `replies` table
   holds follow-ups (body + timestamps only — anchor and `type` stay on the root).
   A reply's `comment_id` FK cascade-deletes it with its comment (and the comment

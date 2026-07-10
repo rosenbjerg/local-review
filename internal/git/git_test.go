@@ -183,6 +183,40 @@ func TestParseDiffContentLooksLikeHeader(t *testing.T) {
 	}
 }
 
+// MapOldLine tracks a line across a diff: lines shift past hunks, survive as
+// context, and report dead when deleted.
+func TestMapOldLine(t *testing.T) {
+	// Insert two lines at the top: @@ -1,3 +1,5 @@  +new1 +new2  ctxA ctxB ctxC
+	hunks := parseDiff(
+		"diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1,3 +1,5 @@\n+new1\n+new2\n a\n b\n c\n",
+	)[0].Hunks
+	for _, c := range []struct {
+		old, wantNew int
+		wantAlive    bool
+	}{
+		{1, 3, true}, // 'a' shifted down by 2
+		{2, 4, true}, // 'b'
+		{3, 5, true}, // 'c'
+		{10, 12, true}, // past the hunk: shifted by net +2
+	} {
+		got, alive := MapOldLine(hunks, c.old)
+		if got != c.wantNew || alive != c.wantAlive {
+			t.Errorf("MapOldLine(%d) = (%d, %v), want (%d, %v)", c.old, got, alive, c.wantNew, c.wantAlive)
+		}
+	}
+
+	// Modify line 2 in place: @@ -1,3 +1,3 @@  a  -old  +new  c
+	del := parseDiff(
+		"diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1,3 +1,3 @@\n a\n-old\n+new\n c\n",
+	)[0].Hunks
+	if _, alive := MapOldLine(del, 2); alive {
+		t.Errorf("MapOldLine of a deleted/modified line should be dead")
+	}
+	if got, alive := MapOldLine(del, 3); !alive || got != 3 {
+		t.Errorf("MapOldLine(3) = (%d, %v), want (3, true)", got, alive)
+	}
+}
+
 func TestParseGitHeaderPaths(t *testing.T) {
 	cases := []struct {
 		line, wantOld, wantNew string

@@ -27,13 +27,86 @@ func annotateComments(repo *git.Repo, headRef string, comments []store.Comment) 
 		return repo.FileContent(headRef, path)
 	})
 	readWorktree := fileReader(repo.WorktreeFile)
+	headSHA, _ := repo.ResolveSHA(headRef)
+	diffCache := map[string]*fileDiffResult{}
 	for i := range comments {
+		c := &comments[i]
+		// Prefer precise line tracking via the diff from the commit the comment
+		// was anchored against (commit_sha) to head — snippet matching can't tell
+		// a genuine move from a coincidental reappearance of the same lines.
+		if !c.Worktree && c.StartLine > 0 && c.CommitSHA != "" && c.CommitSHA != headSHA {
+			if annotateByDiff(repo, c, headRef, diffCache) {
+				continue
+			}
+		}
 		read := readHead
-		if comments[i].Worktree {
+		if c.Worktree {
 			read = readWorktree
 		}
-		annotateComment(&comments[i], read)
+		annotateComment(c, read)
 	}
+}
+
+type fileDiffResult struct {
+	files []git.FileDiff
+	err   error
+}
+
+// annotateByDiff sets a comment's anchor status by mapping its original range
+// through the diff from its commit_sha to head. Returns false to fall back to
+// snippet matching (unresolvable commit, binary/renamed file, etc.).
+func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, cache map[string]*fileDiffResult) bool {
+	key := c.CommitSHA + "\x00" + c.FilePath
+	res := cache[key]
+	if res == nil {
+		files, err := repo.DiffFile(c.CommitSHA, headRef, c.FilePath)
+		res = &fileDiffResult{files: files, err: err}
+		cache[key] = res
+	}
+	if res.err != nil {
+		return false
+	}
+	var fd *git.FileDiff
+	for i := range res.files {
+		if res.files[i].OldPath == c.FilePath || res.files[i].NewPath == c.FilePath {
+			fd = &res.files[i]
+			break
+		}
+	}
+	if fd == nil {
+		// File unchanged between commit_sha and head → still where it was.
+		c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorCurrent, 0, 0
+		return true
+	}
+	if fd.Status == "deleted" {
+		c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorOutdated, 0, 0
+		return true
+	}
+	if fd.Binary || len(fd.Hunks) == 0 {
+		return false // no textual hunks to map — let the snippet path decide
+	}
+	// Every line in the range must survive and stay contiguous, else the block
+	// was edited (outdated) rather than merely shifted (moved).
+	ns, alive := git.MapOldLine(fd.Hunks, c.StartLine)
+	if !alive {
+		c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorOutdated, 0, 0
+		return true
+	}
+	prev := ns
+	for l := c.StartLine + 1; l <= c.EndLine; l++ {
+		nl, ok := git.MapOldLine(fd.Hunks, l)
+		if !ok || nl != prev+1 {
+			c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorOutdated, 0, 0
+			return true
+		}
+		prev = nl
+	}
+	if ns == c.StartLine {
+		c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorCurrent, 0, 0
+	} else {
+		c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorMoved, ns, prev
+	}
+	return true
 }
 
 // fileReader returns a cached line-reader. A readable file always yields a

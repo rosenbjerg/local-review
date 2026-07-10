@@ -195,6 +195,51 @@ func (r *Repo) Diff(base, head string) ([]FileDiff, error) {
 	return parseDiff(out), nil
 }
 
+// DiffFile returns the diff of a single path between two refs.
+func (r *Repo) DiffFile(from, to, path string) ([]FileDiff, error) {
+	args := append([]string{"diff", "--no-color", "--find-renames"}, diffPrefixArgs...)
+	args = append(args, from, to, "--", path)
+	out, err := r.run(args...)
+	if err != nil {
+		return nil, err
+	}
+	return parseDiff(out), nil
+}
+
+// MapOldLine maps an old-side line (1-based) to its new-side line using a file's
+// diff hunks, carrying the running offset across the unchanged regions between
+// hunks. alive=false means the old line was deleted or modified (no new-side
+// counterpart).
+func MapOldLine(hunks []Hunk, old int) (newLine int, alive bool) {
+	offset := 0
+	for _, h := range hunks {
+		oldStart, newStart := parseHunkHeader(h.Header)
+		if old < oldStart {
+			return old + offset, true // unchanged region before this hunk
+		}
+		oldLn, newLn := oldStart, newStart
+		for _, l := range h.Lines {
+			switch l.Kind {
+			case "context":
+				if oldLn == old {
+					return newLn, true
+				}
+				oldLn++
+				newLn++
+			case "del":
+				if oldLn == old {
+					return 0, false
+				}
+				oldLn++
+			case "add":
+				newLn++
+			}
+		}
+		offset = newLn - oldLn
+	}
+	return old + offset, true // unchanged region after the last hunk
+}
+
 // DiffWorktree returns the diff from base to the current working tree: the
 // committed changes on the checked-out branch plus staged and unstaged edits
 // to tracked files, and untracked (non-ignored) files as new files. Only
