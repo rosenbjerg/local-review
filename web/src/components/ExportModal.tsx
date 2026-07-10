@@ -68,14 +68,19 @@ export function ExportModal({ reviewId, onClose }: Props) {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>Export review</h2>
-          <div className="view-toggle">
+          <div className="view-toggle" role="group" aria-label="Export view">
             <button
               className={view === "preview" ? "active" : ""}
+              aria-pressed={view === "preview"}
               onClick={() => setView("preview")}
             >
               Preview
             </button>
-            <button className={view === "raw" ? "active" : ""} onClick={() => setView("raw")}>
+            <button
+              className={view === "raw" ? "active" : ""}
+              aria-pressed={view === "raw"}
+              onClick={() => setView("raw")}
+            >
               Raw
             </button>
           </div>

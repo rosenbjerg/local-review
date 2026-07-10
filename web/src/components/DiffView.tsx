@@ -524,7 +524,13 @@ export function DiffView({
   return (
     <div className={`file${reviewed ? " file-reviewed" : ""}`}>
       <div className="file-header">
-        <button className="file-toggle" onClick={() => setCollapsed((c) => !c)}>
+        <button
+          className="file-toggle"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "Expand file" : "Collapse file"}
+          title={collapsed ? "Expand file" : "Collapse file"}
+        >
           {collapsed ? "▸" : "▾"}
         </button>
         <span className={`status status-${file.status}`}>{file.status}</span>
@@ -541,24 +547,37 @@ export function DiffView({
           Viewed
         </label>
         {svg && (
-          <div className="view-toggle">
-            <button className={!svgAsImage ? "active" : ""} onClick={() => setSvgAsImage(false)}>
+          <div className="view-toggle" role="group" aria-label="SVG view">
+            <button
+              className={!svgAsImage ? "active" : ""}
+              aria-pressed={!svgAsImage}
+              onClick={() => setSvgAsImage(false)}
+            >
               Text
             </button>
-            <button className={svgAsImage ? "active" : ""} onClick={() => setSvgAsImage(true)}>
+            <button
+              className={svgAsImage ? "active" : ""}
+              aria-pressed={svgAsImage}
+              onClick={() => setSvgAsImage(true)}
+            >
               Image
             </button>
           </div>
         )}
         {!mediaView && file.newPath !== "" && (
-          <div className="view-toggle">
+          <div className="view-toggle" role="group" aria-label="Diff view">
             <button
               className={mode === "changed" ? "active" : ""}
+              aria-pressed={mode === "changed"}
               onClick={() => switchMode("changed")}
             >
               Changed
             </button>
-            <button className={mode === "full" ? "active" : ""} onClick={() => switchMode("full")}>
+            <button
+              className={mode === "full" ? "active" : ""}
+              aria-pressed={mode === "full"}
+              onClick={() => switchMode("full")}
+            >
               Full
             </button>
           </div>
