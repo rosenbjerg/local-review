@@ -38,8 +38,9 @@ export const api = {
     return req<DiffResponse>(`/api/diff?${p.toString()}`);
   },
 
-  file: (repo: string, path: string, ref: string) => {
+  file: (repo: string, path: string, ref: string, worktree?: boolean) => {
     const p = new URLSearchParams({ repo, path, ref });
+    if (worktree) p.set("worktree", "true");
     return req<{ path: string; ref: string; content: string }>(`/api/file?${p.toString()}`);
   },
 

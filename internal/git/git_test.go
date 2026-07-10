@@ -1,6 +1,29 @@
 package git
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+// WorktreeFile reads on-disk content (the uncommitted new side) but must stay
+// confined to the repo: no ".." escape and no reaching into .git.
+func TestWorktreeFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := New(dir)
+
+	if got, err := r.WorktreeFile("a.txt"); err != nil || got != "hello\n" {
+		t.Fatalf("WorktreeFile(a.txt) = (%q, %v), want (\"hello\\n\", nil)", got, err)
+	}
+	for _, bad := range []string{"../escape", "../../etc/hosts", ".git", ".git/config"} {
+		if _, err := r.WorktreeFile(bad); err == nil {
+			t.Errorf("WorktreeFile(%q) should be rejected", bad)
+		}
+	}
+}
 
 func TestParseHunkHeader(t *testing.T) {
 	cases := []struct {

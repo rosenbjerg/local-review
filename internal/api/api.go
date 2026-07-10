@@ -190,11 +190,19 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, errString("path is required"))
 		return
 	}
-	if err := validRef(ref); err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return
+	// worktree reads the on-disk (uncommitted) new side, which git show can't
+	// reach — e.g. a new file that isn't committed at the head ref.
+	var content string
+	var err error
+	if r.URL.Query().Get("worktree") == "true" {
+		content, err = repo.WorktreeFile(path)
+	} else {
+		if err = validRef(ref); err != nil {
+			httpError(w, http.StatusBadRequest, err)
+			return
+		}
+		content, err = repo.FileContent(ref, path)
 	}
-	content, err := repo.FileContent(ref, path)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)
 		return

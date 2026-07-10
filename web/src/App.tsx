@@ -631,6 +631,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
                     file={f}
                     repo={repo}
                     headRef={review.headRef}
+                    uncommitted={effectiveUncommitted}
                     comments={comments.filter((c) => c.filePath === path)}
                     onAddComment={handleAddComment}
                     onUpdateComment={handleUpdate}

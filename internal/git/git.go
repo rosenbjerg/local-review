@@ -7,7 +7,9 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -136,6 +138,23 @@ func (r *Repo) ResolveSHA(ref string) (string, error) {
 // FileContent returns the full content of a file at a ref.
 func (r *Repo) FileContent(ref, path string) (string, error) {
 	return r.run("show", ref+":"+path)
+}
+
+// WorktreeFile returns the on-disk content of a file — the new side of an
+// uncommitted (working-tree) diff, which git show can't read. The path is
+// confined to the repo: no ".." escape and no reaching into .git.
+func (r *Repo) WorktreeFile(path string) (string, error) {
+	clean := filepath.Clean(path)
+	if clean == ".git" || strings.HasPrefix(clean, ".git"+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid path %q", path)
+	}
+	full := filepath.Join(r.Path, clean)
+	rel, err := filepath.Rel(r.Path, full)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid path %q", path)
+	}
+	b, err := os.ReadFile(full)
+	return string(b), err
 }
 
 // --- Diff parsing ---

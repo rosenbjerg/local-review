@@ -18,6 +18,7 @@ interface Props {
   file: FileDiff;
   repo: string;
   headRef: string;
+  uncommitted: boolean;
   comments: Comment[];
   onAddComment: (args: {
     filePath: string;
@@ -47,6 +48,7 @@ export function DiffView({
   file,
   repo,
   headRef,
+  uncommitted,
   comments,
   onAddComment,
   onUpdateComment,
@@ -87,13 +89,20 @@ export function DiffView({
     if (expandTarget && expandTarget.path === path) setCollapsed(false);
   }, [expandTarget, path]);
 
+  // In uncommitted mode the new side is the working tree, so read from disk
+  // (git show can't reach an uncommitted new file). Reset source when the mode
+  // flips so the full view refetches the correct side.
+  useEffect(() => {
+    setSource(null);
+  }, [uncommitted]);
+
   // Fetch the full new-side file (once expanded) for both the Full view and
   // syntax highlighting of add/context lines. Skipped for deleted files.
   useEffect(() => {
     if (collapsed || source || file.status === "deleted" || !file.newPath) return;
     let cancelled = false;
     api
-      .file(repo, file.newPath, headRef)
+      .file(repo, file.newPath, headRef, uncommitted)
       .then((res) => {
         if (!cancelled) setSource(res.content.replace(/\n$/, "").split("\n"));
       })
@@ -101,7 +110,7 @@ export function DiffView({
     return () => {
       cancelled = true;
     };
-  }, [collapsed, source, file, headRef, repo]);
+  }, [collapsed, source, file, headRef, repo, uncommitted]);
 
   // Tokenize the full source → one token array per line (keyed by new line no).
   // Skipped for very large files to avoid blocking the main thread.
@@ -220,7 +229,7 @@ export function DiffView({
   async function switchMode(next: "changed" | "full") {
     if (next === "full" && !source) {
       try {
-        const res = await api.file(repo, file.newPath, headRef);
+        const res = await api.file(repo, file.newPath, headRef, uncommitted);
         setSource(res.content.replace(/\n$/, "").split("\n"));
       } catch (e) {
         alert(`Could not load full file: ${(e as Error).message}`);
