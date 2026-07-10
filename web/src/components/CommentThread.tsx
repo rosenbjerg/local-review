@@ -4,6 +4,7 @@ import { lineLabel } from "../types";
 import { CommentComposer } from "./CommentComposer";
 import { AnchorBadge } from "./AnchorBadge";
 import { Markdown } from "./Markdown";
+import { absoluteTime, relativeTime, wasEdited } from "../time";
 
 interface Props {
   comment: Comment;
@@ -33,6 +34,16 @@ function ReplyItem({
       <div className="reply-meta">
         <span className="muted">↳ #{reply.id}</span>
         <span className="muted">{reply.author}</span>
+        {reply.createdAt && (
+          <span className="muted" title={absoluteTime(reply.createdAt)}>
+            {relativeTime(reply.createdAt)}
+          </span>
+        )}
+        {wasEdited(reply.createdAt, reply.updatedAt) && (
+          <span className="muted" title={`edited ${absoluteTime(reply.updatedAt)}`}>
+            (edited)
+          </span>
+        )}
         <span className="spacer" />
         <button className="link" onClick={() => setEditing((e) => !e)}>
           {editing ? "close" : "edit"}
@@ -85,6 +96,16 @@ export function CommentThread({
         <span className="muted">{lineLabel(comment)}</span>
         <AnchorBadge comment={comment} />
         <span className="muted">{comment.author}</span>
+        {comment.createdAt && (
+          <span className="muted" title={absoluteTime(comment.createdAt)}>
+            {relativeTime(comment.createdAt)}
+          </span>
+        )}
+        {wasEdited(comment.createdAt, comment.updatedAt) && (
+          <span className="muted" title={`edited ${absoluteTime(comment.updatedAt)}`}>
+            (edited)
+          </span>
+        )}
         {comment.resolved && <span className="badge badge-resolved">✓ resolved</span>}
         <span className="spacer" />
         <button className="link" onClick={() => onResolve(comment.id, !comment.resolved)}>

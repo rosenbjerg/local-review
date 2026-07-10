@@ -459,10 +459,12 @@ func (s *Store) UpdateComment(id int64, body, ctype string, start, end int) (*Co
 
 // SetCommentResolved marks a comment (thread root) resolved or reopened and
 // returns the id of its review so the caller can publish an SSE ping.
+// updated_at is intentionally left untouched: it tracks the last body/type edit
+// (which the UI surfaces as an "edited" marker), and resolving isn't an edit —
+// it has its own `resolved` flag.
 func (s *Store) SetCommentResolved(id int64, resolved bool) (int64, error) {
-	now := time.Now().UTC().Format(timeFmt)
 	if _, err := s.db.Exec(
-		`UPDATE comments SET resolved=?, updated_at=? WHERE id=?`, resolved, now, id); err != nil {
+		`UPDATE comments SET resolved=? WHERE id=?`, resolved, id); err != nil {
 		return 0, err
 	}
 	return s.reviewIDForComment(id)
