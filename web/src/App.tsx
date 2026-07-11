@@ -8,13 +8,14 @@ import {
 } from "react";
 import { api } from "./api";
 import { CommentsPanel } from "./components/CommentsPanel";
+import type { CommentActions } from "./components/CommentThread";
 import { CopyButton } from "./components/CopyButton";
 import { DiffView, LARGE_FILE_LINES } from "./components/DiffView";
 import { ExportModal } from "./components/ExportModal";
 import { FileExplorer, orderedFiles } from "./components/FileExplorer";
 import { LazyFile } from "./components/LazyFile";
 import { Modal } from "./components/Modal";
-import type { Branch, Comment, CommentType, FileDiff, Review } from "./types";
+import type { Branch, Comment, CommentType, FileDiff, Reply, Review } from "./types";
 import { effectiveLines } from "./types";
 
 const LS_LEFT = "lr.leftWidth";
@@ -391,14 +392,18 @@ export default function App() {
 
   // Reply handlers mutate the nested `replies` array of the parent comment. The
   // commentId is threaded through (rather than looked up from the reply) so the
-  // state update stays a single map over comments.
+  // update stays a single map over comments; only the per-array op differs.
+  function updateCommentReplies(commentId: number, fn: (replies: Reply[]) => Reply[]) {
+    setComments((cs) =>
+      cs.map((c) => (c.id === commentId ? { ...c, replies: fn(c.replies ?? []) } : c))
+    );
+  }
+
   async function handleAddReply(commentId: number, body: string): Promise<boolean> {
     setError(null);
     try {
       const rep = await api.addReply(commentId, body);
-      setComments((cs) =>
-        cs.map((c) => (c.id === commentId ? { ...c, replies: [...(c.replies ?? []), rep] } : c))
-      );
+      updateCommentReplies(commentId, (replies) => [...replies, rep]);
       return true;
     } catch (e) {
       setError((e as Error).message);
@@ -414,13 +419,7 @@ export default function App() {
     setError(null);
     try {
       const rep = await api.updateReply(replyId, body);
-      setComments((cs) =>
-        cs.map((c) =>
-          c.id === commentId
-            ? { ...c, replies: (c.replies ?? []).map((r) => (r.id === replyId ? rep : r)) }
-            : c
-        )
-      );
+      updateCommentReplies(commentId, (replies) => replies.map((r) => (r.id === replyId ? rep : r)));
       return true;
     } catch (e) {
       setError((e as Error).message);
@@ -432,13 +431,7 @@ export default function App() {
     setError(null);
     try {
       await api.deleteReply(replyId);
-      setComments((cs) =>
-        cs.map((c) =>
-          c.id === commentId
-            ? { ...c, replies: (c.replies ?? []).filter((r) => r.id !== replyId) }
-            : c
-        )
-      );
+      updateCommentReplies(commentId, (replies) => replies.filter((r) => r.id !== replyId));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -456,6 +449,18 @@ export default function App() {
       setError((e as Error).message);
     }
   }
+
+  // The thread mutation callbacks, bundled so DiffView forwards one prop to each
+  // CommentThread instead of six. Rebuilt each render (the handlers close over
+  // live `comments`); the thread components aren't memoized, so this is free.
+  const commentActions: CommentActions = {
+    onUpdate: handleUpdate,
+    onDelete: handleDelete,
+    onAddReply: handleAddReply,
+    onUpdateReply: handleUpdateReply,
+    onDeleteReply: handleDeleteReply,
+    onResolve: handleResolve,
+  };
 
   // Wipes the review clean: deletes every comment and unmarks every reviewed
   // file, keeping the review itself (the same branch resumes empty). It's
@@ -933,12 +938,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
                     uncommitted={effectiveUncommitted}
                     comments={comments.filter((c) => c.filePath === path)}
                     onAddComment={handleAddComment}
-                    onUpdateComment={handleUpdate}
-                    onDeleteComment={handleDelete}
-                    onAddReply={handleAddReply}
-                    onUpdateReply={handleUpdateReply}
-                    onDeleteReply={handleDeleteReply}
-                    onResolve={handleResolve}
+                    actions={commentActions}
                     reviewed={reviewedFiles.has(path)}
                     onToggleReviewed={(r) => toggleReviewed(path, r)}
                     expandTarget={expandTarget}

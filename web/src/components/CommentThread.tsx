@@ -6,14 +6,21 @@ import { AnchorBadge } from "./AnchorBadge";
 import { Markdown } from "./Markdown";
 import { absoluteTime, relativeTime, wasEdited } from "../time";
 
-interface Props {
-  comment: Comment;
+// The comment/reply mutation callbacks a thread needs. Bundled into one object
+// so the handful of components that render threads (the diff, the media view)
+// forward a single `actions` prop instead of re-listing six callbacks each.
+export interface CommentActions {
   onUpdate: (id: number, body: string, type: CommentType) => Promise<boolean>;
   onDelete: (id: number) => Promise<void>;
   onAddReply: (commentId: number, body: string) => Promise<boolean>;
   onUpdateReply: (commentId: number, replyId: number, body: string) => Promise<boolean>;
   onDeleteReply: (commentId: number, replyId: number) => Promise<void>;
   onResolve: (id: number, resolved: boolean) => void;
+}
+
+interface Props {
+  comment: Comment;
+  actions: CommentActions;
 }
 
 // A single reply within a thread. Replies carry no type or anchor — just body —
@@ -70,15 +77,8 @@ function ReplyItem({
   );
 }
 
-export function CommentThread({
-  comment,
-  onUpdate,
-  onDelete,
-  onAddReply,
-  onUpdateReply,
-  onDeleteReply,
-  onResolve,
-}: Props) {
+export function CommentThread({ comment, actions }: Props) {
+  const { onUpdate, onDelete, onAddReply, onUpdateReply, onDeleteReply, onResolve } = actions;
   const [editing, setEditing] = useState(false);
   const [replying, setReplying] = useState(false);
   const replies = comment.replies ?? [];
