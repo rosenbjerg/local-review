@@ -207,6 +207,59 @@ func (s *Store) ensureColumn(table, column, ddl string) error {
 
 const timeFmt = time.RFC3339
 
+// nowStr is the current UTC time formatted for the created_at/updated_at columns.
+func nowStr() string { return time.Now().UTC().Format(timeFmt) }
+
+// rowScanner is satisfied by both *sql.Row (QueryRow) and *sql.Rows, so the scan
+// helpers below serve single-row and multi-row queries with one implementation.
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+// Column lists paired with the scan* helpers below. The SELECT order here and
+// the Scan order in the matching helper must move together — keeping each pair
+// adjacent is the whole point of single-sourcing them.
+const (
+	reviewCols  = `id, repo_path, base_ref, head_ref, head_sha, status, created_at, updated_at`
+	commentCols = `id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved, author, commit_sha, worktree`
+	replyCols   = `id, comment_id, body, created_at, updated_at, author`
+)
+
+func scanReview(sc rowScanner) (Review, error) {
+	var r Review
+	var created, updated string
+	if err := sc.Scan(&r.ID, &r.RepoPath, &r.BaseRef, &r.HeadRef, &r.HeadSHA, &r.Status, &created, &updated); err != nil {
+		return Review{}, err
+	}
+	r.CreatedAt, _ = time.Parse(timeFmt, created)
+	r.UpdatedAt, _ = time.Parse(timeFmt, updated)
+	return r, nil
+}
+
+func scanComment(sc rowScanner) (Comment, error) {
+	var c Comment
+	var created, updated string
+	if err := sc.Scan(&c.ID, &c.ReviewID, &c.FilePath, &c.StartLine, &c.EndLine,
+		&c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved, &c.Author, &c.CommitSHA, &c.Worktree); err != nil {
+		return Comment{}, err
+	}
+	c.CreatedAt, _ = time.Parse(timeFmt, created)
+	c.UpdatedAt, _ = time.Parse(timeFmt, updated)
+	c.Replies = []Reply{} // never null in JSON; GetReview/getComment fill in any replies
+	return c, nil
+}
+
+func scanReply(sc rowScanner) (Reply, error) {
+	var rep Reply
+	var created, updated string
+	if err := sc.Scan(&rep.ID, &rep.CommentID, &rep.Body, &created, &updated, &rep.Author); err != nil {
+		return Reply{}, err
+	}
+	rep.CreatedAt, _ = time.Parse(timeFmt, created)
+	rep.UpdatedAt, _ = time.Parse(timeFmt, updated)
+	return rep, nil
+}
+
 // CreateOrGetReview returns the existing review for (repo, base, head) or creates
 // one. A review is matched regardless of status so that exporting (which marks it
 // 'exported') does not orphan an in-progress review — re-opening the same branch
@@ -227,7 +280,7 @@ func (s *Store) CreateOrGetReview(repoPath, base, head, sha string) (*Review, er
 	err = tx.QueryRow(
 		`SELECT id FROM reviews WHERE repo_path=? AND base_ref=? AND head_ref=? ORDER BY id DESC LIMIT 1`,
 		repoPath, base, head).Scan(&id)
-	now := time.Now().UTC().Format(timeFmt)
+	now := nowStr()
 	switch err {
 	case nil:
 		if _, err := tx.Exec(`UPDATE reviews SET head_sha=?, updated_at=? WHERE id=?`, sha, now, id); err != nil {
@@ -252,16 +305,10 @@ func (s *Store) CreateOrGetReview(repoPath, base, head, sha string) (*Review, er
 }
 
 func (s *Store) GetReview(id int64) (*Review, error) {
-	var r Review
-	var created, updated string
-	err := s.db.QueryRow(
-		`SELECT id, repo_path, base_ref, head_ref, head_sha, status, created_at, updated_at FROM reviews WHERE id=?`, id).
-		Scan(&r.ID, &r.RepoPath, &r.BaseRef, &r.HeadRef, &r.HeadSHA, &r.Status, &created, &updated)
+	r, err := scanReview(s.db.QueryRow(`SELECT `+reviewCols+` FROM reviews WHERE id=?`, id))
 	if err != nil {
 		return nil, err
 	}
-	r.CreatedAt, _ = time.Parse(timeFmt, created)
-	r.UpdatedAt, _ = time.Parse(timeFmt, updated)
 	comments, err := s.listComments(id)
 	if err != nil {
 		return nil, err
@@ -355,7 +402,7 @@ func (s *Store) SetFileReviewed(reviewID int64, path string, reviewed bool, cont
 			`INSERT INTO reviewed_files (review_id, file_path, reviewed_at, content_hash, worktree) VALUES (?,?,?,?,?)
 			 ON CONFLICT(review_id, file_path) DO UPDATE SET
 			   reviewed_at=excluded.reviewed_at, content_hash=excluded.content_hash, worktree=excluded.worktree`,
-			reviewID, path, time.Now().UTC().Format(timeFmt), contentHash, worktree)
+			reviewID, path, nowStr(), contentHash, worktree)
 		return err
 	}
 	_, err := s.db.Exec(`DELETE FROM reviewed_files WHERE review_id=? AND file_path=?`, reviewID, path)
@@ -363,21 +410,17 @@ func (s *Store) SetFileReviewed(reviewID int64, path string, reviewed bool, cont
 }
 
 func (s *Store) ListReviews() ([]Review, error) {
-	rows, err := s.db.Query(
-		`SELECT id, repo_path, base_ref, head_ref, head_sha, status, created_at, updated_at FROM reviews ORDER BY updated_at DESC`)
+	rows, err := s.db.Query(`SELECT ` + reviewCols + ` FROM reviews ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var out []Review
 	for rows.Next() {
-		var r Review
-		var created, updated string
-		if err := rows.Scan(&r.ID, &r.RepoPath, &r.BaseRef, &r.HeadRef, &r.HeadSHA, &r.Status, &created, &updated); err != nil {
+		r, err := scanReview(rows)
+		if err != nil {
 			return nil, err
 		}
-		r.CreatedAt, _ = time.Parse(timeFmt, created)
-		r.UpdatedAt, _ = time.Parse(timeFmt, updated)
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -409,36 +452,30 @@ func (s *Store) ResetReview(id int64) error {
 
 func (s *Store) SetStatus(id int64, status string) error {
 	_, err := s.db.Exec(`UPDATE reviews SET status=?, updated_at=? WHERE id=?`,
-		status, time.Now().UTC().Format(timeFmt), id)
+		status, nowStr(), id)
 	return err
 }
 
 func (s *Store) listComments(reviewID int64) ([]Comment, error) {
 	rows, err := s.db.Query(
-		`SELECT id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved, author, commit_sha, worktree
-		 FROM comments WHERE review_id=? ORDER BY file_path, start_line`, reviewID)
+		`SELECT `+commentCols+` FROM comments WHERE review_id=? ORDER BY file_path, start_line`, reviewID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var out []Comment
 	for rows.Next() {
-		var c Comment
-		var created, updated string
-		if err := rows.Scan(&c.ID, &c.ReviewID, &c.FilePath, &c.StartLine, &c.EndLine,
-			&c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved, &c.Author, &c.CommitSHA, &c.Worktree); err != nil {
+		c, err := scanComment(rows)
+		if err != nil {
 			return nil, err
 		}
-		c.CreatedAt, _ = time.Parse(timeFmt, created)
-		c.UpdatedAt, _ = time.Parse(timeFmt, updated)
-		c.Replies = []Reply{} // never null in JSON; GetReview fills in any replies
 		out = append(out, c)
 	}
 	return out, rows.Err()
 }
 
 func (s *Store) AddComment(c Comment) (*Comment, error) {
-	now := time.Now().UTC().Format(timeFmt)
+	now := nowStr()
 	res, err := s.db.Exec(
 		`INSERT INTO comments (review_id, file_path, start_line, end_line, snippet, type, body, author, commit_sha, worktree, created_at, updated_at)
 		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -451,7 +488,7 @@ func (s *Store) AddComment(c Comment) (*Comment, error) {
 }
 
 func (s *Store) UpdateComment(id int64, body, ctype string, start, end int) (*Comment, error) {
-	now := time.Now().UTC().Format(timeFmt)
+	now := nowStr()
 	_, err := s.db.Exec(
 		`UPDATE comments SET body=?, type=?, start_line=?, end_line=?, updated_at=? WHERE id=?`,
 		body, ctype, start, end, now, id)
@@ -488,17 +525,10 @@ func (s *Store) DeleteComment(id int64) (int64, error) {
 }
 
 func (s *Store) getComment(id int64) (*Comment, error) {
-	var c Comment
-	var created, updated string
-	err := s.db.QueryRow(
-		`SELECT id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved, author, commit_sha, worktree
-		 FROM comments WHERE id=?`, id).
-		Scan(&c.ID, &c.ReviewID, &c.FilePath, &c.StartLine, &c.EndLine, &c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved, &c.Author, &c.CommitSHA, &c.Worktree)
+	c, err := scanComment(s.db.QueryRow(`SELECT `+commentCols+` FROM comments WHERE id=?`, id))
 	if err != nil {
 		return nil, err
 	}
-	c.CreatedAt, _ = time.Parse(timeFmt, created)
-	c.UpdatedAt, _ = time.Parse(timeFmt, updated)
 	replies, err := s.getReplies(id)
 	if err != nil {
 		return nil, err
@@ -512,13 +542,10 @@ func scanReplies(rows *sql.Rows) ([]Reply, error) {
 	defer rows.Close()
 	out := []Reply{}
 	for rows.Next() {
-		var rep Reply
-		var created, updated string
-		if err := rows.Scan(&rep.ID, &rep.CommentID, &rep.Body, &created, &updated, &rep.Author); err != nil {
+		rep, err := scanReply(rows)
+		if err != nil {
 			return nil, err
 		}
-		rep.CreatedAt, _ = time.Parse(timeFmt, created)
-		rep.UpdatedAt, _ = time.Parse(timeFmt, updated)
 		out = append(out, rep)
 	}
 	return out, rows.Err()
@@ -540,8 +567,7 @@ func (s *Store) listReplies(reviewID int64) ([]Reply, error) {
 // getReplies returns the replies on a single comment, oldest first.
 func (s *Store) getReplies(commentID int64) ([]Reply, error) {
 	rows, err := s.db.Query(
-		`SELECT id, comment_id, body, created_at, updated_at, author
-		 FROM replies WHERE comment_id=? ORDER BY created_at, id`, commentID)
+		`SELECT `+replyCols+` FROM replies WHERE comment_id=? ORDER BY created_at, id`, commentID)
 	if err != nil {
 		return nil, err
 	}
@@ -549,16 +575,10 @@ func (s *Store) getReplies(commentID int64) ([]Reply, error) {
 }
 
 func (s *Store) getReply(id int64) (*Reply, error) {
-	var rep Reply
-	var created, updated string
-	err := s.db.QueryRow(
-		`SELECT id, comment_id, body, created_at, updated_at, author FROM replies WHERE id=?`, id).
-		Scan(&rep.ID, &rep.CommentID, &rep.Body, &created, &updated, &rep.Author)
+	rep, err := scanReply(s.db.QueryRow(`SELECT ` + replyCols + ` FROM replies WHERE id=?`, id))
 	if err != nil {
 		return nil, err
 	}
-	rep.CreatedAt, _ = time.Parse(timeFmt, created)
-	rep.UpdatedAt, _ = time.Parse(timeFmt, updated)
 	return &rep, nil
 }
 
@@ -569,7 +589,7 @@ func (s *Store) AddReply(commentID int64, body, author string) (*Reply, int64, e
 	if err := s.db.QueryRow(`SELECT review_id FROM comments WHERE id=?`, commentID).Scan(&reviewID); err != nil {
 		return nil, 0, err
 	}
-	now := time.Now().UTC().Format(timeFmt)
+	now := nowStr()
 	res, err := s.db.Exec(
 		`INSERT INTO replies (comment_id, body, author, created_at, updated_at) VALUES (?,?,?,?,?)`,
 		commentID, body, author, now, now)
@@ -583,7 +603,7 @@ func (s *Store) AddReply(commentID int64, body, author string) (*Reply, int64, e
 
 // UpdateReply edits a reply's body and returns it with its review id.
 func (s *Store) UpdateReply(id int64, body string) (*Reply, int64, error) {
-	now := time.Now().UTC().Format(timeFmt)
+	now := nowStr()
 	if _, err := s.db.Exec(`UPDATE replies SET body=?, updated_at=? WHERE id=?`, body, now, id); err != nil {
 		return nil, 0, err
 	}
@@ -627,7 +647,7 @@ func (s *Store) PruneDrafts(olderThan time.Duration) (int64, error) {
 
 func (s *Store) Touch(reviewID int64) error {
 	_, err := s.db.Exec(`UPDATE reviews SET updated_at=? WHERE id=?`,
-		time.Now().UTC().Format(timeFmt), reviewID)
+		nowStr(), reviewID)
 	if err != nil {
 		return fmt.Errorf("touch review: %w", err)
 	}
