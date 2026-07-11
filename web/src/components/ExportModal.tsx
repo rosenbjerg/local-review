@@ -115,7 +115,7 @@ export function ExportModal({ reviewId, onClose }: Props) {
             />
             agent reply instructions
           </label>
-          <button className="btn" onClick={copy}>
+          <button className="btn copy-btn" onClick={copy}>
             {copyState === "ok" ? "Copied ✓" : copyState === "fail" ? "Copy failed" : "Copy markdown"}
           </button>
           <button className="btn btn-primary" onClick={download}>

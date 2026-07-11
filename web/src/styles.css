@@ -223,6 +223,36 @@ select {
   text-align: center;
   color: var(--muted);
 }
+/* Indeterminate spinner for load states (diff column, initial repo discovery). */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  vertical-align: -3px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
+/* Hold copy buttons at a stable width so the transient "Copied ✓ / Copy failed"
+   swap doesn't reflow the toolbar row. */
+.copy-btn {
+  min-width: 8rem;
+}
+.copy-btn-wide {
+  min-width: 12rem;
+}
 
 /* File */
 .file {

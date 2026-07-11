@@ -777,7 +777,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
               {effectiveUncommitted && " + uncommitted"}
             </span>
             <button
-              className="btn"
+              className="btn copy-btn-wide"
               onClick={copyAgentInstructions}
               title="Copy a prompt telling a coding agent how to fetch this review from the API and reply to comments"
             >
@@ -842,9 +842,16 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
 
       {!review && !error && (
         <div className="empty">
-          {reposLoaded && repos.length === 0
-            ? "No git repositories found under the served folder."
-            : "Select a branch to start a review."}
+          {!reposLoaded ? (
+            <>
+              <span className="spinner" aria-hidden="true" />
+              Loading…
+            </>
+          ) : repos.length === 0 ? (
+            "No git repositories found under the served folder."
+          ) : (
+            "Select a branch to start a review."
+          )}
         </div>
       )}
 
@@ -866,6 +873,12 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
           </aside>
           <div className="resizer" onMouseDown={(e) => startResize(e, "left")} />
           <div className="diff-column" ref={diffColRef}>
+            {files.length === 0 && loading && (
+              <div className="empty">
+                <span className="spinner" aria-hidden="true" />
+                Loading diff…
+              </div>
+            )}
             {files.length === 0 && !loading && (
               <div className="empty">No changes between base and head.</div>
             )}
