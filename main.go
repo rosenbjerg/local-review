@@ -27,7 +27,7 @@ func main() {
 	var (
 		rootPath  = flag.String("root", ".", "path to a folder containing one or more git repositories")
 		port      = flag.Int("port", 7777, "port to listen on")
-		retention = flag.Int("retention-days", 30, "delete draft reviews older than this many days on startup")
+		retention = flag.Int("retention-days", 30, "delete draft reviews older than this many days on startup (0 or less disables pruning)")
 		noOpen    = flag.Bool("no-open", false, "do not open the browser on start")
 		dataDir   = flag.String("data-dir", "", "directory for local-review's data (SQLite DB); defaults to ~/.local-review")
 	)
@@ -51,7 +51,12 @@ func main() {
 	}
 	defer st.Close()
 
-	if n, err := st.PruneDrafts(time.Duration(*retention) * 24 * time.Hour); err != nil {
+	// A non-positive retention would put the cutoff at (or after) now, deleting
+	// every draft review — so treat 0 or less as "keep drafts forever" rather
+	// than silently wiping all in-progress work.
+	if *retention <= 0 {
+		log.Print("retention-days <= 0: draft pruning disabled")
+	} else if n, err := st.PruneDrafts(time.Duration(*retention) * 24 * time.Hour); err != nil {
 		log.Printf("prune drafts: %v", err)
 	} else if n > 0 {
 		log.Printf("pruned %d stale draft review(s)", n)
