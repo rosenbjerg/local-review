@@ -74,17 +74,21 @@ type Reply struct {
 }
 
 func Open(path string) (*Store, error) {
-	db, err := sql.Open("sqlite", path)
+	// foreign_keys is a per-connection pragma, so set it in the DSN: every
+	// connection the pool ever opens then enforces ON DELETE CASCADE, even if
+	// the original connection is discarded and replaced (a one-time PRAGMA would
+	// silently stop applying). The non-URI "<path>?<query>" form avoids having to
+	// URL-encode a path with spaces. WAL journal mode is persisted in the DB
+	// file, so a one-time PRAGMA below still suffices for it.
+	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		return nil, err
 	}
-	// SQLite's foreign_keys pragma is per-connection, so with a pooled DB some
-	// connections could miss it and skip ON DELETE CASCADE. A single connection
-	// makes the one-time pragma below authoritative; DB access is low-frequency
-	// (git diffs/file reads don't hit SQLite), so serializing it is free, and it
-	// also gives CreateOrGetReview's transaction full check-then-insert atomicity.
+	// A single connection serializes DB access — free here (git diffs/file reads
+	// don't hit SQLite) and it gives CreateOrGetReview's transaction full
+	// check-then-insert atomicity.
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;`); err != nil {
+	if _, err := db.Exec(`PRAGMA journal_mode=WAL;`); err != nil {
 		return nil, err
 	}
 	s := &Store{db: db}
