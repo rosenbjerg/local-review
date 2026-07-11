@@ -20,6 +20,17 @@
   --warn-border: #9e6a03;
   --info: #58a6ff;
   --info-border: #1f6feb;
+  /* Translucent tint of --danger for hover fills on danger controls and the
+     error banner background. */
+  --danger-soft: rgba(248, 81, 73, 0.12);
+  /* Foreground on saturated accent/success fills (primary button, active
+     toggle, hovered gutter) where --text would lack contrast. */
+  --on-accent: #fff;
+  /* Checkerboard behind transparent images: base color + square color. */
+  --checker-bg: #1c2128;
+  --checker-fg: #262c36;
+  /* Scrim behind modals. */
+  --backdrop: rgba(0, 0, 0, 0.6);
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   /* Render native controls (checkboxes, selects, default scrollbars) dark. */
   color-scheme: dark;
@@ -140,7 +151,7 @@ select {
   border-color: var(--danger);
 }
 .btn.danger:hover:not(:disabled) {
-  background: rgba(248, 81, 73, 0.1);
+  background: var(--danger-soft);
 }
 /* Square button holding a single icon (e.g. the GitHub link) */
 .btn-icon {
@@ -156,7 +167,7 @@ select {
 .btn-primary {
   background: var(--add-border);
   border-color: var(--add-border);
-  color: #fff;
+  color: var(--on-accent);
 }
 .link {
   background: none;
@@ -306,7 +317,7 @@ select {
 }
 .view-toggle button.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .status {
@@ -488,11 +499,11 @@ select {
   border: 1px solid var(--border);
   border-radius: 4px;
   /* checkerboard so transparent images are legible */
-  background-color: #1c2128;
-  background-image: linear-gradient(45deg, #262c36 25%, transparent 25%),
-    linear-gradient(-45deg, #262c36 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #262c36 75%),
-    linear-gradient(-45deg, transparent 75%, #262c36 75%);
+  background-color: var(--checker-bg);
+  background-image: linear-gradient(45deg, var(--checker-fg) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--checker-fg) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--checker-fg) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--checker-fg) 75%);
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
@@ -544,7 +555,7 @@ select {
 }
 .gutter-click:hover {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 .line-content {
   padding: 0 8px;
@@ -770,7 +781,7 @@ select {
   cursor: pointer;
 }
 .comment-nav-delete:hover {
-  background: rgba(248, 81, 73, 0.15);
+  background: var(--danger-soft);
 }
 .comment-preview {
   font-size: 13px;
@@ -890,7 +901,7 @@ select {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--backdrop);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -189,7 +189,11 @@ web/src/
   `--accent`), the diff-row shades (`--add-bg`/`--add-border`/`--del-bg`/
   `--sel-bg`), and the semantic status palette (`--danger`/`--success`/`--warn`/
   `--info`, each with a matching `-border` shade) used by `.status-*`/`.fstat-*`/
-  `.badge-*` and danger controls. Add a var rather than reintroduce a literal.
+  `.badge-*` and danger controls. Plus a few derived/utility tokens:
+  `--danger-soft` (translucent danger tint for hover fills + the error banner),
+  `--on-accent` (foreground on saturated accent/success fills), `--backdrop`
+  (modal scrim), and `--checker-bg`/`--checker-fg` (transparent-image
+  checkerboard). Add a var rather than reintroduce a literal.
 - Persisted UI prefs (panel widths) go in `localStorage` under `lr.*` keys.
 - Modals (`.modal` inside a `.modal-backdrop`) close on Escape and backdrop
   click, and use `useFocusTrap` for focus-in / Tab-trap / restore-on-close —
