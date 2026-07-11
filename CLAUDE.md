@@ -48,6 +48,7 @@ web/src/
   highlight.ts           Shiki wrapper: all languages, lazy-loaded, JS regex engine
   time.ts                relative/absolute timestamp + edited-marker helpers
   useFocusTrap.ts        modal focus hook: focus-in, Tab trap, restore on close
+  storage.ts             typed, error-swallowing localStorage helpers + the lr.* keys
   components/
     FileExplorer.tsx     left pane: hierarchical file tree, collapse, reviewed toggle
     DiffView.tsx         center: per-file diff, syntax highlight, inline threads/composer,
@@ -57,6 +58,10 @@ web/src/
     CommentsPanel.tsx    right pane: cross-file comment overview, jump-to
     CommentComposer.tsx  type select + body textarea (reused for new/edit)
     ExportModal.tsx      rendered-markdown preview (markdown-it) + Raw toggle + copy/download
+    Modal.tsx            shared dialog shell: backdrop, focus trap, Escape, dialog aria
+    ViewToggle.tsx       data-driven segmented control (Changed/Full, Text/Image, Preview/Raw)
+    CopyButton.tsx       clipboard button with idle/ok/fail state (lazy text builder)
+    (small shared UI primitives: Chevron, CommentCount, AnchorBadge, MetaTimestamps, Markdown)
 ```
 
 ## Architecture notes

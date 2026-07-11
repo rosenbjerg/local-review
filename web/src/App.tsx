@@ -17,37 +17,19 @@ import { LazyFile } from "./components/LazyFile";
 import { Modal } from "./components/Modal";
 import type { Branch, Comment, CommentType, FileDiff, Reply, Review } from "./types";
 import { effectiveLines } from "./types";
-
-const LS_LEFT = "lr.leftWidth";
-const LS_RIGHT = "lr.rightWidth";
-const LS_BASE_BY_REPO = "lr.baseByRepo";
-const LS_REPO = "lr.repo";
-
-function readWidth(key: string, def: number): number {
-  const v = Number(localStorage.getItem(key));
-  return Number.isFinite(v) && v > 0 ? v : def;
-}
+import { LS, getJSON, getNumber, getString, setJSON, setNumber, setString } from "./storage";
 
 // Remembered base branch per repo (empty string = auto). Branch names differ
 // across repos, so the preference is keyed by repo path.
 function readBasePref(repo: string): string {
-  try {
-    const map = JSON.parse(localStorage.getItem(LS_BASE_BY_REPO) || "{}");
-    const v = map[repo];
-    return typeof v === "string" ? v : "";
-  } catch {
-    return "";
-  }
+  const v = getJSON<Record<string, string>>(LS.baseByRepo, {})[repo];
+  return typeof v === "string" ? v : "";
 }
 
 function writeBasePref(repo: string, base: string): void {
-  try {
-    const map = JSON.parse(localStorage.getItem(LS_BASE_BY_REPO) || "{}");
-    map[repo] = base;
-    localStorage.setItem(LS_BASE_BY_REPO, JSON.stringify(map));
-  } catch {
-    // storage unavailable/full — preference is best-effort
-  }
+  const map = getJSON<Record<string, string>>(LS.baseByRepo, {});
+  map[repo] = base;
+  setJSON(LS.baseByRepo, map);
 }
 
 function clamp(n: number, min: number, max: number): number {
@@ -75,8 +57,8 @@ export default function App() {
   const [confirmingReset, setConfirmingReset] = useState(false);
   // The comment last jumped to (via click or n/p), so n/p can step from it.
   const [activeComment, setActiveComment] = useState<number | null>(null);
-  const [leftW, setLeftW] = useState(() => readWidth(LS_LEFT, 260));
-  const [rightW, setRightW] = useState(() => readWidth(LS_RIGHT, 380));
+  const [leftW, setLeftW] = useState(() => getNumber(LS.leftWidth, 260));
+  const [rightW, setRightW] = useState(() => getNumber(LS.rightWidth, 380));
   const mainRef = useRef<HTMLDivElement>(null);
   const diffColRef = useRef<HTMLDivElement>(null);
   const expandN = useRef(0);
@@ -98,10 +80,10 @@ export default function App() {
   );
 
   useEffect(() => {
-    localStorage.setItem(LS_LEFT, String(leftW));
+    setNumber(LS.leftWidth, leftW);
   }, [leftW]);
   useEffect(() => {
-    localStorage.setItem(LS_RIGHT, String(rightW));
+    setNumber(LS.rightWidth, rightW);
   }, [rightW]);
 
   // Resize by writing grid-template-columns directly to the DOM during the drag
@@ -164,7 +146,7 @@ export default function App() {
       .then((r) => {
         setRepos(r.repos);
         // Restore the last-used repo if it still exists, else the first.
-        const saved = localStorage.getItem(LS_REPO);
+        const saved = getString(LS.repo);
         setRepo(saved && r.repos.includes(saved) ? saved : (r.repos[0] ?? ""));
       })
       .catch((e) => setError((e as Error).message))
@@ -733,7 +715,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
             value={repo}
             onChange={(e) => {
               setRepo(e.target.value);
-              localStorage.setItem(LS_REPO, e.target.value);
+              setString(LS.repo, e.target.value);
             }}
             disabled={loading}
           >

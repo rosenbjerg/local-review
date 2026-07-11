@@ -4,7 +4,7 @@ import { lineLabel } from "../types";
 import { CommentComposer } from "./CommentComposer";
 import { AnchorBadge } from "./AnchorBadge";
 import { Markdown } from "./Markdown";
-import { absoluteTime, relativeTime, wasEdited } from "../time";
+import { MetaTimestamps } from "./MetaTimestamps";
 
 // The comment/reply mutation callbacks a thread needs. Bundled into one object
 // so the handful of components that render threads (the diff, the media view)
@@ -40,17 +40,11 @@ function ReplyItem({
     <div className="reply" id={`reply-${reply.id}`}>
       <div className="reply-meta">
         <span className="muted meta-id">↳ #{reply.id}</span>
-        <span className="muted">{reply.author}</span>
-        {reply.createdAt && (
-          <span className="muted" title={absoluteTime(reply.createdAt)}>
-            {relativeTime(reply.createdAt)}
-          </span>
-        )}
-        {wasEdited(reply.createdAt, reply.updatedAt) && (
-          <span className="muted" title={`edited ${absoluteTime(reply.updatedAt)}`}>
-            (edited)
-          </span>
-        )}
+        <MetaTimestamps
+          author={reply.author}
+          createdAt={reply.createdAt}
+          updatedAt={reply.updatedAt}
+        />
         <span className="spacer" />
         <button className="link" onClick={() => setEditing((e) => !e)}>
           {editing ? "close" : "edit"}
@@ -95,17 +89,11 @@ export function CommentThread({ comment, actions }: Props) {
         <span className={`badge badge-${comment.type}`}>{comment.type}</span>
         <span className="muted">{lineLabel(comment)}</span>
         <AnchorBadge comment={comment} />
-        <span className="muted">{comment.author}</span>
-        {comment.createdAt && (
-          <span className="muted" title={absoluteTime(comment.createdAt)}>
-            {relativeTime(comment.createdAt)}
-          </span>
-        )}
-        {wasEdited(comment.createdAt, comment.updatedAt) && (
-          <span className="muted" title={`edited ${absoluteTime(comment.updatedAt)}`}>
-            (edited)
-          </span>
-        )}
+        <MetaTimestamps
+          author={comment.author}
+          createdAt={comment.createdAt}
+          updatedAt={comment.updatedAt}
+        />
         {comment.resolved && <span className="badge badge-resolved">✓ resolved</span>}
         <span className="spacer" />
         <button className="link" onClick={() => onResolve(comment.id, !comment.resolved)}>

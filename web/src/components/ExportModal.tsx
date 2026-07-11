@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import MarkdownIt from "markdown-it";
 import { api } from "../api";
+import { LS, getBool, setBool } from "../storage";
 import { CopyButton } from "./CopyButton";
 import { Modal } from "./Modal";
 import { ViewToggle } from "./ViewToggle";
@@ -13,16 +14,12 @@ interface Props {
 // html:false escapes any raw HTML in comment bodies — safe to render.
 const md = new MarkdownIt({ html: false, linkify: true, breaks: false });
 
-const LS_INSTRUCTIONS = "lr.exportInstructions";
-
 export function ExportModal({ reviewId, onClose }: Props) {
   const [markdown, setMarkdown] = useState("");
   const [filename, setFilename] = useState("review.md");
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"preview" | "raw">("preview");
-  const [instructions, setInstructions] = useState(
-    () => localStorage.getItem(LS_INSTRUCTIONS) === "true"
-  );
+  const [instructions, setInstructions] = useState(() => getBool(LS.exportInstructions));
 
   useEffect(() => {
     // ignore guards against an out-of-order response: toggling the instructions
@@ -81,7 +78,7 @@ export function ExportModal({ reviewId, onClose }: Props) {
             checked={instructions}
             onChange={(e) => {
               setInstructions(e.target.checked);
-              localStorage.setItem(LS_INSTRUCTIONS, String(e.target.checked));
+              setBool(LS.exportInstructions, e.target.checked);
             }}
           />
           agent reply instructions
