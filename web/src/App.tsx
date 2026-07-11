@@ -193,8 +193,15 @@ export default function App() {
     const id = review.id;
     let cancelled = false;
     let inFlight = false;
+    let pending = false;
     async function refresh() {
-      if (inFlight || cancelled || document.visibilityState !== "visible") return;
+      if (cancelled || document.visibilityState !== "visible") return;
+      if (inFlight) {
+        // A ping arrived mid-fetch; the in-flight response may predate this
+        // change, so queue exactly one trailing refetch instead of dropping it.
+        pending = true;
+        return;
+      }
       inFlight = true;
       try {
         const rev = await api.getReview(id);
@@ -207,6 +214,10 @@ export default function App() {
         // Transient refresh failure — keep the current state.
       } finally {
         inFlight = false;
+        if (pending && !cancelled) {
+          pending = false;
+          refresh();
+        }
       }
     }
     const es = new EventSource(`/api/reviews/${id}/events`);
