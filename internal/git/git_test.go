@@ -19,10 +19,38 @@ func TestWorktreeFile(t *testing.T) {
 	if got, err := r.WorktreeFile("a.txt"); err != nil || got != "hello\n" {
 		t.Fatalf("WorktreeFile(a.txt) = (%q, %v), want (\"hello\\n\", nil)", got, err)
 	}
-	for _, bad := range []string{"../escape", "../../etc/hosts", ".git", ".git/config"} {
+	// Case variants of .git must also be rejected — a case-insensitive
+	// filesystem resolves ".GIT" to the real .git directory.
+	for _, bad := range []string{"../escape", "../../etc/hosts", ".git", ".git/config", ".GIT/config", ".Git/HEAD"} {
 		if _, err := r.WorktreeFile(bad); err == nil {
 			t.Errorf("WorktreeFile(%q) should be rejected", bad)
 		}
+	}
+}
+
+// A symlink inside the repo pointing outside it must not be followed out of the
+// tree; a symlink to a file inside the repo stays readable.
+func TestWorktreeFileSymlinkEscape(t *testing.T) {
+	dir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(outside, []byte("secret\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := New(dir)
+
+	if err := os.Symlink(outside, filepath.Join(dir, "escape.txt")); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+	if _, err := r.WorktreeFile("escape.txt"); err == nil {
+		t.Error("WorktreeFile should reject a symlink escaping the repo")
+	}
+
+	mustWrite(t, dir, "real.txt", "inside\n")
+	if err := os.Symlink(filepath.Join(dir, "real.txt"), filepath.Join(dir, "inlink.txt")); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+	if got, err := r.WorktreeFile("inlink.txt"); err != nil || got != "inside\n" {
+		t.Errorf("WorktreeFile(inlink.txt) = (%q, %v), want (\"inside\\n\", nil)", got, err)
 	}
 }
 

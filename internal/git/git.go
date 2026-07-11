@@ -144,16 +144,31 @@ func (r *Repo) FileContent(ref, path string) (string, error) {
 // uncommitted (working-tree) diff, which git show can't read. The path is
 // confined to the repo: no ".." escape and no reaching into .git.
 func (r *Repo) WorktreeFile(path string) (string, error) {
+	sep := string(filepath.Separator)
 	clean := filepath.Clean(path)
-	if clean == ".git" || strings.HasPrefix(clean, ".git"+string(filepath.Separator)) {
+	// Case-insensitive: on a case-insensitive filesystem (default macOS/Windows)
+	// ".GIT/config" resolves to the real .git, so reject every case variant.
+	if lower := strings.ToLower(clean); lower == ".git" || strings.HasPrefix(lower, ".git"+sep) {
 		return "", fmt.Errorf("invalid path %q", path)
 	}
 	full := filepath.Join(r.Path, clean)
-	rel, err := filepath.Rel(r.Path, full)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	// Resolve symlinks on both sides and confirm the target is still inside the
+	// repo, so an in-repo symlink pointing outward (e.g. link -> /etc/passwd)
+	// can't be followed out of the tree. EvalSymlinks also rejects a nonexistent
+	// path, which os.ReadFile would fail on anyway.
+	root, err := filepath.EvalSymlinks(r.Path)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(full)
+	if err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(root, resolved)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+sep) {
 		return "", fmt.Errorf("invalid path %q", path)
 	}
-	b, err := os.ReadFile(full)
+	b, err := os.ReadFile(resolved)
 	return string(b), err
 }
 
