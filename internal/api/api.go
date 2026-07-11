@@ -599,6 +599,7 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusInternalServerError, err)
 		return
 	}
+	_ = s.Store.Touch(c.ReviewID)
 	s.hub.publish(c.ReviewID)
 	writeJSON(w, c)
 }
@@ -613,6 +614,7 @@ func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusInternalServerError, err)
 		return
 	}
+	_ = s.Store.Touch(reviewID)
 	s.hub.publish(reviewID)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -688,6 +690,7 @@ func (s *Server) handleUpdateReply(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusInternalServerError, err)
 		return
 	}
+	_ = s.Store.Touch(reviewID)
 	s.hub.publish(reviewID)
 	writeJSON(w, rep)
 }
@@ -702,6 +705,7 @@ func (s *Server) handleDeleteReply(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusInternalServerError, err)
 		return
 	}
+	_ = s.Store.Touch(reviewID)
 	s.hub.publish(reviewID)
 	w.WriteHeader(http.StatusNoContent)
 }
