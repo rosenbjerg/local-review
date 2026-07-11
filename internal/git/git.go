@@ -200,7 +200,7 @@ func (r *Repo) Diff(base, head string) ([]FileDiff, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parseDiff(out), nil
+	return parseDiff(out)
 }
 
 // DiffFile returns the diff of a single path between two refs.
@@ -209,7 +209,7 @@ func (r *Repo) DiffFile(from, to, path string) ([]FileDiff, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parseDiff(out), nil
+	return parseDiff(out)
 }
 
 // MapOldLine maps an old-side line (1-based) to its new-side line using a file's
@@ -256,7 +256,10 @@ func (r *Repo) DiffWorktree(base string) ([]FileDiff, error) {
 	if err != nil {
 		return nil, err
 	}
-	files := parseDiff(out)
+	files, err := parseDiff(out)
+	if err != nil {
+		return nil, err
+	}
 	// git diff omits untracked files, so add them explicitly — otherwise the
 	// uncommitted view only shows tracked (staged/unstaged) changes and a brand
 	// new file doesn't appear until it's `git add`ed.
@@ -312,7 +315,7 @@ func (r *Repo) newFileDiff(path string) (FileDiff, bool) {
 	return fd, true
 }
 
-func parseDiff(text string) []FileDiff {
+func parseDiff(text string) ([]FileDiff, error) {
 	var files []FileDiff
 	var cur *FileDiff
 	var hunk *Hunk
@@ -401,8 +404,15 @@ func parseDiff(text string) []FileDiff {
 			cur.Binary = true
 		}
 	}
+	if err := sc.Err(); err != nil {
+		// A single line exceeding the 16MB buffer (minified bundle, source map,
+		// one-line JSON) trips bufio.ErrTooLong. Surface it rather than return a
+		// silently truncated file list — Scan stops mid-stream, so every file
+		// after the offending one would otherwise just vanish from the review.
+		return nil, fmt.Errorf("parse diff: %w", err)
+	}
 	flush()
-	return files
+	return files, nil
 }
 
 // parseGitHeaderPaths extracts the old and new paths from a

@@ -3,6 +3,7 @@ package git
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -102,7 +103,10 @@ func TestParseDiffHeaderOnlyPaths(t *testing.T) {
 		"@@ -1 +1,2 @@\n" +
 		" text\n" +
 		"+more\n"
-	files := parseDiff(diff)
+	files, err := parseDiff(diff)
+	if err != nil {
+		t.Fatalf("parseDiff: %v", err)
+	}
 	want := []string{".claude/hook.sh", "asset.bin", "normal.txt"}
 	if len(files) != len(want) {
 		t.Fatalf("got %d files, want %d", len(files), len(want))
@@ -130,7 +134,10 @@ func TestParseDiffAddedDeletedBinaryPaths(t *testing.T) {
 		"deleted file mode 100644\n" +
 		"index d95f3ad..0000000\n" +
 		"Binary files a/gone.bin and /dev/null differ\n"
-	files := parseDiff(diff)
+	files, err := parseDiff(diff)
+	if err != nil {
+		t.Fatalf("parseDiff: %v", err)
+	}
 	if len(files) != 2 {
 		t.Fatalf("got %d files, want 2", len(files))
 	}
@@ -158,7 +165,10 @@ func TestParseDiffContentLooksLikeHeader(t *testing.T) {
 		"--- old comment\n" +
 		"+++ new comment\n" +
 		" SELECT 2;\n"
-	files := parseDiff(diff)
+	files, err := parseDiff(diff)
+	if err != nil {
+		t.Fatalf("parseDiff: %v", err)
+	}
 	if len(files) != 1 {
 		t.Fatalf("got %d files, want 1", len(files))
 	}
@@ -187,9 +197,13 @@ func TestParseDiffContentLooksLikeHeader(t *testing.T) {
 // context, and report dead when deleted.
 func TestMapOldLine(t *testing.T) {
 	// Insert two lines at the top: @@ -1,3 +1,5 @@  +new1 +new2  ctxA ctxB ctxC
-	hunks := parseDiff(
+	parsed, err := parseDiff(
 		"diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1,3 +1,5 @@\n+new1\n+new2\n a\n b\n c\n",
-	)[0].Hunks
+	)
+	if err != nil {
+		t.Fatalf("parseDiff: %v", err)
+	}
+	hunks := parsed[0].Hunks
 	for _, c := range []struct {
 		old, wantNew int
 		wantAlive    bool
@@ -206,9 +220,13 @@ func TestMapOldLine(t *testing.T) {
 	}
 
 	// Modify line 2 in place: @@ -1,3 +1,3 @@  a  -old  +new  c
-	del := parseDiff(
+	parsedDel, err := parseDiff(
 		"diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1,3 +1,3 @@\n a\n-old\n+new\n c\n",
-	)[0].Hunks
+	)
+	if err != nil {
+		t.Fatalf("parseDiff: %v", err)
+	}
+	del := parsedDel[0].Hunks
 	if _, alive := MapOldLine(del, 2); alive {
 		t.Errorf("MapOldLine of a deleted/modified line should be dead")
 	}
@@ -231,5 +249,20 @@ func TestParseGitHeaderPaths(t *testing.T) {
 			t.Errorf("parseGitHeaderPaths(%q) = (%q, %q), want (%q, %q)",
 				c.line, gotOld, gotNew, c.wantOld, c.wantNew)
 		}
+	}
+}
+
+// A diff line longer than the scanner buffer (a minified bundle on one line)
+// must surface an error rather than silently truncate the stream and drop every
+// file after the offending one.
+func TestParseDiffOverlongLine(t *testing.T) {
+	huge := strings.Repeat("x", 17*1024*1024)
+	diff := "diff --git a/big.js b/big.js\n" +
+		"--- a/big.js\n+++ b/big.js\n@@ -1 +1 @@\n" +
+		"+" + huge + "\n" +
+		"diff --git a/after.txt b/after.txt\n" +
+		"--- a/after.txt\n+++ b/after.txt\n@@ -1 +1 @@\n+kept\n"
+	if _, err := parseDiff(diff); err == nil {
+		t.Fatal("parseDiff of an over-long line should error, got nil (files silently truncated)")
 	}
 }
