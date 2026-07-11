@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -116,7 +117,10 @@ func mountStatic(mux *http.ServeMux) {
 	fileServer := http.FileServer(http.FS(sub))
 	// Serve assets, falling back to index.html for client-side routing.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if _, err := fs.Stat(sub, filepath.Clean(r.URL.Path[1:])); err == nil || r.URL.Path == "/" {
+		// path.Clean (not filepath.Clean): io/fs paths are always slash-separated,
+		// but filepath.Clean would emit backslashes on Windows, so the asset
+		// lookup would miss and every bundle fall back to index.html.
+		if _, err := fs.Stat(sub, path.Clean(r.URL.Path[1:])); err == nil || r.URL.Path == "/" {
 			fileServer.ServeHTTP(w, r)
 			return
 		}
