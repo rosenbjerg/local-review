@@ -84,6 +84,29 @@ func TestRenderAgentInstructionsPlaceholder(t *testing.T) {
 	}
 }
 
+// author/type reach the export unfiltered from the API; a newline in them must
+// not break out of the comment heading to inject a fake markdown section into
+// the artifact a coding agent consumes.
+func TestRenderSanitizesHeadingFields(t *testing.T) {
+	r := &store.Review{
+		HeadRef: "feature", BaseRef: "main", HeadSHA: "abc1234",
+		Comments: []store.Comment{{
+			ID: 7, FilePath: "main.go", StartLine: 1, EndLine: 1,
+			Type:   "bug\n## Injected",
+			Author: "agent\n---\n# Fake",
+			Body:   "x",
+		}},
+	}
+	out := Render(r, false, "")
+	if strings.Contains(out, "\n## Injected") || strings.Contains(out, "\n# Fake") || strings.Contains(out, "\n---") {
+		t.Fatalf("heading fields not sanitized — injection present:\n%s", out)
+	}
+	// The fields survive as flattened inline text on the single heading line.
+	if !strings.Contains(out, "### #7 · L1 · bug ## Injected · agent --- # Fake") {
+		t.Fatalf("expected flattened heading, got:\n%s", out)
+	}
+}
+
 // A snippet containing a triple-backtick fence must not prematurely close the
 // surrounding code block: the opening and closing fences the exporter emits
 // must be longer than any backtick run in the snippet.

@@ -6,9 +6,24 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 
 	"local-review/internal/store"
 )
+
+// inlineField neutralizes a value interpolated into a single markdown line
+// (author, type, file heading). Those come from the API with no allow-list, so
+// a control character — a newline especially — could otherwise break out of the
+// line and inject a fake heading/section into the artifact a coding agent
+// consumes as its task list. Control runes collapse to spaces.
+func inlineField(s string) string {
+	return strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, s))
+}
 
 // Render produces the markdown artifact for a review. When agentInstructions is
 // set, a trailing section explains how to reply to comments over HTTP, using
@@ -46,14 +61,14 @@ func Render(r *store.Review, agentInstructions bool, baseURL string) string {
 	}
 
 	for _, name := range fileNames {
-		fmt.Fprintf(&b, "\n## %s\n", name)
+		fmt.Fprintf(&b, "\n## %s\n", inlineField(name))
 		comments := files[name]
 		sort.Slice(comments, func(i, j int) bool {
 			return comments[i].StartLine < comments[j].StartLine
 		})
 		lang := langForExt(name)
 		for _, c := range comments {
-			fmt.Fprintf(&b, "\n### #%d · %s · %s · %s\n", c.ID, anchorLabel(c), c.Type, c.Author)
+			fmt.Fprintf(&b, "\n### #%d · %s · %s · %s\n", c.ID, anchorLabel(c), inlineField(c.Type), inlineField(c.Author))
 			if strings.TrimSpace(c.Snippet) != "" {
 				snippet := strings.TrimRight(c.Snippet, "\n")
 				fence := fenceFor(snippet)
@@ -110,7 +125,7 @@ func renderAgentInstructions(b *strings.Builder, baseURL string, exampleID int64
 // stays inside the quote; a bare blank line between replies keeps each in its
 // own blockquote rather than merging them.
 func renderReply(b *strings.Builder, rep store.Reply) {
-	fmt.Fprintf(b, "\n> **↳ reply #%d · %s**\n", rep.ID, rep.Author)
+	fmt.Fprintf(b, "\n> **↳ reply #%d · %s**\n", rep.ID, inlineField(rep.Author))
 	body := strings.TrimSpace(rep.Body)
 	if body == "" {
 		return
