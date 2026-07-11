@@ -743,7 +743,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
             {branches.map((b) => (
               <option key={b.name} value={b.name}>
                 {b.name}
-                {b.isCurrent ? " *" : ""}
+                {b.isCurrent ? " (current)" : ""}
               </option>
             ))}
           </select>
@@ -1022,6 +1022,25 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
                       <kbd>Esc</kbd>
                     </td>
                     <td>Close a dialog / cancel a comment</td>
+                  </tr>
+                </tbody>
+              </table>
+              <h3 className="help-subhead">Reviewing</h3>
+              <table className="shortcuts">
+                <tbody>
+                  <tr>
+                    <td>Click a line №</td>
+                    <td>Start a comment on that line</td>
+                  </tr>
+                  <tr>
+                    <td>Drag / Shift-click</td>
+                    <td>Comment on a line range</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>Enter</kbd>
+                    </td>
+                    <td>Submit the comment</td>
                   </tr>
                 </tbody>
               </table>
