@@ -27,13 +27,25 @@ export function ExportModal({ reviewId, onClose }: Props) {
   const trapRef = useFocusTrap<HTMLDivElement>(true);
 
   useEffect(() => {
+    // ignore guards against an out-of-order response: toggling the instructions
+    // checkbox refires this, and a slower earlier request must not overwrite a
+    // newer one. Clearing error on success keeps a transient failure from
+    // masking a later successful fetch forever.
+    let ignore = false;
     api
       .export(reviewId, instructions)
       .then((r) => {
+        if (ignore) return;
+        setError(null);
         setMarkdown(r.markdown);
         setFilename(r.filename);
       })
-      .catch((e) => setError((e as Error).message));
+      .catch((e) => {
+        if (!ignore) setError((e as Error).message);
+      });
+    return () => {
+      ignore = true;
+    };
   }, [reviewId, instructions]);
 
   // Dismiss on Escape, matching the inline composer's Esc-to-cancel.
