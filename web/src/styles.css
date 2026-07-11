@@ -841,6 +841,13 @@ select {
 }
 .composer-actions {
   margin-top: 8px;
+  align-items: center;
+}
+/* Sits at the left of the actions row; pushes Cancel/Submit to the right. */
+.composer-hint {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 /* Comments panel */
