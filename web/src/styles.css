@@ -368,7 +368,12 @@ textarea:focus-visible {
 .file-header > :not(.file-path) {
   flex-shrink: 0;
 }
-.file-count {
+/* Monochrome comment-count marker (speech-bubble icon + number), replacing the
+   color 💬 emoji in the file header and the comments panel. */
+.comment-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   color: var(--muted);
   font-size: 12px;
 }
@@ -737,6 +742,31 @@ textarea:focus-visible {
 }
 .reply-body {
   font-size: 13px;
+}
+/* Meta-row decluttering. The #id is the least useful token in a thread/reply
+   header, so dim it a notch below the other muted metadata; the type badge and
+   line label lead. */
+.meta-id {
+  opacity: 0.7;
+}
+/* Action links (resolve/edit/delete) recede to muted at rest so a thread reads
+   as calm metadata, then take their action color when reached for. The
+   standalone "Reply" link lives outside .thread-meta, so it stays accent. */
+.thread-meta .link,
+.reply-meta .link {
+  color: var(--muted);
+}
+.thread-meta .link:hover,
+.thread-meta .link:focus-visible,
+.reply-meta .link:hover,
+.reply-meta .link:focus-visible {
+  color: var(--accent);
+}
+.thread-meta .link.danger:hover,
+.thread-meta .link.danger:focus-visible,
+.reply-meta .link.danger:hover,
+.reply-meta .link.danger:focus-visible {
+  color: var(--danger);
 }
 /* Rendered markdown inside comment & reply bodies. Kept tight — these live in
    the narrow inline threads, not the full-width export preview. */

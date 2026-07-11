@@ -1,6 +1,7 @@
 import type { Comment } from "../types";
 import { lineLabel } from "../types";
 import { AnchorBadge } from "./AnchorBadge";
+import { CommentCount } from "./CommentCount";
 import { Markdown } from "./Markdown";
 
 interface Props {
@@ -59,13 +60,13 @@ export function CommentsPanel({ comments, fileOrder, onJump, onDelete }: Props) 
                 onClick={() => onJump(c.id)}
               >
                 <div className="comment-meta">
-                  <span className="muted">#{c.id}</span>
+                  <span className="muted meta-id">#{c.id}</span>
                   <span className={`badge badge-${c.type}`}>{c.type}</span>
                   <span className="muted">{lineLabel(c)}</span>
                   <AnchorBadge comment={c} compact />
                   {c.resolved && <span className="muted">✓</span>}
                   {(c.replies?.length ?? 0) > 0 && (
-                    <span className="muted">💬 {c.replies.length}</span>
+                    <CommentCount n={c.replies.length} label="reply" />
                   )}
                 </div>
                 {c.body ? (

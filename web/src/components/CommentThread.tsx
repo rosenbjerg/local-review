@@ -32,7 +32,7 @@ function ReplyItem({
   return (
     <div className="reply" id={`reply-${reply.id}`}>
       <div className="reply-meta">
-        <span className="muted">↳ #{reply.id}</span>
+        <span className="muted meta-id">↳ #{reply.id}</span>
         <span className="muted">{reply.author}</span>
         {reply.createdAt && (
           <span className="muted" title={absoluteTime(reply.createdAt)}>
@@ -91,7 +91,7 @@ export function CommentThread({
       id={`comment-${comment.id}`}
     >
       <div className="thread-meta">
-        <span className="muted">#{comment.id}</span>
+        <span className="muted meta-id">#{comment.id}</span>
         <span className={`badge badge-${comment.type}`}>{comment.type}</span>
         <span className="muted">{lineLabel(comment)}</span>
         <AnchorBadge comment={comment} />
