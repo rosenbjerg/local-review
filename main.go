@@ -2,18 +2,22 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"flag"
 	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"local-review/internal/api"
@@ -68,15 +72,43 @@ func main() {
 
 	addr := fmt.Sprintf("127.0.0.1:%d", *port)
 	url := "http://" + addr
+
+	// Bind explicitly so a failure (e.g. the port is already in use) aborts here,
+	// before we open a browser tab pointed at a server that isn't listening.
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatalf("listen on %s: %v", addr, err)
+	}
+
 	log.Printf("local-review serving repositories in %s", absRoot)
 	log.Printf("db: %s", dbPath)
 	log.Printf("listening on %s", url)
 
+	srv := &http.Server{Handler: api.WithErrorLogging(mux)}
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- srv.Serve(ln) }()
+
+	// The listener is up, so the browser will reach a live server.
 	if !*noOpen {
 		go openBrowser(url)
 	}
-	if err := http.ListenAndServe(addr, api.WithErrorLogging(mux)); err != nil {
-		log.Fatal(err)
+
+	// Run until a shutdown signal or a fatal serve error, then drain in-flight
+	// requests and let the deferred st.Close() checkpoint the WAL cleanly.
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	select {
+	case err := <-serveErr:
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("serve: %v", err)
+		}
+	case s := <-sig:
+		log.Printf("received %s, shutting down", s)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("graceful shutdown: %v", err)
+		}
 	}
 }
 
@@ -144,7 +176,8 @@ func mountStatic(mux *http.ServeMux) {
 }
 
 func openBrowser(url string) {
-	time.Sleep(300 * time.Millisecond)
+	// The caller only starts this once the listener is bound, so no wait is
+	// needed — a connection to the bound socket queues until Serve accepts it.
 	var cmd string
 	var args []string
 	switch runtime.GOOS {
