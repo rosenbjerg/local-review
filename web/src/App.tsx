@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { api } from "./api";
 import { CommentsPanel } from "./components/CommentsPanel";
 import { DiffView, LARGE_FILE_LINES } from "./components/DiffView";
@@ -119,6 +126,19 @@ export default function App() {
     window.addEventListener("mouseup", onUp);
     document.body.style.userSelect = "none";
     document.body.style.cursor = "col-resize";
+  }
+
+  // Keyboard resize for the separators: ←/→ nudge the width (Shift for a bigger
+  // step), clamped to the same bounds as the drag.
+  function onResizeKey(e: ReactKeyboardEvent, side: "left" | "right") {
+    const step = e.shiftKey ? 40 : 12;
+    let delta = 0;
+    if (e.key === "ArrowLeft") delta = -step;
+    else if (e.key === "ArrowRight") delta = step;
+    else return;
+    e.preventDefault();
+    if (side === "left") setLeftW((w) => clamp(w + delta, 160, 560));
+    else setRightW((w) => clamp(w - delta, 220, 640));
   }
 
   // Reflect the active review in the tab title so several open reviews (the
@@ -871,7 +891,18 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
               onToggleReviewed={toggleReviewed}
             />
           </aside>
-          <div className="resizer" onMouseDown={(e) => startResize(e, "left")} />
+          <div
+            className="resizer"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize files panel"
+            aria-valuemin={160}
+            aria-valuemax={560}
+            aria-valuenow={leftW}
+            tabIndex={0}
+            onMouseDown={(e) => startResize(e, "left")}
+            onKeyDown={(e) => onResizeKey(e, "left")}
+          />
           <div className="diff-column" ref={diffColRef}>
             {files.length === 0 && loading && (
               <div className="empty">
@@ -914,7 +945,18 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
               );
             })}
           </div>
-          <div className="resizer" onMouseDown={(e) => startResize(e, "right")} />
+          <div
+            className="resizer"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize comments panel"
+            aria-valuemin={220}
+            aria-valuemax={640}
+            aria-valuenow={rightW}
+            tabIndex={0}
+            onMouseDown={(e) => startResize(e, "right")}
+            onKeyDown={(e) => onResizeKey(e, "right")}
+          />
           <aside className="side-column">
             <CommentsPanel comments={comments} onJump={jumpTo} onDelete={handleDelete} />
           </aside>
@@ -927,9 +969,16 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
 
       {showHelp && (
         <div className="modal-backdrop" onClick={() => setShowHelp(false)}>
-          <div className="modal modal-sm" ref={helpTrapRef} onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal modal-sm"
+            ref={helpTrapRef}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="help-title"
+          >
             <div className="modal-head">
-              <h2>Keyboard shortcuts</h2>
+              <h2 id="help-title">Keyboard shortcuts</h2>
               <span className="spacer" />
               <button className="btn" onClick={() => setShowHelp(false)}>
                 Close
@@ -983,9 +1032,16 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
 
       {confirmingReset && (
         <div className="modal-backdrop" onClick={() => setConfirmingReset(false)}>
-          <div className="modal modal-sm" ref={resetTrapRef} onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal modal-sm"
+            ref={resetTrapRef}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-title"
+          >
             <div className="modal-head">
-              <h2>Reset review?</h2>
+              <h2 id="reset-title">Reset review?</h2>
             </div>
             <div className="confirm-body">
               <p>

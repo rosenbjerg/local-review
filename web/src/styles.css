@@ -235,8 +235,13 @@ textarea:focus-visible {
   cursor: col-resize;
 }
 .resizer:hover,
-.resizer:active {
+.resizer:active,
+.resizer:focus-visible {
   background: var(--accent);
+}
+.resizer:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
 }
 .explorer-column {
   border-right: 1px solid var(--border);

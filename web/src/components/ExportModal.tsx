@@ -81,9 +81,16 @@ export function ExportModal({ reviewId, onClose }: Props) {
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" ref={trapRef} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal"
+        ref={trapRef}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="export-title"
+      >
         <div className="modal-head">
-          <h2>Export review</h2>
+          <h2 id="export-title">Export review</h2>
           <div className="view-toggle" role="group" aria-label="Export view">
             <button
               className={view === "preview" ? "active" : ""}
