@@ -8,13 +8,14 @@ import {
 } from "react";
 import { api } from "./api";
 import { CommentsPanel } from "./components/CommentsPanel";
+import { CopyButton } from "./components/CopyButton";
 import { DiffView, LARGE_FILE_LINES } from "./components/DiffView";
 import { ExportModal } from "./components/ExportModal";
 import { FileExplorer, orderedFiles } from "./components/FileExplorer";
 import { LazyFile } from "./components/LazyFile";
+import { Modal } from "./components/Modal";
 import type { Branch, Comment, CommentType, FileDiff, Review } from "./types";
 import { effectiveLines } from "./types";
-import { useFocusTrap } from "./useFocusTrap";
 
 const LS_LEFT = "lr.leftWidth";
 const LS_RIGHT = "lr.rightWidth";
@@ -73,7 +74,6 @@ export default function App() {
   const [confirmingReset, setConfirmingReset] = useState(false);
   // The comment last jumped to (via click or n/p), so n/p can step from it.
   const [activeComment, setActiveComment] = useState<number | null>(null);
-  const [promptCopy, setPromptCopy] = useState<"idle" | "ok" | "fail">("idle");
   const [leftW, setLeftW] = useState(() => readWidth(LS_LEFT, 260));
   const [rightW, setRightW] = useState(() => readWidth(LS_RIGHT, 380));
   const mainRef = useRef<HTMLDivElement>(null);
@@ -87,10 +87,6 @@ export default function App() {
   // startReview bumps it; in-flight responses check it before applying state so
   // a stale repo's review/diff can't repopulate the UI for the new selection.
   const reqSeq = useRef(0);
-  // Focus traps for the two inline modals (the export modal manages its own).
-  // Only one is ever open at a time; each restores focus to its trigger on close.
-  const helpTrapRef = useFocusTrap<HTMLDivElement>(showHelp);
-  const resetTrapRef = useFocusTrap<HTMLDivElement>(confirmingReset);
 
   // Clear any pending jump-to-comment poll on unmount.
   useEffect(
@@ -565,14 +561,15 @@ export default function App() {
     return Math.min(lines, 400) * 18 + 44;
   }
 
-  // Copies a prompt pointing a coding agent at this review's API: what to do
-  // with each comment (change + reply), how to read the type/anchor cues, and
-  // the curl calls to fetch the markdown and reply by id. Uses the browser's own
-  // origin so the URLs match wherever the server is reachable.
-  async function copyAgentInstructions() {
-    if (!review) return;
+  // A prompt pointing a coding agent at this review's API: what to do with each
+  // comment (change + reply), how to read the type/anchor cues, and the curl
+  // calls to fetch the markdown and reply by id. Uses the browser's own origin
+  // so the URLs match wherever the server is reachable. Built at copy time (see
+  // CopyButton) so it always reflects the current review.
+  function buildAgentInstructions(): string {
+    if (!review) return "";
     const origin = window.location.origin;
-    const text = `This is a code review produced with local-review. Fetch it from the API and work through every open comment.
+    return `This is a code review produced with local-review. Fetch it from the API and work through every open comment.
 
 For each comment: if you agree, make the change and reply noting what you did; if you disagree or need clarification, reply explaining why or asking a question. Comment types signal intent — bug and suggestion want a fix (or a reason it's declined), question wants an answer, nit is optional. A comment marked (outdated) or (moved from …) means the code shifted since it was written — trust the quoted snippet over the line number.
 
@@ -585,15 +582,6 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
   -H 'Content-Type: application/json' \\
   -d '{"body": "your reply here"}'
 `;
-    try {
-      await navigator.clipboard.writeText(text);
-      setPromptCopy("ok");
-    } catch {
-      // Transient inline feedback on the button itself (like the export modal),
-      // not a sticky top-banner error — a failed copy isn't app-level breakage.
-      setPromptCopy("fail");
-    }
-    setTimeout(() => setPromptCopy("idle"), 1500);
   }
 
   const shortSha = review?.headSha.slice(0, 7);
@@ -669,21 +657,16 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
       ) {
         return;
       }
-      if (showHelp) {
-        if (e.key === "Escape" || e.key === "?") {
+      // While any modal is open the shortcuts below are suppressed; the Modal
+      // shell owns Escape-to-close, so only the `?`-toggles-help affordance
+      // stays here.
+      if (showHelp || confirmingReset || showExport) {
+        if (showHelp && e.key === "?") {
           e.preventDefault();
           setShowHelp(false);
         }
         return;
       }
-      if (confirmingReset) {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          setConfirmingReset(false);
-        }
-        return;
-      }
-      if (showExport) return; // the export modal handles its own Escape
       switch (e.key) {
         case "j":
           e.preventDefault();
@@ -820,17 +803,12 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
               {shortSha}
               {effectiveUncommitted && " + uncommitted"}
             </span>
-            <button
+            <CopyButton
               className="btn copy-btn-wide"
-              onClick={copyAgentInstructions}
+              text={buildAgentInstructions}
+              idleLabel="Copy agent instructions"
               title="Copy a prompt telling a coding agent how to fetch this review from the API and reply to comments"
-            >
-              {promptCopy === "ok"
-                ? "Copied ✓"
-                : promptCopy === "fail"
-                  ? "Copy failed"
-                  : "Copy agent instructions"}
-            </button>
+            />
             <button
               className="btn"
               onClick={() => setShowExport(true)}
@@ -997,23 +975,15 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
       )}
 
       {showHelp && (
-        <div className="modal-backdrop" onClick={() => setShowHelp(false)}>
-          <div
-            className="modal modal-sm"
-            ref={helpTrapRef}
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="help-title"
-          >
-            <div className="modal-head">
-              <h2 id="help-title">Keyboard shortcuts</h2>
-              <span className="spacer" />
-              <button className="btn" onClick={() => setShowHelp(false)}>
-                Close
-              </button>
-            </div>
-            <div className="help-body">
+        <Modal onClose={() => setShowHelp(false)} labelledBy="help-title" className="modal-sm">
+          <div className="modal-head">
+            <h2 id="help-title">Keyboard shortcuts</h2>
+            <span className="spacer" />
+            <button className="btn" onClick={() => setShowHelp(false)}>
+              Close
+            </button>
+          </div>
+          <div className="help-body">
               <table className="shortcuts">
                 <tbody>
                   <tr>
@@ -1074,24 +1044,19 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {confirmingReset && (
-        <div className="modal-backdrop" onClick={() => setConfirmingReset(false)}>
-          <div
-            className="modal modal-sm"
-            ref={resetTrapRef}
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="reset-title"
-          >
-            <div className="modal-head">
-              <h2 id="reset-title">Reset review?</h2>
-            </div>
-            <div className="confirm-body">
+        <Modal
+          onClose={() => setConfirmingReset(false)}
+          labelledBy="reset-title"
+          className="modal-sm"
+        >
+          <div className="modal-head">
+            <h2 id="reset-title">Reset review?</h2>
+          </div>
+          <div className="confirm-body">
               <p>
                 This deletes{" "}
                 <strong>
@@ -1112,8 +1077,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
                 Delete everything
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
