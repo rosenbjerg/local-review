@@ -52,6 +52,16 @@ type fileDiffResult struct {
 	err   error
 }
 
+// markCurrent/markOutdated/markMoved set a comment's derived anchor fields. Every
+// annotation path resolves to exactly one of these three states, so routing
+// through them keeps AnchorStatus and the Current* lines assigned as a unit.
+func markCurrent(c *store.Comment)  { c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorCurrent, 0, 0 }
+func markOutdated(c *store.Comment) { c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorOutdated, 0, 0 }
+
+func markMoved(c *store.Comment, start, end int) {
+	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorMoved, start, end
+}
+
 // annotateByDiff sets a comment's anchor status by mapping its original range
 // through the diff from its commit_sha to head. Returns false to fall back to
 // snippet matching (unresolvable commit, binary/renamed file, etc.).
@@ -75,11 +85,11 @@ func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, cache map[
 	}
 	if fd == nil {
 		// File unchanged between commit_sha and head → still where it was.
-		c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorCurrent, 0, 0
+		markCurrent(c)
 		return true
 	}
 	if fd.Status == "deleted" {
-		c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorOutdated, 0, 0
+		markOutdated(c)
 		return true
 	}
 	if fd.Binary || len(fd.Hunks) == 0 {
@@ -89,22 +99,22 @@ func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, cache map[
 	// was edited (outdated) rather than merely shifted (moved).
 	ns, alive := git.MapOldLine(fd.Hunks, c.StartLine)
 	if !alive {
-		c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorOutdated, 0, 0
+		markOutdated(c)
 		return true
 	}
 	prev := ns
 	for l := c.StartLine + 1; l <= c.EndLine; l++ {
 		nl, ok := git.MapOldLine(fd.Hunks, l)
 		if !ok || nl != prev+1 {
-			c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorOutdated, 0, 0
+			markOutdated(c)
 			return true
 		}
 		prev = nl
 	}
 	if ns == c.StartLine {
-		c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorCurrent, 0, 0
+		markCurrent(c)
 	} else {
-		c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorMoved, ns, prev
+		markMoved(c, ns, prev)
 	}
 	return true
 }
@@ -133,7 +143,7 @@ func fileReader(fetch func(string) (string, error)) func(string) ([]string, bool
 // current file lines. A comment with no captured snippet stays "current" — there
 // is nothing to verify drift against.
 func annotateComment(c *store.Comment, read func(string) ([]string, bool)) {
-	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorCurrent, 0, 0
+	markCurrent(c)
 
 	snippet := strings.TrimRight(c.Snippet, "\n")
 	if strings.TrimSpace(snippet) == "" {
@@ -141,7 +151,7 @@ func annotateComment(c *store.Comment, read func(string) ([]string, bool)) {
 	}
 	lines, ok := read(c.FilePath)
 	if !ok {
-		c.AnchorStatus = store.AnchorOutdated
+		markOutdated(c)
 		return
 	}
 	snip := strings.Split(snippet, "\n")
@@ -152,12 +162,10 @@ func annotateComment(c *store.Comment, read func(string) ([]string, bool)) {
 	// safely, so they read as outdated rather than guessing.
 	starts := findMatches(lines, snip)
 	if len(starts) == 1 {
-		c.AnchorStatus = store.AnchorMoved
-		c.CurrentStartLine = starts[0] + 1
-		c.CurrentEndLine = starts[0] + len(snip)
+		markMoved(c, starts[0]+1, starts[0]+len(snip))
 		return
 	}
-	c.AnchorStatus = store.AnchorOutdated
+	markOutdated(c)
 }
 
 // matchAt reports whether snip appears in lines starting at 0-based index start.

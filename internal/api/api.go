@@ -184,27 +184,32 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"base": base, "head": head, "files": diff})
 }
 
-func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
+// readFileContent resolves the file requested by r, shared by handleFile and
+// handleBlob. It validates the repo and path, then reads the content from the
+// working tree (?worktree=true) or the given ref — falling back to the working
+// tree when the ref lacks the file (an uncommitted new file, or a stale request
+// mid-mode-switch). On any failure it writes the error response and returns
+// ok=false; on success it returns the content and validated path.
+func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (content, path string, ok bool) {
 	repo, ok := s.repoParam(w, r)
 	if !ok {
-		return
+		return "", "", false
 	}
-	path := r.URL.Query().Get("path")
-	ref := r.URL.Query().Get("ref")
+	path = r.URL.Query().Get("path")
 	if path == "" {
 		httpError(w, http.StatusBadRequest, errString("path is required"))
-		return
+		return "", "", false
 	}
-	// worktree reads the on-disk (uncommitted) new side, which git show can't
-	// reach — e.g. a new file that isn't committed at the head ref.
-	var content string
 	var err error
 	if r.URL.Query().Get("worktree") == "true" {
+		// worktree reads the on-disk (uncommitted) new side, which git show can't
+		// reach — e.g. a new file that isn't committed at the head ref.
 		content, err = repo.WorktreeFile(path)
 	} else {
+		ref := r.URL.Query().Get("ref")
 		if err = validRef(ref); err != nil {
 			httpError(w, http.StatusBadRequest, err)
-			return
+			return "", "", false
 		}
 		content, err = repo.FileContent(ref, path)
 		if err != nil {
@@ -218,43 +223,25 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)
+		return "", "", false
+	}
+	return content, path, true
+}
+
+func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
+	content, path, ok := s.readFileContent(w, r)
+	if !ok {
 		return
 	}
-	writeJSON(w, map[string]any{"path": path, "ref": ref, "content": content})
+	writeJSON(w, map[string]any{"path": path, "ref": r.URL.Query().Get("ref"), "content": content})
 }
 
 // handleBlob serves a file's raw bytes with an image-friendly Content-Type, for
 // <img> rendering of image files. Same ref/worktree resolution (and working-tree
 // fallback) as handleFile.
 func (s *Server) handleBlob(w http.ResponseWriter, r *http.Request) {
-	repo, ok := s.repoParam(w, r)
+	content, path, ok := s.readFileContent(w, r)
 	if !ok {
-		return
-	}
-	path := r.URL.Query().Get("path")
-	if path == "" {
-		httpError(w, http.StatusBadRequest, errString("path is required"))
-		return
-	}
-	var content string
-	var err error
-	if r.URL.Query().Get("worktree") == "true" {
-		content, err = repo.WorktreeFile(path)
-	} else {
-		ref := r.URL.Query().Get("ref")
-		if err = validRef(ref); err != nil {
-			httpError(w, http.StatusBadRequest, err)
-			return
-		}
-		content, err = repo.FileContent(ref, path)
-		if err != nil {
-			if wt, wtErr := repo.WorktreeFile(path); wtErr == nil {
-				content, err = wt, nil
-			}
-		}
-	}
-	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
 		return
 	}
 	w.Header().Set("Content-Type", mimeForPath(path))
@@ -298,9 +285,8 @@ type createReviewReq struct {
 }
 
 func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) {
-	var req createReviewReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpError(w, http.StatusBadRequest, err)
+	req, ok := decodeBody[createReviewReq](w, r)
+	if !ok {
 		return
 	}
 	repo, err := s.repoFor(req.Repo)
@@ -442,8 +428,7 @@ func (s *Server) handleResetReview(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusInternalServerError, err)
 		return
 	}
-	_ = s.Store.Touch(id)
-	s.hub.publish(id)
+	s.notify(id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -481,9 +466,8 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req setReviewedReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpError(w, http.StatusBadRequest, err)
+	req, ok := decodeBody[setReviewedReq](w, r)
+	if !ok {
 		return
 	}
 	if req.FilePath == "" {
@@ -503,8 +487,7 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusInternalServerError, err)
 		return
 	}
-	_ = s.Store.Touch(id)
-	s.hub.publish(id)
+	s.notify(id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -526,9 +509,8 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req addCommentReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpError(w, http.StatusBadRequest, err)
+	req, ok := decodeBody[addCommentReq](w, r)
+	if !ok {
 		return
 	}
 	if req.EndLine < req.StartLine {
@@ -571,8 +553,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		annotateComments(repo, headRef, cs)
 		c = &cs[0]
 	}
-	_ = s.Store.Touch(id)
-	s.hub.publish(id)
+	s.notify(id)
 	writeJSON(w, c)
 }
 
@@ -588,9 +569,8 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req updateCommentReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpError(w, http.StatusBadRequest, err)
+	req, ok := decodeBody[updateCommentReq](w, r)
+	if !ok {
 		return
 	}
 	if req.EndLine < req.StartLine {
@@ -601,8 +581,7 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 		storeError(w, err)
 		return
 	}
-	_ = s.Store.Touch(c.ReviewID)
-	s.hub.publish(c.ReviewID)
+	s.notify(c.ReviewID)
 	writeJSON(w, c)
 }
 
@@ -616,8 +595,7 @@ func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
 		storeError(w, err)
 		return
 	}
-	_ = s.Store.Touch(reviewID)
-	s.hub.publish(reviewID)
+	s.notify(reviewID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -630,9 +608,8 @@ func (s *Server) handleSetResolved(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req setResolvedReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpError(w, http.StatusBadRequest, err)
+	req, ok := decodeBody[setResolvedReq](w, r)
+	if !ok {
 		return
 	}
 	reviewID, err := s.Store.SetCommentResolved(id, req.Resolved)
@@ -640,8 +617,7 @@ func (s *Server) handleSetResolved(w http.ResponseWriter, r *http.Request) {
 		storeError(w, err)
 		return
 	}
-	_ = s.Store.Touch(reviewID)
-	s.hub.publish(reviewID)
+	s.notify(reviewID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -657,9 +633,8 @@ func (s *Server) handleAddReply(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req replyReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpError(w, http.StatusBadRequest, err)
+	req, ok := decodeBody[replyReq](w, r)
+	if !ok {
 		return
 	}
 	if req.Author == "" {
@@ -672,8 +647,7 @@ func (s *Server) handleAddReply(w http.ResponseWriter, r *http.Request) {
 		storeError(w, err)
 		return
 	}
-	_ = s.Store.Touch(reviewID)
-	s.hub.publish(reviewID)
+	s.notify(reviewID)
 	writeJSON(w, rep)
 }
 
@@ -682,9 +656,8 @@ func (s *Server) handleUpdateReply(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req replyReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpError(w, http.StatusBadRequest, err)
+	req, ok := decodeBody[replyReq](w, r)
+	if !ok {
 		return
 	}
 	rep, reviewID, err := s.Store.UpdateReply(id, req.Body)
@@ -692,8 +665,7 @@ func (s *Server) handleUpdateReply(w http.ResponseWriter, r *http.Request) {
 		storeError(w, err)
 		return
 	}
-	_ = s.Store.Touch(reviewID)
-	s.hub.publish(reviewID)
+	s.notify(reviewID)
 	writeJSON(w, rep)
 }
 
@@ -707,12 +679,31 @@ func (s *Server) handleDeleteReply(w http.ResponseWriter, r *http.Request) {
 		storeError(w, err)
 		return
 	}
-	_ = s.Store.Touch(reviewID)
-	s.hub.publish(reviewID)
+	s.notify(reviewID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // --- helpers ---
+
+// notify records a mutation on a review: it bumps the review's updated_at and
+// pings SSE subscribers so every open tab refetches. Every write handler ends
+// with this. Touch failures are non-fatal (the mutation already landed), so its
+// error is dropped just as the inline callers did.
+func (s *Server) notify(reviewID int64) {
+	_ = s.Store.Touch(reviewID)
+	s.hub.publish(reviewID)
+}
+
+// decodeBody decodes the JSON request body into T. On malformed input it writes
+// a 400 and returns ok=false, signalling the handler to return without writing
+// anything further.
+func decodeBody[T any](w http.ResponseWriter, r *http.Request) (req T, ok bool) {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpError(w, http.StatusBadRequest, err)
+		return req, false
+	}
+	return req, true
+}
 
 func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
