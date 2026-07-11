@@ -6,10 +6,18 @@
   --text: #e6edf3;
   --muted: #8b949e;
   --accent: #2f81f7;
+  /* Brighter accent for the hover state of saturated accent fills (primary
+     buttons), so they lift on hover instead of falling through to the grey
+     .btn:hover surface. */
+  --accent-hover: #4b93f9;
   --add-bg: #12261e;
   --add-border: #238636;
   --del-bg: #25171c;
-  --sel-bg: #2a2f1a;
+  /* Range-select highlight — a dark accent-family blue so selecting lines
+     matches the blue gutter-hover, rather than the old olive that belonged to
+     neither the add/del shades nor the accent. Opaque like its siblings; it
+     fully overrides the row shade it sits on. */
+  --sel-bg: #1c2e4a;
   /* Semantic status/feedback colors — text shade + matching border shade.
      Used by status/fstat marks, comment-type badges, and danger controls. */
   --danger: #f85149;
@@ -207,9 +215,15 @@ textarea:focus-visible {
   color: var(--text);
 }
 .btn-primary {
-  background: var(--add-border);
-  border-color: var(--add-border);
+  background: var(--accent);
+  border-color: var(--accent);
   color: var(--on-accent);
+}
+/* Own hover shade — otherwise .btn:hover (higher specificity) would repaint the
+   primary button grey on hover. */
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 .link {
   background: none;
@@ -412,6 +426,10 @@ textarea:focus-visible {
 .status-renamed {
   color: var(--warn);
   border-color: var(--warn-border);
+}
+.status-modified {
+  color: var(--info);
+  border-color: var(--info-border);
 }
 
 /* File explorer */

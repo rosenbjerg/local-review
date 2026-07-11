@@ -190,6 +190,7 @@ web/src/
   `--sel-bg`), and the semantic status palette (`--danger`/`--success`/`--warn`/
   `--info`, each with a matching `-border` shade) used by `.status-*`/`.fstat-*`/
   `.badge-*` and danger controls. Plus a few derived/utility tokens:
+  `--accent-hover` (brighter accent for the hover state of `.btn-primary`),
   `--danger-soft` (translucent danger tint for hover fills + the error banner),
   `--on-accent` (foreground on saturated accent/success fills), `--backdrop`
   (modal scrim), and `--checker-bg`/`--checker-fg` (transparent-image
