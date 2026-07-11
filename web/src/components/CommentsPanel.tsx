@@ -5,11 +5,14 @@ import { Markdown } from "./Markdown";
 
 interface Props {
   comments: Comment[];
+  // The diff's file paths in tree order (dirs first), so this pane lists files
+  // in the same order as the explorer and the diff rather than alphabetically.
+  fileOrder: string[];
   onJump: (id: number) => void;
   onDelete: (id: number) => void;
 }
 
-export function CommentsPanel({ comments, onJump, onDelete }: Props) {
+export function CommentsPanel({ comments, fileOrder, onJump, onDelete }: Props) {
   const byFile = new Map<string, Comment[]>();
   for (const c of comments) {
     const arr = byFile.get(c.filePath) ?? [];
@@ -24,7 +27,15 @@ export function CommentsPanel({ comments, onJump, onDelete }: Props) {
       return a.startLine - b.startLine;
     });
   }
-  const files = [...byFile.keys()].sort();
+  // Order files by their position in the diff (tree order); any file no longer
+  // in the diff (a comment left on since-removed content) trails at the end,
+  // alphabetically among themselves.
+  const orderIndex = new Map(fileOrder.map((p, i) => [p, i]));
+  const files = [...byFile.keys()].sort((a, b) => {
+    const ia = orderIndex.get(a) ?? Infinity;
+    const ib = orderIndex.get(b) ?? Infinity;
+    return ia !== ib ? ia - ib : a.localeCompare(b);
+  });
 
   return (
     <div className="comments-panel">

@@ -609,6 +609,10 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
   const effectiveUncommitted = uncommitted && headIsCurrent;
   // Render the middle pane in the same order the left-pane tree shows.
   const orderedDiffFiles = useMemo(() => orderedFiles(files), [files]);
+  const orderedFilePaths = useMemo(
+    () => orderedDiffFiles.map((f) => f.newPath || f.oldPath),
+    [orderedDiffFiles]
+  );
 
   // Comment ids in reading order (file order, then line) — the sequence n/p
   // steps through. Comments whose file isn't in the diff trail at the end.
@@ -978,7 +982,12 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
             onKeyDown={(e) => onResizeKey(e, "right")}
           />
           <aside className="side-column">
-            <CommentsPanel comments={comments} onJump={jumpTo} onDelete={handleDelete} />
+            <CommentsPanel
+              comments={comments}
+              fileOrder={orderedFilePaths}
+              onJump={jumpTo}
+              onDelete={handleDelete}
+            />
           </aside>
         </div>
       )}
