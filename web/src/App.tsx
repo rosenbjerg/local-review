@@ -79,6 +79,9 @@ export default function App() {
   const mainRef = useRef<HTMLDivElement>(null);
   const diffColRef = useRef<HTMLDivElement>(null);
   const expandN = useRef(0);
+  // The in-flight jump-to-comment poll, so a new jump can cancel it instead of
+  // leaving stacked timers fighting over scroll position.
+  const jumpPoll = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [expandTarget, setExpandTarget] = useState<{ path: string; n: number } | null>(null);
   // Monotonic token identifying the latest load. A repo switch or a newer
   // startReview bumps it; in-flight responses check it before applying state so
@@ -88,6 +91,14 @@ export default function App() {
   // Only one is ever open at a time; each restores focus to its trigger on close.
   const helpTrapRef = useFocusTrap<HTMLDivElement>(showHelp);
   const resetTrapRef = useFocusTrap<HTMLDivElement>(confirmingReset);
+
+  // Clear any pending jump-to-comment poll on unmount.
+  useEffect(
+    () => () => {
+      if (jumpPoll.current !== null) clearTimeout(jumpPoll.current);
+    },
+    []
+  );
 
   useEffect(() => {
     localStorage.setItem(LS_LEFT, String(leftW));
@@ -484,6 +495,12 @@ export default function App() {
   }
 
   function jumpTo(id: number) {
+    // Supersede any in-flight jump so its poll doesn't keep scrolling to the
+    // old target (rapid n/p would otherwise stack several loops).
+    if (jumpPoll.current !== null) {
+      clearTimeout(jumpPoll.current);
+      jumpPoll.current = null;
+    }
     setActiveComment(id);
     if (flashComment(id)) return;
     // The comment's file may be unmounted (lazy rendering) and/or collapsed
@@ -497,10 +514,13 @@ export default function App() {
     // guessing a fixed delay (which fails on slow devices / long scrolls).
     let tries = 0;
     const poll = () => {
-      if (flashComment(id) || tries++ > 40) return; // ~4s cap
-      setTimeout(poll, 100);
+      if (flashComment(id) || tries++ > 40) {
+        jumpPoll.current = null; // ~4s cap
+        return;
+      }
+      jumpPoll.current = setTimeout(poll, 100);
     };
-    setTimeout(poll, 100);
+    jumpPoll.current = setTimeout(poll, 100);
   }
 
   function jumpToFile(path: string) {
