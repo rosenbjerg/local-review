@@ -1,8 +1,7 @@
 // Human-friendly timestamps for comment/reply meta lines.
 
-// relativeTime turns an ISO timestamp into a compact "3m ago" / "2h ago" /
-// "5d ago" string, falling back to a short absolute date past a week. Returns
-// "" for empty/unparseable input (older rows can carry a blank timestamp).
+// ISO → compact "3m ago" / "2h ago" / "5d ago", or a short date past a week.
+// "" for empty/unparseable input (older rows can be blank).
 export function relativeTime(iso: string): string {
   if (!iso) return "";
   const then = new Date(iso).getTime();
@@ -22,17 +21,16 @@ export function relativeTime(iso: string): string {
   });
 }
 
-// absoluteTime is the full local timestamp, shown on hover behind relativeTime.
+// Full local timestamp, shown on hover behind relativeTime.
 export function absoluteTime(iso: string): string {
   if (!iso) return "";
   const d = new Date(iso);
   return Number.isFinite(d.getTime()) ? d.toLocaleString() : "";
 }
 
-// wasEdited reports whether a comment/reply body was changed after creation.
-// The backend keeps updated_at == created_at until an actual body/type edit
-// (resolving a thread no longer bumps it), so a later updated_at is a genuine
-// edit.
+// Whether the body was edited after creation. The backend keeps updated_at ==
+// created_at until a real body/type edit (resolve doesn't bump it), so a later
+// updated_at is genuine.
 export function wasEdited(createdAt: string, updatedAt: string): boolean {
   if (!createdAt || !updatedAt) return false;
   const c = new Date(createdAt).getTime();

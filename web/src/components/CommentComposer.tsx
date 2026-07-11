@@ -8,8 +8,7 @@ interface Props {
   onSubmit: (body: string, type: CommentType) => void | Promise<unknown>;
   onCancel: () => void;
   submitLabel?: string;
-  // Replies inherit their type from the thread root, so their composer hides the
-  // type picker (the type value is emitted but ignored by the caller).
+  // Replies inherit the root's type, so their composer hides the type picker.
   hideType?: boolean;
   placeholder?: string;
 }
@@ -27,8 +26,7 @@ export function CommentComposer({
   const [type, setType] = useState<CommentType>(initialType);
   const [submitting, setSubmitting] = useState(false);
 
-  // Await the (possibly async) submit and block re-entry, so a second click or
-  // ⌘+Enter while a save is in flight can't post a duplicate.
+  // Block re-entry so a second click or ⌘+Enter mid-save can't post a duplicate.
   async function submit() {
     const trimmed = body.trim();
     if (!trimmed || submitting) return;

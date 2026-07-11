@@ -44,9 +44,8 @@ function buildTree(files: FileDiff[]): TreeNode[] {
   return root.children.map((c) => (c.kind === "dir" ? compress(c) : c));
 }
 
-// orderedFiles returns the files in the same top-to-bottom order the tree
-// renders them (dirs first, then files, alphabetically), so the middle pane's
-// list matches the left pane's tree.
+// Files in the tree's render order (dirs first, then files, alphabetically), so
+// the middle pane matches the left pane.
 export function orderedFiles(files: FileDiff[]): FileDiff[] {
   const out: FileDiff[] = [];
   const walk = (nodes: TreeNode[]) => {
@@ -88,8 +87,7 @@ export function FileExplorer({
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  // Per-file badge counts open threads only — a file whose feedback is all
-  // resolved shows no count, matching the diff header and Export button.
+  // Badge counts open threads only (like the diff header and Export).
   const countByFile = new Map<string, number>();
   for (const c of comments) {
     if (c.resolved) continue;

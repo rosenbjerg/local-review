@@ -6,9 +6,8 @@ import { AnchorBadge } from "./AnchorBadge";
 import { Markdown } from "./Markdown";
 import { MetaTimestamps } from "./MetaTimestamps";
 
-// The comment/reply mutation callbacks a thread needs. Bundled into one object
-// so the handful of components that render threads (the diff, the media view)
-// forward a single `actions` prop instead of re-listing six callbacks each.
+// The thread's mutation callbacks, bundled so components that render threads
+// forward one `actions` prop instead of six callbacks.
 export interface CommentActions {
   onUpdate: (id: number, body: string, type: CommentType) => Promise<boolean>;
   onDelete: (id: number) => Promise<void>;
@@ -23,8 +22,8 @@ interface Props {
   actions: CommentActions;
 }
 
-// A single reply within a thread. Replies carry no type or anchor — just body —
-// so their editor is the composer with the type picker hidden.
+// Replies carry no type or anchor — just body — so their editor hides the
+// composer's type picker.
 function ReplyItem({
   reply,
   onUpdate,

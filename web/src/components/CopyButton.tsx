@@ -2,10 +2,9 @@ import { useEffect, useRef, useState } from "react";
 
 type CopyState = "idle" | "ok" | "fail";
 
-// A button that writes text to the clipboard and reflects the result inline
-// (idle → "Copied ✓" / "Copy failed" → back to idle after 1.5s) rather than a
-// sticky banner error — a failed copy isn't app-level breakage. `text` may be a
-// function so the payload is built lazily at click time from live state.
+// Clipboard button that reflects the result inline (idle → "Copied ✓" / "Copy
+// failed" → idle after 1.5s) rather than a sticky error. `text` may be a
+// function so the payload is built lazily at click time.
 export function CopyButton({
   text,
   idleLabel,
@@ -20,8 +19,7 @@ export function CopyButton({
   const [state, setState] = useState<CopyState>("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Clear a pending reset on unmount (and reuse the ref to collapse overlapping
-  // timers from rapid clicks into one).
+  // Clear a pending reset on unmount; the ref also collapses rapid-click timers.
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
   }, []);

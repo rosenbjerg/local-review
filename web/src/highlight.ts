@@ -7,9 +7,9 @@ export type Token = ThemedToken;
 
 const THEME = "github-dark";
 
-// Every language id and alias → canonical id, derived from Shiki's own metadata
-// so we cover all ~235 bundled languages without a maintained list. Each grammar
-// is still lazily fetched (a separate chunk) only when a file needs it.
+// Every language id + alias → canonical id, from Shiki's own metadata (no
+// maintained list, covers all ~235 languages). Grammars are still lazily fetched
+// per file.
 const ALIAS_TO_ID = new Map<string, string>();
 for (const info of bundledLanguagesInfo) {
   ALIAS_TO_ID.set(info.id, info.id);
@@ -50,8 +50,8 @@ function highlighter(): Promise<HighlighterCore> {
 
 const loaded = new Set<string>();
 
-// tokenize returns one token array per line, or null if the language is
-// unsupported (caller falls back to plain text).
+// One token array per line, or null if the language is unsupported (caller
+// falls back to plain text).
 export async function tokenize(code: string, lang: string): Promise<Token[][] | null> {
   if (!(lang in bundledLanguages)) return null;
   try {

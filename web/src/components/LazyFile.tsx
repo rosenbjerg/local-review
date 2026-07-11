@@ -8,11 +8,10 @@ interface Props {
   children: ReactNode;
 }
 
-// Renders a lightweight placeholder until the file scrolls near the viewport,
-// then mounts its diff and keeps it mounted. This bounds the DOM (and the
-// per-file fetch + tokenization) to what the user actually looks at, so large
-// change-sets stay responsive. The wrapper keeps the scroll anchor and an
-// estimated height so the scrollbar and jump-to-file work before mount.
+// Placeholder until the file scrolls near the viewport, then mounts its diff and
+// keeps it mounted — bounds DOM + per-file fetch/tokenization to what's looked
+// at. The placeholder keeps the anchor and an estimated height so the scrollbar
+// and jump-to-file work before mount.
 export function LazyFile({ anchorId, label, estHeight, rootRef, children }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);

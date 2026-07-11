@@ -1,8 +1,5 @@
-// A monochrome comment-count marker — an octicon-style speech bubble plus the
-// number — used wherever we show how many threads/replies hang off something.
-// Replaces the color 💬 emoji so counts stay in the app's restrained palette
-// (the bubble inherits currentColor). `label` names the unit for screen readers
-// (the visible text is just the number).
+// Monochrome speech-bubble + number for thread/reply counts (inherits
+// currentColor, unlike a 💬 emoji). `label` names the unit for screen readers.
 export function CommentCount({ n, label = "comment" }: { n: number; label?: string }) {
   return (
     <span className="comment-count" aria-label={`${n} ${label}${n === 1 ? "" : "s"}`}>

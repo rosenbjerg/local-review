@@ -1,9 +1,8 @@
 import { absoluteTime, relativeTime, wasEdited } from "../time";
 
-// The shared tail of a comment/reply meta row: author, a relative timestamp
-// (full time on hover), and an (edited) marker when the body changed after
-// creation. Rendered as a fragment so callers place it among their own leading
-// meta bits (id, badges) inside the flex row.
+// Shared tail of a comment/reply meta row: author, relative time (full on
+// hover), and an (edited) marker. A fragment so callers prepend their own
+// id/badges.
 export function MetaTimestamps({
   author,
   createdAt,

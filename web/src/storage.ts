@@ -1,7 +1,6 @@
 // Typed, error-swallowing wrappers over localStorage for the app's `lr.*`
-// preferences. Every access is best-effort: a private-mode / quota / disabled
-// failure falls back to the caller's default rather than throwing, so a broken
-// storage never breaks a render or a handler.
+// preferences. Every access is best-effort — a private-mode/quota/disabled
+// failure falls back to the caller's default rather than throwing.
 
 // The persisted preference keys, kept in one place so they can't drift apart.
 export const LS = {

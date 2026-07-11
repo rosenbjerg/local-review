@@ -1,7 +1,6 @@
 import type { Branch, Comment, CommentType, DiffResponse, Reply, Review } from "./types";
 
-// The API defaults an omitted author to "agent", so the browser (the reviewer)
-// tags everything it creates explicitly.
+// The API defaults author to "agent", so the browser tags its own writes explicitly.
 const REVIEWER = "reviewer";
 
 async function req<T>(url: string, opts?: RequestInit): Promise<T> {
@@ -110,8 +109,8 @@ export const api = {
 
   deleteReply: (id: number) => req<void>(`/api/replies/${id}`, { method: "DELETE" }),
 
-  // worktree records which side the fingerprint is captured on (on-disk working
-  // tree vs head), so a later change to that side reverts the file to unread.
+  // worktree records which side the fingerprint is taken on, so a later change
+  // to that side reverts the file to unread.
   setReviewed: (reviewId: number, filePath: string, reviewed: boolean, worktree: boolean) =>
     req<void>(`/api/reviews/${reviewId}/reviewed`, {
       method: "POST",

@@ -1,9 +1,7 @@
-// The single disclosure triangle used by both the file tree and the diff file
-// toggle. Drawn as SVG rather than a text ▸ glyph: a glyph's ink sits
-// off-centre in its box, so it wobbles when rotated. Here the triangle's
-// centroid is at the viewBox centre (8,8), so rotating the whole svg about its
-// centre spins it cleanly in place. Points right when closed; the .chevron
-// class rotates it 90° down when `open`.
+// Disclosure triangle for the file tree and diff toggle. Drawn as SVG, not a ▸
+// glyph, whose ink sits off-centre and wobbles when rotated; here the centroid
+// is at the viewBox centre (8,8) so it spins cleanly. Points right when closed;
+// `.chevron.open` rotates it 90° down.
 export function Chevron({
   open,
   size = 12,

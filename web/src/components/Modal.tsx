@@ -10,12 +10,9 @@ interface Props {
   children: ReactNode;
 }
 
-// The shared modal shell: a scrim that closes on click, a focus-trapped dialog
-// panel that swallows its own clicks, Escape-to-close, and the dialog aria. Only
-// mounted while open (render it conditionally), so the trap is active for the
-// component's whole lifetime and restores focus to the trigger on unmount.
-// Callers supply the head + body as children (a `.modal-head` with the heading
-// carrying `labelledBy`, then the body).
+// Shared modal shell: click-scrim, focus trap, Escape-to-close, dialog aria.
+// Render it conditionally (mounted only while open) so the trap restores focus
+// to the trigger on unmount. Callers supply the head + body as children.
 export function Modal({ onClose, labelledBy, className, children }: Props) {
   const trapRef = useFocusTrap<HTMLDivElement>(true);
 
