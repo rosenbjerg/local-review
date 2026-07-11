@@ -179,16 +179,24 @@ type FileDiff struct {
 	Hunks   []Hunk `json:"hunks"`
 }
 
-// diffPrefixArgs forces canonical a/ and b/ path prefixes so parseDiff can
-// strip them, regardless of the user's git config (diff.mnemonicPrefix uses
-// c//w//i//o/ on worktree diffs, diff.noprefix drops prefixes, and
-// diff.srcprefix/dstprefix set custom ones).
-var diffPrefixArgs = []string{"--src-prefix=a/", "--dst-prefix=b/"}
+// diffArgs builds the argument list common to every diff invocation, with the
+// given revisions/paths appended. Two config choices matter:
+//   - core.quotePath=false keeps non-ASCII paths verbatim; with the default
+//     (true) git octal-escapes and double-quotes them (`"a/caf\303\251.txt"`),
+//     which parseGitHeaderPaths/stripDiffPath can't unwrap, corrupting the name.
+//   - canonical a/ and b/ prefixes let parseDiff strip them regardless of the
+//     user's git config (diff.mnemonicPrefix uses c//w//i//o/ on worktree diffs,
+//     diff.noprefix drops prefixes, diff.srcprefix/dstprefix set custom ones).
+//
+// The `-c` flags must precede the `diff` subcommand.
+func diffArgs(rest ...string) []string {
+	base := []string{"-c", "core.quotePath=false", "diff", "--no-color", "--find-renames", "--src-prefix=a/", "--dst-prefix=b/"}
+	return append(base, rest...)
+}
 
 // Diff returns the parsed diff introduced between base and head.
 func (r *Repo) Diff(base, head string) ([]FileDiff, error) {
-	args := append([]string{"diff", "--no-color", "--find-renames"}, diffPrefixArgs...)
-	out, err := r.run(append(args, base, head)...)
+	out, err := r.run(diffArgs(base, head)...)
 	if err != nil {
 		return nil, err
 	}
@@ -197,9 +205,7 @@ func (r *Repo) Diff(base, head string) ([]FileDiff, error) {
 
 // DiffFile returns the diff of a single path between two refs.
 func (r *Repo) DiffFile(from, to, path string) ([]FileDiff, error) {
-	args := append([]string{"diff", "--no-color", "--find-renames"}, diffPrefixArgs...)
-	args = append(args, from, to, "--", path)
-	out, err := r.run(args...)
+	out, err := r.run(diffArgs(from, to, "--", path)...)
 	if err != nil {
 		return nil, err
 	}
@@ -246,8 +252,7 @@ func MapOldLine(hunks []Hunk, old int) (newLine int, alive bool) {
 // meaningful when base's other side is the checked-out branch, since the working
 // tree reflects whatever HEAD is checked out.
 func (r *Repo) DiffWorktree(base string) ([]FileDiff, error) {
-	args := append([]string{"diff", "--no-color", "--find-renames"}, diffPrefixArgs...)
-	out, err := r.run(append(args, base)...)
+	out, err := r.run(diffArgs(base)...)
 	if err != nil {
 		return nil, err
 	}
