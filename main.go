@@ -122,6 +122,15 @@ func mountStatic(mux *http.ServeMux) {
 	fileServer := http.FileServer(http.FS(sub))
 	// Serve assets, falling back to index.html for client-side routing.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// An unknown /api/* path must 404, not fall through to index.html: an API
+		// client hitting a removed/typo'd endpoint should get a JSON error, not a
+		// 200 HTML page (which also wouldn't be logged as an error).
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"not found"}`))
+			return
+		}
 		// path.Clean (not filepath.Clean): io/fs paths are always slash-separated,
 		// but filepath.Clean would emit backslashes on Windows, so the asset
 		// lookup would miss and every bundle fall back to index.html.

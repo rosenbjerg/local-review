@@ -2,7 +2,9 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime"
 	"net/http"
@@ -596,7 +598,7 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 	}
 	c, err := s.Store.UpdateComment(id, req.Body, req.Type, req.StartLine, req.EndLine)
 	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
+		storeError(w, err)
 		return
 	}
 	_ = s.Store.Touch(c.ReviewID)
@@ -611,7 +613,7 @@ func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
 	}
 	reviewID, err := s.Store.DeleteComment(id)
 	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
+		storeError(w, err)
 		return
 	}
 	_ = s.Store.Touch(reviewID)
@@ -635,7 +637,7 @@ func (s *Server) handleSetResolved(w http.ResponseWriter, r *http.Request) {
 	}
 	reviewID, err := s.Store.SetCommentResolved(id, req.Resolved)
 	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
+		storeError(w, err)
 		return
 	}
 	_ = s.Store.Touch(reviewID)
@@ -667,7 +669,7 @@ func (s *Server) handleAddReply(w http.ResponseWriter, r *http.Request) {
 	}
 	rep, reviewID, err := s.Store.AddReply(commentID, req.Body, req.Author)
 	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
+		storeError(w, err)
 		return
 	}
 	_ = s.Store.Touch(reviewID)
@@ -687,7 +689,7 @@ func (s *Server) handleUpdateReply(w http.ResponseWriter, r *http.Request) {
 	}
 	rep, reviewID, err := s.Store.UpdateReply(id, req.Body)
 	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
+		storeError(w, err)
 		return
 	}
 	_ = s.Store.Touch(reviewID)
@@ -702,7 +704,7 @@ func (s *Server) handleDeleteReply(w http.ResponseWriter, r *http.Request) {
 	}
 	reviewID, err := s.Store.DeleteReply(id)
 	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
+		storeError(w, err)
 		return
 	}
 	_ = s.Store.Touch(reviewID)
@@ -730,6 +732,16 @@ func httpError(w http.ResponseWriter, code int, err error) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+}
+
+// storeError maps a store error to a response: mutating a comment/reply id that
+// doesn't exist surfaces as sql.ErrNoRows and should be a 404, not a 500.
+func storeError(w http.ResponseWriter, err error) {
+	if errors.Is(err, sql.ErrNoRows) {
+		httpError(w, http.StatusNotFound, errString("not found"))
+		return
+	}
+	httpError(w, http.StatusInternalServerError, err)
 }
 
 type errString string
