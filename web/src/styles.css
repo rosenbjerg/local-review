@@ -561,9 +561,24 @@ textarea:focus-visible {
 }
 .tree-chevron {
   flex: none;
-  width: 12px;
+  /* fill=currentColor on the svg → muted triangle in the tree. */
   color: var(--muted);
-  font-size: 10px;
+}
+/* The shared disclosure triangle (see Chevron.tsx) — an SVG whose centroid is
+   at its centre, so rotating it 90° to point down when expanded spins it in
+   place. display:block drops the inline-svg baseline gap. */
+.chevron {
+  display: block;
+  transition: transform 0.15s ease;
+  transform-origin: center;
+}
+.chevron.open {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
 }
 .tree-folder {
   flex: 1;

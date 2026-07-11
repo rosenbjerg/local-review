@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { Comment, FileDiff } from "../types";
+import { Chevron } from "./Chevron";
 
 interface Props {
   files: FileDiff[];
@@ -147,9 +148,7 @@ export function FileExplorer({
               }
             }}
           >
-            <span className="tree-chevron" aria-hidden="true">
-              {isCollapsed ? "▸" : "▾"}
-            </span>
+            <Chevron open={!isCollapsed} size={10} className="tree-chevron" />
             <span className={`tree-folder${done ? " reviewed" : ""}`}>{n.name}</span>
             <span className="muted tree-progress">
               {stats.reviewed}/{stats.total}
