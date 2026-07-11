@@ -66,7 +66,7 @@ export default function App() {
   const [confirmingReset, setConfirmingReset] = useState(false);
   // The comment last jumped to (via click or n/p), so n/p can step from it.
   const [activeComment, setActiveComment] = useState<number | null>(null);
-  const [promptCopied, setPromptCopied] = useState(false);
+  const [promptCopy, setPromptCopy] = useState<"idle" | "ok" | "fail">("idle");
   const [leftW, setLeftW] = useState(() => readWidth(LS_LEFT, 260));
   const [rightW, setRightW] = useState(() => readWidth(LS_RIGHT, 380));
   const mainRef = useRef<HTMLDivElement>(null);
@@ -319,6 +319,7 @@ export default function App() {
     type: CommentType;
   }): Promise<boolean> {
     if (!review) return false;
+    setError(null);
     try {
       // Tag the comment as working-tree-anchored when reviewing uncommitted
       // changes, so its snippet is later checked against the working tree
@@ -335,6 +336,7 @@ export default function App() {
   async function handleUpdate(id: number, body: string, type: CommentType): Promise<boolean> {
     const existing = comments.find((c) => c.id === id);
     if (!existing) return false;
+    setError(null);
     try {
       const updated = await api.updateComment(id, {
         body,
@@ -351,6 +353,7 @@ export default function App() {
   }
 
   async function handleDelete(id: number) {
+    setError(null);
     try {
       await api.deleteComment(id);
       setComments((cs) => cs.filter((c) => c.id !== id));
@@ -363,6 +366,7 @@ export default function App() {
   // commentId is threaded through (rather than looked up from the reply) so the
   // state update stays a single map over comments.
   async function handleAddReply(commentId: number, body: string): Promise<boolean> {
+    setError(null);
     try {
       const rep = await api.addReply(commentId, body);
       setComments((cs) =>
@@ -380,6 +384,7 @@ export default function App() {
     replyId: number,
     body: string
   ): Promise<boolean> {
+    setError(null);
     try {
       const rep = await api.updateReply(replyId, body);
       setComments((cs) =>
@@ -397,6 +402,7 @@ export default function App() {
   }
 
   async function handleDeleteReply(commentId: number, replyId: number) {
+    setError(null);
     try {
       await api.deleteReply(replyId);
       setComments((cs) =>
@@ -414,6 +420,7 @@ export default function App() {
   // Resolve/reopen is optimistic (the dim/label flips immediately), rolling back
   // if the save fails — matching toggleReviewed.
   async function handleResolve(id: number, resolved: boolean) {
+    setError(null);
     setComments((cs) => cs.map((c) => (c.id === id ? { ...c, resolved } : c)));
     try {
       await api.setCommentResolved(id, resolved);
@@ -437,6 +444,7 @@ export default function App() {
   async function performReset() {
     setConfirmingReset(false);
     if (!review) return;
+    setError(null);
     try {
       await api.resetReview(review.id);
       setComments([]);
@@ -481,6 +489,7 @@ export default function App() {
   }
 
   async function toggleReviewed(path: string, reviewed: boolean) {
+    setError(null);
     setReviewedFiles((s) => {
       const n = new Set(s);
       if (reviewed) n.add(path);
@@ -538,11 +547,13 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
 `;
     try {
       await navigator.clipboard.writeText(text);
-      setPromptCopied(true);
-      setTimeout(() => setPromptCopied(false), 1500);
+      setPromptCopy("ok");
     } catch {
-      setError("Copy failed — clipboard unavailable");
+      // Transient inline feedback on the button itself (like the export modal),
+      // not a sticky top-banner error — a failed copy isn't app-level breakage.
+      setPromptCopy("fail");
     }
+    setTimeout(() => setPromptCopy("idle"), 1500);
   }
 
   const shortSha = review?.headSha.slice(0, 7);
@@ -770,7 +781,11 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
               onClick={copyAgentInstructions}
               title="Copy a prompt telling a coding agent how to fetch this review from the API and reply to comments"
             >
-              {promptCopied ? "Copied ✓" : "Copy agent instructions"}
+              {promptCopy === "ok"
+                ? "Copied ✓"
+                : promptCopy === "fail"
+                  ? "Copy failed"
+                  : "Copy agent instructions"}
             </button>
             <button
               className="btn"
@@ -811,7 +826,19 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
         </a>
       </header>
 
-      {error && <div className="error banner">{error}</div>}
+      {error && (
+        <div className="error banner" role="alert">
+          <span>{error}</span>
+          <button
+            className="banner-dismiss"
+            onClick={() => setError(null)}
+            title="Dismiss"
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {!review && !error && (
         <div className="empty">

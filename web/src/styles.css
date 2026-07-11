@@ -223,10 +223,6 @@ select {
   text-align: center;
   color: var(--muted);
 }
-.banner {
-  margin: 0;
-  border-radius: 0;
-}
 
 /* File */
 .file {
@@ -1058,4 +1054,32 @@ kbd {
 .error {
   color: var(--danger);
   padding: 10px 16px;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  border-radius: 6px;
+}
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* Full-width bar under the header: no margin, square corners, bottom rule. */
+  margin: 0;
+  border-width: 0 0 1px;
+  border-radius: 0;
+}
+.banner > span {
+  flex: 1;
+}
+.banner-dismiss {
+  flex: none;
+  background: none;
+  border: none;
+  color: var(--danger);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+}
+.banner-dismiss:hover {
+  color: var(--text);
 }
