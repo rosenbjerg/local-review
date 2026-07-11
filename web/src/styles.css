@@ -39,6 +39,13 @@
   --checker-fg: #262c36;
   /* Scrim behind modals. */
   --backdrop: rgba(0, 0, 0, 0.6);
+  /* Corner-radius scale: sm for inline chips (labels, code, kbd, thumbnails),
+     md for controls & cards (buttons, inputs, threads, code blocks), lg for
+     large surfaces (file cards, modals), pill for count/type badges. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-pill: 999px;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   /* Render native controls (checkboxes, selects, default scrollbars) dark. */
   color-scheme: dark;
@@ -70,7 +77,7 @@ input[type="checkbox"] {
 }
 ::-webkit-scrollbar-thumb {
   background: var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   /* Transparent border + padding-box clip gives the thumb breathing room on any
      background without hardcoding the surface color. */
   border: 2px solid transparent;
@@ -132,7 +139,7 @@ select {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 4px 8px;
   font-size: 13px;
 }
@@ -142,7 +149,7 @@ select {
   background: var(--bg-elev);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 5px 12px;
   cursor: pointer;
   font-size: 13px;
@@ -318,7 +325,7 @@ textarea:focus-visible {
 /* File */
 .file {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   margin-bottom: 16px;
   /* No overflow:hidden here — it would scope the sticky header to this
      (non-scrolling) box. Corner clipping lives on .file-body / the header. */
@@ -333,20 +340,20 @@ textarea:focus-visible {
   padding: 8px 12px;
   background: var(--bg-elev);
   border-bottom: 1px solid var(--border);
-  border-radius: 8px 8px 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   position: sticky;
   top: 0;
   z-index: 1;
 }
 /* Collapsed file (header is the only child) — round all corners. */
 .file-header:last-child {
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border-bottom: none;
 }
 /* Clips the diff/media to the rounded bottom without breaking header sticky. */
 .file-body {
   overflow: hidden;
-  border-radius: 0 0 8px 8px;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 .file-toggle {
   background: none;
@@ -396,7 +403,7 @@ textarea:focus-visible {
 .view-toggle {
   display: flex;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 .view-toggle button {
@@ -416,7 +423,7 @@ textarea:focus-visible {
   font-size: 11px;
   text-transform: uppercase;
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   color: var(--muted);
 }
@@ -528,7 +535,7 @@ textarea:focus-visible {
   color: var(--muted);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-pill);
   padding: 0 6px;
 }
 
@@ -602,7 +609,7 @@ textarea:focus-visible {
   max-width: 320px;
   max-height: 320px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   /* checkerboard so transparent images are legible */
   background-color: var(--checker-bg);
   background-image: linear-gradient(45deg, var(--checker-fg) 25%, transparent 25%),
@@ -620,7 +627,7 @@ textarea:focus-visible {
 .file-error {
   margin: 8px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-elev);
   font-size: 13px;
 }
@@ -708,7 +715,7 @@ textarea:focus-visible {
 }
 .thread {
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 8px 10px;
   margin: 6px 0;
   background: var(--bg);
@@ -813,13 +820,13 @@ textarea:focus-visible {
   font-size: 0.9em;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 0.1em 0.35em;
 }
 .md-body pre {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 8px 10px;
   overflow-x: auto;
   margin: 0.4em 0;
@@ -882,7 +889,7 @@ textarea:focus-visible {
   text-align: left;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   /* extra right padding reserves room for the corner delete button */
   padding: 8px 26px 8px 10px;
   cursor: pointer;
@@ -903,7 +910,7 @@ textarea:focus-visible {
   justify-content: center;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--danger);
   font-size: 17px;
@@ -928,7 +935,7 @@ textarea:focus-visible {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 8px;
   font-family: inherit;
   font-size: 13px;
@@ -982,7 +989,7 @@ textarea:focus-visible {
 .badge {
   font-size: 11px;
   padding: 1px 7px;
-  border-radius: 10px;
+  border-radius: var(--radius-pill);
   text-transform: lowercase;
   border: 1px solid var(--border);
 }
@@ -1048,7 +1055,7 @@ textarea:focus-visible {
 .modal {
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   width: min(1200px, 94vw);
   height: 88vh;
   display: flex;
@@ -1112,7 +1119,7 @@ kbd {
   background: var(--bg);
   border: 1px solid var(--border);
   border-bottom-width: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 0 6px;
   color: var(--text);
 }
@@ -1180,7 +1187,7 @@ kbd {
 .markdown-body pre {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 10px 12px;
   overflow-x: auto;
 }
@@ -1204,7 +1211,7 @@ kbd {
   padding: 10px 16px;
   background: var(--danger-soft);
   border: 1px solid var(--danger-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 .banner {
   display: flex;

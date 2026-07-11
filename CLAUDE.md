@@ -195,6 +195,10 @@ web/src/
   `--on-accent` (foreground on saturated accent/success fills), `--backdrop`
   (modal scrim), and `--checker-bg`/`--checker-fg` (transparent-image
   checkerboard). Add a var rather than reintroduce a literal.
+- Corner radii come from a fixed scale, never a literal: `--radius-sm` (inline
+  chips — status labels, code, kbd, thumbnails), `--radius-md` (controls & cards
+  — buttons, inputs, threads, code blocks), `--radius-lg` (large surfaces — file
+  cards, modals), `--radius-pill` (count/type badges).
 - Persisted UI prefs (panel widths) go in `localStorage` under `lr.*` keys.
 - Modals (`.modal` inside a `.modal-backdrop`) close on Escape and backdrop
   click, and use `useFocusTrap` for focus-in / Tab-trap / restore-on-close —
