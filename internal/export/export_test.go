@@ -58,8 +58,6 @@ func TestRenderAgentInstructions(t *testing.T) {
 	if !strings.Contains(out, "## Addressing these comments") {
 		t.Fatalf("expected instructions section, got:\n%s", out)
 	}
-	// The section states the task contract and the type/anchor legend, not just
-	// the reply mechanism.
 	if !strings.Contains(out, "make the change and reply") {
 		t.Fatalf("expected the task contract, got:\n%s", out)
 	}
@@ -101,7 +99,6 @@ func TestRenderSanitizesHeadingFields(t *testing.T) {
 	if strings.Contains(out, "\n## Injected") || strings.Contains(out, "\n# Fake") || strings.Contains(out, "\n---") {
 		t.Fatalf("heading fields not sanitized — injection present:\n%s", out)
 	}
-	// The fields survive as flattened inline text on the single heading line.
 	if !strings.Contains(out, "### #7 · L1 · bug ## Injected · agent --- # Fake") {
 		t.Fatalf("expected flattened heading, got:\n%s", out)
 	}
@@ -122,15 +119,12 @@ func TestRenderFenceNotClosedBySnippet(t *testing.T) {
 	}
 	out := Render(r, false, "")
 
-	// The emitted fence must be at least 4 backticks (snippet's longest run is 3).
 	if !strings.Contains(out, "````markdown\n") {
 		t.Fatalf("expected a 4-backtick opening fence, got:\n%s", out)
 	}
-	// The snippet's own ``` lines must survive verbatim inside the block.
 	if !strings.Contains(out, "```js\nconsole.log(1)\n```") {
 		t.Fatalf("snippet fence was altered:\n%s", out)
 	}
-	// Sanity: the block closes exactly once with the longer fence.
 	if strings.Count(out, "````") != 2 {
 		t.Fatalf("expected exactly one opening and one closing 4-backtick fence, got:\n%s", out)
 	}

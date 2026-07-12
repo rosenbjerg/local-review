@@ -110,8 +110,6 @@ func main() {
 	}
 }
 
-// resolveDBPath returns the SQLite DB path inside the data directory (created if
-// needed). An empty dir defaults to ~/.local-review; a leading ~ is expanded.
 func resolveDBPath(dir string) (string, error) {
 	if dir == "" {
 		home, err := os.UserHomeDir()
@@ -148,7 +146,6 @@ func mountStatic(mux *http.ServeMux) {
 		return
 	}
 	fileServer := http.FileServer(http.FS(sub))
-	// Serve assets, falling back to index.html for client-side routing.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// An unknown /api/* path must 404, not fall through to index.html, so an
 		// API client hitting a bad endpoint gets a JSON error rather than 200 HTML.

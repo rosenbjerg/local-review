@@ -8,10 +8,6 @@ import (
 	"local-review/internal/store"
 )
 
-// annotateReviewedFiles drops any reviewed-file mark whose content changed since
-// it was set — re-verifying the captured fingerprint against the current file so
-// a later edit reverts it to unread. A mark with no fingerprint can't be checked
-// and stays reviewed.
 func (s *Server) annotateReviewedFiles(review *store.Review) {
 	if len(review.ReviewedFiles) == 0 {
 		return
@@ -30,10 +26,9 @@ func (s *Server) annotateReviewedFiles(review *store.Review) {
 	review.ReviewedFiles = kept
 }
 
-// reviewedMarkHolds reports whether a mark still matches its content. An empty
-// captured hash means nothing was fingerprinted, so it holds; otherwise the
-// current same-side content must re-hash equal (a deleted/unreadable file hashes
-// to "" and so counts as changed).
+// An empty captured hash (older/unfingerprinted rows) always holds; otherwise the
+// current same-side content must re-hash equal — a deleted/unreadable file hashes
+// to "" and so counts as changed.
 func reviewedMarkHolds(repo *git.Repo, headRef string, f store.ReviewedFile) bool {
 	if f.ContentHash == "" {
 		return true
@@ -41,8 +36,6 @@ func reviewedMarkHolds(repo *git.Repo, headRef string, f store.ReviewedFile) boo
 	return fileContentHash(repo, headRef, f.Path, f.Worktree) == f.ContentHash
 }
 
-// fileContentHash hashes a file's new-side content — the working tree when
-// worktree is set, else the content at headRef — or "" when it can't be read.
 func fileContentHash(repo *git.Repo, headRef, path string, worktree bool) string {
 	var content string
 	var err error

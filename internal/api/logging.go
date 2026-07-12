@@ -7,9 +7,6 @@ import (
 	"strings"
 )
 
-// WithErrorLogging logs any 4xx/5xx response (with its JSON error body) to the
-// console. Wrapping the whole mux is safe: static assets fall back to index.html
-// (200), so only genuine API failures are logged.
 func WithErrorLogging(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
@@ -21,7 +18,6 @@ func WithErrorLogging(h http.Handler) http.Handler {
 	})
 }
 
-// statusRecorder captures the status and error-response body for WithErrorLogging.
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
@@ -35,7 +31,7 @@ func (s *statusRecorder) WriteHeader(code int) {
 
 func (s *statusRecorder) Write(b []byte) (int, error) {
 	if s.status >= 400 {
-		s.body.Write(b) // error bodies are small; captured only for logging
+		s.body.Write(b)
 	}
 	return s.ResponseWriter.Write(b)
 }

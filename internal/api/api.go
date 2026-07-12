@@ -20,22 +20,20 @@ import (
 )
 
 type Server struct {
-	Root  string // folder containing one or more git repositories
+	Root  string
 	Store *store.Store
-	hub   *hub // fans review-change pings out to connected SSE clients
+	hub   *hub
 }
 
 func New(root string, st *store.Store) *Server {
 	return &Server{Root: root, Store: st, hub: newHub()}
 }
 
-// isGitRepo reports whether path is a git working tree (has a .git entry).
 func isGitRepo(path string) bool {
 	_, err := os.Stat(filepath.Join(path, ".git"))
 	return err == nil
 }
 
-// listRepos returns the names of git repositories directly under the root.
 func (s *Server) listRepos() ([]string, error) {
 	entries, err := os.ReadDir(s.Root)
 	if err != nil {
@@ -53,8 +51,8 @@ func (s *Server) listRepos() ([]string, error) {
 	return repos, nil
 }
 
-// repoFor resolves a client-supplied repo name to a Repo, rejecting anything that
-// isn't a single path segment naming a git repo under the root (path-traversal guard).
+// Rejects anything that isn't a single path segment under the root — a
+// path-traversal guard, so keep the segment check if you touch this.
 func (s *Server) repoFor(name string) (*git.Repo, error) {
 	if name == "" {
 		return nil, errString("repo is required")
@@ -69,8 +67,6 @@ func (s *Server) repoFor(name string) (*git.Repo, error) {
 	return git.New(abs), nil
 }
 
-// repoParam resolves the ?repo= query parameter, writing an error response on
-// failure.
 func (s *Server) repoParam(w http.ResponseWriter, r *http.Request) (*git.Repo, bool) {
 	repo, err := s.repoFor(r.URL.Query().Get("repo"))
 	if err != nil {
@@ -80,7 +76,6 @@ func (s *Server) repoParam(w http.ResponseWriter, r *http.Request) (*git.Repo, b
 	return repo, true
 }
 
-// Routes registers all API handlers on the given mux.
 func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/repos", s.handleRepos)
 	mux.HandleFunc("GET /api/branches", s.handleBranches)
@@ -168,7 +163,6 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	base = mb
-	// uncommitted diffs base against the working tree instead of the head commit.
 	uncommitted := r.URL.Query().Get("uncommitted") == "true"
 	var diff []git.FileDiff
 	if uncommitted {
@@ -183,10 +177,6 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"base": base, "head": head, "files": diff})
 }
 
-// readFileContent reads the file requested by r (shared by handleFile/handleBlob):
-// the working tree (?worktree=true) or the given ref, falling back to the working
-// tree when the ref lacks the file. On failure it writes the error and returns
-// ok=false.
 func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (content, path string, ok bool) {
 	repo, ok := s.repoParam(w, r)
 	if !ok {
@@ -231,8 +221,6 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"path": path, "ref": r.URL.Query().Get("ref"), "content": content})
 }
 
-// handleBlob serves a file's raw bytes with an image-friendly Content-Type for
-// <img> rendering.
 func (s *Server) handleBlob(w http.ResponseWriter, r *http.Request) {
 	content, path, ok := s.readFileContent(w, r)
 	if !ok {
@@ -243,8 +231,6 @@ func (s *Server) handleBlob(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(content))
 }
 
-// mimeForPath maps an extension to a Content-Type (the image types the UI
-// renders), falling back to the stdlib table, then octet-stream.
 func mimeForPath(path string) string {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".png":
@@ -346,10 +332,6 @@ func (s *Server) handleGetReview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, review)
 }
 
-// handleEvents streams review-change pings over SSE: a "changed" event on every
-// comment/reviewed-file mutation of this review (by any tab), which the client
-// answers by refetching. Keepalives surface a half-open connection as a write
-// error, so an unclean disconnect still unsubscribes.
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
@@ -367,7 +349,6 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	ch := s.hub.subscribe(id)
 	defer s.hub.unsubscribe(id, ch) // fires on every exit path — no orphaned channel
 
-	// Prompt the client's onopen and flush headers through any dev proxy.
 	if _, err := fmt.Fprint(w, ": connected\n\n"); err != nil {
 		return
 	}
@@ -379,7 +360,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	for {
 		select {
-		case <-ctx.Done(): // tab closed / clean disconnect
+		case <-ctx.Done():
 			return
 		case <-ch:
 			if _, err := fmt.Fprint(w, "data: changed\n\n"); err != nil {
@@ -409,8 +390,6 @@ func (s *Server) handleDeleteReview(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// handleResetReview clears a review's comments and reviewed-file marks, keeping
-// the review itself.
 func (s *Server) handleResetReview(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
@@ -450,7 +429,7 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 type setReviewedReq struct {
 	FilePath string `json:"filePath"`
 	Reviewed bool   `json:"reviewed"`
-	Worktree bool   `json:"worktree"` // fingerprint the on-disk (uncommitted) side, not head
+	Worktree bool   `json:"worktree"`
 }
 
 func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
@@ -466,8 +445,6 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, errString("filePath is required"))
 		return
 	}
-	// Fingerprint the current content so a later change can revert it to unread.
-	// Best-effort: an unreadable file leaves the hash empty (kept reviewed).
 	var contentHash string
 	if req.Reviewed {
 		if repoPath, headRef, err := s.Store.ReviewRepoHead(id); err == nil {
@@ -492,8 +469,6 @@ type addCommentReq struct {
 	Body      string `json:"body"`
 	Author    string `json:"author"`
 	Worktree  bool   `json:"worktree"`
-	// Snippet is deliberately absent: the server captures it from the anchored
-	// range (see captureSnippet) so every client sends only the line numbers.
 }
 
 func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
@@ -515,8 +490,6 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		// An omitted author is an API client (the coding agent); the browser sends "reviewer".
 		req.Author = "agent"
 	}
-	// Record the head commit this comment anchors to. Best-effort: failures leave
-	// it empty (the comment is still valid).
 	var repo *git.Repo
 	var headRef, sha string
 	if repoPath, hr, err := s.Store.ReviewRepoHead(id); err == nil {
@@ -555,11 +528,6 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, c)
 }
 
-// handleListComments returns a review's comments with the same live annotation as
-// GetReview (anchor status, replies nested), optionally narrowed to one root
-// author via ?author=. The adversarial-review agent polls ?author=agent to see
-// only the threads it started — its own comments and any reviewer replies on
-// them — without the reviewer's separate comments or the reviewed-file list.
 func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
@@ -711,15 +679,12 @@ func (s *Server) handleDeleteReply(w http.ResponseWriter, r *http.Request) {
 
 // --- helpers ---
 
-// notify bumps the review's updated_at and pings SSE subscribers so every open
-// tab refetches. A Touch failure is non-fatal (the mutation already landed).
+// A Touch failure is non-fatal — the mutation already landed.
 func (s *Server) notify(reviewID int64) {
 	_ = s.Store.Touch(reviewID)
 	s.hub.publish(reviewID)
 }
 
-// decodeBody decodes the JSON body into T, writing a 400 and returning ok=false
-// on malformed input.
 func decodeBody[T any](w http.ResponseWriter, r *http.Request) (req T, ok bool) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpError(w, http.StatusBadRequest, err)
@@ -748,8 +713,6 @@ func httpError(w http.ResponseWriter, code int, err error) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 }
 
-// storeError maps a store error to a response: a missing comment/reply id is
-// sql.ErrNoRows → 404, not 500.
 func storeError(w http.ResponseWriter, err error) {
 	if errors.Is(err, sql.ErrNoRows) {
 		httpError(w, http.StatusNotFound, errString("not found"))

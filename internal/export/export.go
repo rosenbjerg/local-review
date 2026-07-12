@@ -11,9 +11,8 @@ import (
 	"local-review/internal/store"
 )
 
-// inlineField collapses control runes (a newline especially) to spaces, so an
-// unvalidated value interpolated into a single markdown line can't break out and
-// inject a fake heading into the artifact a coding agent consumes as its tasks.
+// Collapse control runes (newlines especially) to spaces so an interpolated value
+// can't inject a fake heading into the artifact the agent consumes as its tasks.
 func inlineField(s string) string {
 	return strings.TrimSpace(strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
@@ -23,8 +22,6 @@ func inlineField(s string) string {
 	}, s))
 }
 
-// Render produces the markdown artifact for a review. When agentInstructions is
-// set, a trailing section explains how to reply to comments over HTTP via baseURL.
 func Render(r *store.Review, agentInstructions bool, baseURL string) string {
 	var b strings.Builder
 
@@ -91,8 +88,6 @@ func Render(r *store.Review, agentInstructions bool, baseURL string) string {
 	return b.String()
 }
 
-// renderAgentInstructions appends the "how to reply over HTTP" section. exampleID
-// (when > 0) makes the curl example concrete, else a placeholder.
 func renderAgentInstructions(b *strings.Builder, baseURL string, exampleID int64) {
 	if baseURL == "" {
 		baseURL = "http://127.0.0.1:7777"
@@ -115,9 +110,7 @@ func renderAgentInstructions(b *strings.Builder, baseURL string, exampleID int64
 		"  -d '{\"body\": \"your reply here\"}'\n```\n", baseURL, id)
 }
 
-// renderReply writes a reply as a blockquote. The body is prefixed line-by-line
-// with "> " so multi-line text stays quoted; a blank line between replies keeps
-// them from merging into one blockquote.
+// A blank line between replies keeps adjacent blockquotes from merging into one.
 func renderReply(b *strings.Builder, rep store.Reply) {
 	fmt.Fprintf(b, "\n> **↳ reply #%d · %s**\n", rep.ID, inlineField(rep.Author))
 	body := strings.TrimSpace(rep.Body)
@@ -166,9 +159,6 @@ func lineLabel(start, end int) string {
 	return fmt.Sprintf("L%d", start)
 }
 
-// anchorLabel renders a comment's line reference with any detected drift: a moved
-// comment reports its current line (noting where it came from); an outdated one
-// is flagged since its snippet no longer exists at head.
 func anchorLabel(c store.Comment) string {
 	if c.StartLine == 0 {
 		return "file" // file-level comment (binary/image), not anchored to a line

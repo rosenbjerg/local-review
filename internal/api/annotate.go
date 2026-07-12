@@ -7,9 +7,6 @@ import (
 	"local-review/internal/store"
 )
 
-// annotateReview fills in derived, never-persisted state on read: each comment's
-// live anchor status and which reviewed-file marks still hold. Recomputed every
-// read because the branch keeps moving.
 func (s *Server) annotateReview(review *store.Review) {
 	if len(review.Comments) > 0 {
 		annotateComments(git.New(review.RepoPath), review.HeadRef, review.Comments)
@@ -17,9 +14,8 @@ func (s *Server) annotateReview(review *store.Review) {
 	s.annotateReviewedFiles(review)
 }
 
-// annotateComments annotates comments in place, reading each file at most once
-// per side. Worktree comments compare to the on-disk content, the rest to headRef
-// (else a working-tree snippet never matches head and reads as outdated).
+// Worktree comments compare against on-disk content, the rest against headRef —
+// a worktree snippet checked against head would never match and read as outdated.
 func annotateComments(repo *git.Repo, headRef string, comments []store.Comment) {
 	readHead := fileReader(func(path string) (string, error) {
 		return repo.FileContent(headRef, path)
@@ -49,9 +45,8 @@ type fileDiffResult struct {
 	err   error
 }
 
-// markCurrent/markOutdated/markMoved set a comment's derived anchor fields. Every
-// annotation path resolves to exactly one of these three states, so routing
-// through them keeps AnchorStatus and the Current* lines assigned as a unit.
+// Route every anchor decision through these so AnchorStatus and the Current*
+// lines are always assigned together.
 func markCurrent(c *store.Comment)  { c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorCurrent, 0, 0 }
 func markOutdated(c *store.Comment) { c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorOutdated, 0, 0 }
 
@@ -59,9 +54,8 @@ func markMoved(c *store.Comment, start, end int) {
 	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorMoved, start, end
 }
 
-// annotateByDiff sets a comment's anchor status by mapping its original range
-// through the diff from its commit_sha to head. Returns false to fall back to
-// snippet matching (unresolvable commit, binary/renamed file, etc.).
+// Returns false to fall back to snippet matching (unresolvable commit,
+// binary/renamed file, etc.).
 func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, cache map[string]*fileDiffResult) bool {
 	key := c.CommitSHA + "\x00" + c.FilePath
 	res := cache[key]
@@ -116,8 +110,6 @@ func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, cache map[
 	return true
 }
 
-// fileReader returns a cached line-reader. Readable files yield a non-nil slice
-// (min [""]); nil is cached for an unreadable path so it isn't re-fetched.
 func fileReader(fetch func(string) (string, error)) func(string) ([]string, bool) {
 	cache := map[string][]string{}
 	return func(path string) ([]string, bool) {
@@ -135,8 +127,8 @@ func fileReader(fetch func(string) (string, error)) func(string) ([]string, bool
 	}
 }
 
-// annotateComment sets the anchor status from the current file lines. A comment
-// with no captured snippet stays "current" — nothing to verify drift against.
+// A comment with no captured snippet stays "current" — nothing to verify drift
+// against (e.g. a line-0 media comment).
 func annotateComment(c *store.Comment, read func(string) ([]string, bool)) {
 	markCurrent(c)
 
@@ -151,7 +143,7 @@ func annotateComment(c *store.Comment, read func(string) ([]string, bool)) {
 	}
 	snip := strings.Split(snippet, "\n")
 	if matchAt(lines, c.StartLine-1, snip) {
-		return // still anchored where it was captured
+		return
 	}
 	// Relocate only on an unambiguous hit; multiple matches read as outdated
 	// rather than guessing.
@@ -163,7 +155,6 @@ func annotateComment(c *store.Comment, read func(string) ([]string, bool)) {
 	markOutdated(c)
 }
 
-// matchAt reports whether snip appears in lines starting at 0-based index start.
 func matchAt(lines []string, start int, snip []string) bool {
 	if start < 0 || start+len(snip) > len(lines) {
 		return false
@@ -176,7 +167,6 @@ func matchAt(lines []string, start int, snip []string) bool {
 	return true
 }
 
-// findMatches returns every 0-based start index where snip occurs in lines.
 func findMatches(lines, snip []string) []int {
 	var out []int
 	for i := 0; i+len(snip) <= len(lines); i++ {
@@ -187,18 +177,15 @@ func findMatches(lines, snip []string) []int {
 	return out
 }
 
-// splitLines splits content into lines, dropping one trailing newline so it lines
-// up with the diff's numbering (mirrors the frontend).
+// Drops one trailing newline so numbering lines up with the diff (and the
+// frontend) — an off-by-one here misaligns every snippet capture and match.
 func splitLines(content string) []string {
 	return strings.Split(strings.TrimSuffix(content, "\n"), "\n")
 }
 
-// captureSnippet reads the anchored range's text at add time from the same side
-// the staleness check will later read — the working tree for an uncommitted
-// anchor, else headRef — so the stored snippet matches what annotateComment
-// compares it against. start/end are 1-based inclusive. Best-effort: a nil repo,
-// unreadable file, or start past EOF yields "" (an empty snippet always reads as
-// current), and end is clamped to the file's length.
+// Reads the range from the same side annotateComment later compares against — the
+// working tree for an uncommitted anchor, else headRef — so the stored snippet
+// matches. Best-effort: an unreadable file or out-of-range start yields "".
 func captureSnippet(repo *git.Repo, headRef, path string, start, end int, worktree bool) string {
 	if repo == nil || start <= 0 {
 		return ""

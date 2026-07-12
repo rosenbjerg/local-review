@@ -14,14 +14,12 @@ import (
 	"strings"
 )
 
-// Repo is a handle to a git working tree at an absolute path.
 type Repo struct {
 	Path string
 }
 
 func New(path string) *Repo { return &Repo{Path: path} }
 
-// run executes git in the repo and returns stdout, or an error containing stderr.
 func (r *Repo) run(args ...string) (string, error) {
 	cmd := exec.Command("git", append([]string{"-C", r.Path}, args...)...)
 	var out, errb bytes.Buffer
@@ -33,14 +31,12 @@ func (r *Repo) run(args ...string) (string, error) {
 	return out.String(), nil
 }
 
-// Branch describes a local branch.
 type Branch struct {
 	Name      string `json:"name"`
 	IsCurrent bool   `json:"isCurrent"`
 	IsMain    bool   `json:"isMain"`
 }
 
-// ListBranches returns local branches, flagging the current and main branches.
 func (r *Repo) ListBranches() ([]Branch, error) {
 	out, err := r.run("branch", "--format=%(refname:short)%(if)%(HEAD)%(then)\t*%(end)")
 	if err != nil {
@@ -66,8 +62,6 @@ func (r *Repo) ListBranches() ([]Branch, error) {
 	return branches, sc.Err()
 }
 
-// pinnedBranches sort to the top (in this order), ahead of the alphabetical
-// feature branches, as the likely review bases.
 var pinnedBranches = []string{"main", "master", "develop", "dev", "staging"}
 
 func sortBranches(branches []Branch) {
@@ -88,8 +82,6 @@ func sortBranches(branches []Branch) {
 	})
 }
 
-// MainBranch returns the trunk to diff against: local main/master, else the
-// remote default (origin/HEAD) or origin/main / origin/master, else "".
 func (r *Repo) MainBranch() string {
 	for _, name := range []string{"main", "master"} {
 		if _, err := r.run("rev-parse", "--verify", "--quiet", name); err == nil {
@@ -118,9 +110,8 @@ func (r *Repo) MergeBase(a, b string) (string, error) {
 	return strings.TrimSpace(out), err
 }
 
-// ResolveSHA returns the full commit SHA a ref points to. --verify + ^{commit}
-// fails cleanly on a missing ref instead of git's confusing "ambiguous argument"
-// message from a bare rev-parse.
+// --verify + ^{commit} fails cleanly on a missing ref, instead of the confusing
+// "ambiguous argument" a bare rev-parse emits.
 func (r *Repo) ResolveSHA(ref string) (string, error) {
 	out, err := r.run("rev-parse", "--verify", ref+"^{commit}")
 	return strings.TrimSpace(out), err
@@ -130,9 +121,8 @@ func (r *Repo) FileContent(ref, path string) (string, error) {
 	return r.run("show", ref+":"+path)
 }
 
-// WorktreeFile returns a file's on-disk content — the new side of a working-tree
-// diff, which git show can't read. The path is confined to the repo (no ".."
-// escape, no reaching into .git).
+// Reads the working-tree (on-disk) side, which git show can't. The path is
+// confined to the repo below — no ".." escape, no reaching into .git.
 func (r *Repo) WorktreeFile(path string) (string, error) {
 	sep := string(filepath.Separator)
 	clean := filepath.Clean(path)
@@ -182,11 +172,9 @@ type FileDiff struct {
 	Hunks   []Hunk `json:"hunks"`
 }
 
-// diffArgs prepends the config common to every diff invocation. quotePath=false
-// keeps non-ASCII paths verbatim (the default octal-escapes them, which the path
-// parsers can't unwrap); the forced a//b/ prefixes let parseDiff strip them
-// regardless of the user's diff.mnemonicPrefix/noprefix/srcprefix config. The -c
-// flags must precede the diff subcommand.
+// quotePath=false keeps non-ASCII paths verbatim (the default octal-escapes them,
+// which the parsers can't unwrap); the forced a//b/ prefixes let parseDiff strip
+// them regardless of the user's diff.*prefix config. The -c flags must precede diff.
 func diffArgs(rest ...string) []string {
 	base := []string{"-c", "core.quotePath=false", "diff", "--no-color", "--find-renames", "--src-prefix=a/", "--dst-prefix=b/"}
 	return append(base, rest...)
@@ -208,9 +196,8 @@ func (r *Repo) DiffFile(from, to, path string) ([]FileDiff, error) {
 	return parseDiff(out)
 }
 
-// MapOldLine maps a 1-based old-side line to its new-side line through a file's
-// hunks, carrying the offset across unchanged regions. alive=false means the old
-// line was deleted or modified (no new-side counterpart).
+// Maps a 1-based old-side line to its new-side line; alive=false means the line
+// was deleted or modified (no new-side counterpart).
 func MapOldLine(hunks []Hunk, old int) (newLine int, alive bool) {
 	offset := 0
 	for _, h := range hunks {
@@ -241,9 +228,8 @@ func MapOldLine(hunks []Hunk, old int) (newLine int, alive bool) {
 	return old + offset, true // unchanged region after the last hunk
 }
 
-// DiffWorktree returns the diff from base to the working tree (committed + staged
-// + unstaged tracked changes, plus untracked non-ignored files as new). Only
-// meaningful when the checked-out branch is base's other side.
+// Only meaningful when the checked-out branch is base's other side; untracked
+// non-ignored files are added as new (see below).
 func (r *Repo) DiffWorktree(base string) ([]FileDiff, error) {
 	out, err := r.run(diffArgs(base)...)
 	if err != nil {
@@ -267,8 +253,6 @@ func (r *Repo) DiffWorktree(base string) ([]FileDiff, error) {
 	return files, nil
 }
 
-// untrackedFiles lists untracked, non-ignored files (NUL-separated so paths with
-// odd characters survive).
 func (r *Repo) untrackedFiles() ([]string, error) {
 	out, err := r.run("ls-files", "--others", "--exclude-standard", "-z")
 	if err != nil {
@@ -283,8 +267,6 @@ func (r *Repo) untrackedFiles() ([]string, error) {
 	return paths, nil
 }
 
-// newFileDiff synthesizes an added FileDiff for an untracked file from its
-// on-disk content. Binary and empty files get no hunks (mirroring git's diffs).
 func (r *Repo) newFileDiff(path string) (FileDiff, bool) {
 	content, err := r.WorktreeFile(path)
 	if err != nil {
@@ -401,9 +383,9 @@ func parseDiff(text string) ([]FileDiff, error) {
 	return files, nil
 }
 
-// parseGitHeaderPaths splits a "diff --git a/<old> b/<new>" header on " b/".
-// Reliable because diffArgs forces a//b/ prefixes; a path containing " b/" is a
-// text/rename case the authoritative ---/+++/rename lines correct anyway.
+// Splitting the "diff --git a/<old> b/<new>" header on " b/" is reliable because
+// diffArgs forces a//b/ prefixes; a path containing " b/" is a text/rename case
+// the authoritative ---/+++/rename lines correct anyway.
 func parseGitHeaderPaths(line string) (oldPath, newPath string) {
 	rest := strings.TrimPrefix(line, "diff --git ")
 	i := strings.Index(rest, " b/")
@@ -424,8 +406,6 @@ func stripDiffPath(p string) string {
 	return p
 }
 
-// parseHunkHeader parses "@@ -oldStart,oldLines +newStart,newLines @@ ..." and
-// returns the starting old and new line numbers.
 func parseHunkHeader(h string) (oldStart, newStart int) {
 	// h looks like: @@ -12,7 +12,9 @@ optional section heading
 	// Only the two fixed-position range tokens are line numbers; the trailing
