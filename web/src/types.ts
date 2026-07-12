@@ -21,7 +21,7 @@ export interface Hunk {
 export interface FileDiff {
   oldPath: string;
   newPath: string;
-  status: string; // added | modified | deleted | renamed
+  status: string;
   binary?: boolean;
   hunks: Hunk[];
 }
@@ -53,18 +53,15 @@ export interface Comment {
   author: string;
   resolved: boolean;
   commitSha: string;
-  worktree: boolean; // anchored against the working tree (uncommitted diff)
-  // Derived server-side (see internal/api/annotate.go): whether the comment
-  // still sits at its stored range. Absent ⇒ current.
+  worktree: boolean;
   anchorStatus?: AnchorStatus;
-  currentStartLine?: number; // set when moved: the relocated range
+  currentStartLine?: number;
   currentEndLine?: number;
   createdAt: string;
   updatedAt: string;
   replies: Reply[];
 }
 
-// The line range a comment currently occupies: relocated if it moved, else stored.
 export function effectiveLines(c: Comment): { start: number; end: number } {
   if (c.anchorStatus === "moved" && c.currentStartLine) {
     return { start: c.currentStartLine, end: c.currentEndLine ?? c.currentStartLine };

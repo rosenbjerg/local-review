@@ -8,10 +8,9 @@ interface Props {
   children: ReactNode;
 }
 
-// Placeholder until the file scrolls near the viewport, then mounts its diff and
-// keeps it mounted — bounds DOM + per-file fetch/tokenization to what's looked
-// at. The placeholder keeps the anchor and an estimated height so the scrollbar
-// and jump-to-file work before mount.
+// Mounts once scrolled near, then stays mounted (`shown` never resets) —
+// unmounting on scroll-away would re-fetch and re-tokenize each pass. The
+// placeholder's estimated height keeps scroll and jump-to-file stable pre-mount.
 export function LazyFile({ anchorId, label, estHeight, rootRef, children }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);

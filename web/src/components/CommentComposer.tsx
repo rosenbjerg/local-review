@@ -4,11 +4,9 @@ import { COMMENT_TYPES, type CommentType } from "../types";
 interface Props {
   initialBody?: string;
   initialType?: CommentType;
-  // May be async; the composer awaits it to guard against a double-submit.
   onSubmit: (body: string, type: CommentType) => void | Promise<unknown>;
   onCancel: () => void;
   submitLabel?: string;
-  // Replies inherit the root's type, so their composer hides the type picker.
   hideType?: boolean;
   placeholder?: string;
 }

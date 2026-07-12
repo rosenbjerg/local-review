@@ -1,8 +1,5 @@
-// Typed, error-swallowing wrappers over localStorage for the app's `lr.*`
-// preferences. Every access is best-effort — a private-mode/quota/disabled
-// failure falls back to the caller's default rather than throwing.
-
-// The persisted preference keys, kept in one place so they can't drift apart.
+// Best-effort localStorage: private-mode/quota/disabled throws fall back to the
+// caller's default instead of propagating.
 export const LS = {
   leftWidth: "lr.leftWidth",
   rightWidth: "lr.rightWidth",
@@ -23,11 +20,10 @@ export function setString(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
   } catch {
-    // best-effort — see the module comment
+    // best-effort
   }
 }
 
-// Absent or unparseable → def; otherwise the stored number.
 export function getNumber(key: string, def: number): number {
   const raw = getString(key);
   if (raw === "") return def;
@@ -61,6 +57,6 @@ export function setJSON(key: string, value: unknown): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    // best-effort — see the module comment
+    // best-effort
   }
 }

@@ -19,7 +19,6 @@ import type { Branch, Comment, CommentType, FileDiff, Reply, Review } from "./ty
 import { effectiveLines } from "./types";
 import { LS, getJSON, getNumber, getString, setJSON, setNumber, setString } from "./storage";
 
-// Base branch is remembered per repo — branch names differ across repos.
 function readBasePref(repo: string): string {
   const v = getJSON<Record<string, string>>(LS.baseByRepo, {})[repo];
   return typeof v === "string" ? v : "";
@@ -44,7 +43,7 @@ export default function App() {
   const [base, setBase] = useState("");
   const [review, setReview] = useState<Review | null>(null);
   const [files, setFiles] = useState<FileDiff[]>([]);
-  const [baseSha, setBaseSha] = useState(""); // resolved merge-base, for image "before"
+  const [baseSha, setBaseSha] = useState("");
   const [comments, setComments] = useState<Comment[]>([]);
   const [reviewedFiles, setReviewedFiles] = useState<Set<string>>(new Set());
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -55,14 +54,12 @@ export default function App() {
   const [showPrompts, setShowPrompts] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
-  // The comment last jumped to (via click or n/p), so n/p can step from it.
   const [activeComment, setActiveComment] = useState<number | null>(null);
   const [leftW, setLeftW] = useState(() => getNumber(LS.leftWidth, 260));
   const [rightW, setRightW] = useState(() => getNumber(LS.rightWidth, 380));
   const mainRef = useRef<HTMLDivElement>(null);
   const diffColRef = useRef<HTMLDivElement>(null);
   const expandN = useRef(0);
-  // In-flight jump poll — a new jump cancels it so timers don't stack.
   const jumpPoll = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [expandTarget, setExpandTarget] = useState<{ path: string; n: number } | null>(null);
   // Bumped on each load; in-flight responses check it before applying state, so
@@ -83,9 +80,8 @@ export default function App() {
     setNumber(LS.rightWidth, rightW);
   }, [rightW]);
 
-  // Write grid-template-columns straight to the DOM during the drag (no React
-  // re-render per mousemove, which matters with large diffs mounted), then
-  // commit to state on release.
+  // Write grid-template-columns straight to the DOM during the drag — a
+  // per-mousemove setState re-renders every mounted diff — then commit on release.
   function startResize(e: ReactMouseEvent, side: "left" | "right") {
     e.preventDefault();
     const startX = e.clientX;
@@ -115,7 +111,6 @@ export default function App() {
     document.body.style.cursor = "col-resize";
   }
 
-  // Arrow keys nudge the width, Shift for a bigger step; same bounds as the drag.
   function onResizeKey(e: ReactKeyboardEvent, side: "left" | "right") {
     const step = e.shiftKey ? 40 : 12;
     let delta = 0;
@@ -127,7 +122,6 @@ export default function App() {
     else setRightW((w) => clamp(w - delta, 220, 640));
   }
 
-  // Tab title tells several open reviews apart (the point of the multi-tab sync).
   useEffect(() => {
     document.title = review
       ? `${repo} · ${review.headRef} → ${review.baseRef} — local-review`
@@ -139,7 +133,6 @@ export default function App() {
       .repos()
       .then((r) => {
         setRepos(r.repos);
-        // Restore the last-used repo if it still exists, else the first.
         const saved = getString(LS.repo);
         setRepo(saved && r.repos.includes(saved) ? saved : (r.repos[0] ?? ""));
       })
@@ -148,12 +141,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Invalidate any in-flight load so a stale response can't land on the new repo.
     reqSeq.current++;
     const seq = reqSeq.current;
     setLoading(false);
-    // Clear branches/head synchronously so the dropdowns never show the old
-    // repo's branches.
     setBranches([]);
     setHead("");
     if (!repo) return;
@@ -172,7 +162,6 @@ export default function App() {
         setBranches(r.branches);
         const current = r.branches.find((b) => b.isCurrent);
         setHead(current?.name ?? r.branches[0]?.name ?? "");
-        // Restore the saved base if it still exists (auto/"" always valid).
         const savedBase = readBasePref(repo);
         if (savedBase === "" || r.branches.some((b) => b.name === savedBase)) {
           setBase(savedBase);
@@ -183,10 +172,9 @@ export default function App() {
       });
   }, [repo]);
 
-  // Live-sync across tabs: on an SSE "changed" ping, refetch the whole review
-  // (backend is source of truth; the diff isn't refetched — HEAD is pinned). A
-  // focus/visibility refetch catches up when the stream is down, gated on it not
-  // being OPEN so a healthy connection doesn't double-fetch.
+  // Refetch the whole review on an SSE "changed" ping; HEAD is pinned so the diff
+  // isn't refetched. The focus/visibility refetch is a fallback for a dead stream,
+  // gated on the stream not being OPEN so a healthy one doesn't double-fetch.
   useEffect(() => {
     if (!review) return;
     const id = review.id;
@@ -236,9 +224,8 @@ export default function App() {
     };
   }, [review?.id]);
 
-  // Refetch the diff when the uncommitted toggle flips. Keyed on `uncommitted`
-  // alone so it fires only on a later toggle, not on load (startReview loads the
-  // initial diff).
+  // Refetch the diff when the uncommitted toggle flips — keyed on `uncommitted`
+  // alone so it fires only on a later toggle, not on load.
   useEffect(() => {
     if (!review) return;
     const seq = ++reqSeq.current;
@@ -275,9 +262,8 @@ export default function App() {
       setBaseSha(diff.base ?? "");
     } catch (e) {
       if (reqSeq.current !== seq) return;
-      // The head may have gone stale (deleted/renamed/mid-rebase). Refetch
-      // branches; if it vanished, fall back to current (auto-start re-fires the
-      // review). If head still exists, the failure was something else — surface it.
+      // head may be stale (deleted/renamed/mid-rebase): refetch branches and, if
+      // it's gone, fall back to current (auto-start re-fires); else surface the error.
       let recovered = false;
       try {
         const r = await api.branches(repo);
@@ -288,7 +274,7 @@ export default function App() {
           recovered = true;
         }
       } catch {
-        // Ignore; fall through to surfacing the original error.
+        // ignore — surface the original error below
       }
       if (!recovered && reqSeq.current === seq) setError((e as Error).message);
     } finally {
@@ -296,15 +282,14 @@ export default function App() {
     }
   }
 
-  // Auto-start when the repo/head/base selection is complete — no "Start" click.
-  // Keyed on the selection only; the uncommitted toggle has its own effect.
+  // Auto-start on a complete repo/head/base selection; the uncommitted toggle has
+  // its own effect, so it's not a dep here.
   useEffect(() => {
     if (repo && head) startReview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repo, head, base]);
 
-  // Returns true on success so the caller keeps the composer (and its text)
-  // open when the save fails.
+  // Returns success so the caller can keep the composer (and its text) open on failure.
   async function handleAddComment(args: {
     filePath: string;
     startLine: number;
@@ -315,9 +300,8 @@ export default function App() {
     if (!review) return false;
     setError(null);
     try {
-      // Anchor to the working tree when reviewing uncommitted changes, so the
-      // server captures the snippet from it (and the staleness check later reads
-      // the same side) rather than from head, which would read as instantly outdated.
+      // Anchor to the working tree for uncommitted reviews, so the server captures
+      // the snippet from the side the staleness check reads (head would read outdated).
       const c = await api.addComment(review.id, { ...args, worktree: effectiveUncommitted });
       setComments((cs) => [...cs, c]);
       return true;
@@ -356,8 +340,6 @@ export default function App() {
     }
   }
 
-  // Apply an op to one comment's replies — shared by the add/update/delete-reply
-  // handlers, which differ only in that op.
   function updateCommentReplies(commentId: number, fn: (replies: Reply[]) => Reply[]) {
     setComments((cs) =>
       cs.map((c) => (c.id === commentId ? { ...c, replies: fn(c.replies ?? []) } : c))
@@ -402,7 +384,6 @@ export default function App() {
     }
   }
 
-  // Optimistic: flip immediately, roll back if the save fails (like toggleReviewed).
   async function handleResolve(id: number, resolved: boolean) {
     setError(null);
     setComments((cs) => cs.map((c) => (c.id === id ? { ...c, resolved } : c)));
@@ -414,8 +395,7 @@ export default function App() {
     }
   }
 
-  // Thread callbacks bundled into one prop. Rebuilt each render (the handlers
-  // close over live `comments`); the threads aren't memoized, so it's free.
+  // Rebuilt each render so the handlers close over live `comments`; do not memoize.
   const commentActions: CommentActions = {
     onUpdate: handleUpdate,
     onDelete: handleDelete,
@@ -425,7 +405,6 @@ export default function App() {
     onResolve: handleResolve,
   };
 
-  // Irreversible wipe of all comments + reviewed marks, so confirm first.
   function requestReset() {
     if (!review) return;
     if (comments.length === 0 && reviewedFiles.size === 0) return;
@@ -462,17 +441,16 @@ export default function App() {
     }
     setActiveComment(id);
     if (flashComment(id)) return;
-    // The file may be unmounted (lazy) and/or collapsed. Signal it to expand,
-    // scroll to trigger mount, then retry the flash once it renders.
+    // The file may be lazy-unmounted/collapsed: signal expand, scroll to trigger
+    // mount, then retry the flash once it renders.
     const c = comments.find((x) => x.id === id);
     if (!c) return;
     setExpandTarget({ path: c.filePath, n: ++expandN.current });
     document.getElementById(`file-${c.filePath}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    // Poll until it mounts and renders, rather than guess a fixed delay.
     let tries = 0;
     const poll = () => {
       if (flashComment(id) || tries++ > 40) {
-        jumpPoll.current = null; // ~4s cap
+        jumpPoll.current = null;
         return;
       }
       jumpPoll.current = setTimeout(poll, 100);
@@ -498,7 +476,6 @@ export default function App() {
       // Fingerprint the side on screen (uncommitted ⇒ working tree), like addComment.
       await api.setReviewed(review.id, path, reviewed, effectiveUncommitted);
     } catch (e) {
-      // Roll back the optimistic change when the save didn't land.
       setReviewedFiles((s) => {
         const n = new Set(s);
         if (reviewed) n.delete(path);
@@ -509,23 +486,15 @@ export default function App() {
     }
   }
 
-  // Rough height for a not-yet-mounted file so the scrollbar/jump behave before
-  // it mounts. Mirrors the collapse decision.
   function estFileHeight(f: FileDiff): number {
     const path = f.newPath || f.oldPath;
     const lines = f.hunks.reduce((n, h) => n + h.lines.length, 0);
     const collapsed = reviewedFiles.has(path) || lines > LARGE_FILE_LINES;
     if (collapsed) return 44;
-    if (f.binary) return 400; // image/binary media view is roughly this tall
+    if (f.binary) return 400;
     return Math.min(lines, 400) * 18 + 44;
   }
 
-  // Two agent prompts, shown in (and copied from) the prompts modal. Both use the
-  // browser's origin so URLs match wherever the server is reached, and are rebuilt
-  // on render so they reflect the current review.
-
-  // "Address the review": a coding agent fetches this review and replies to every
-  // open comment the reviewer left.
   function buildReplyPrompt(): string {
     if (!review) return "";
     const origin = window.location.origin;
@@ -544,9 +513,6 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
 `;
   }
 
-  // "Do an adversarial review": an agent reviews the branch itself and files its
-  // findings as comments, then reads the reviewer's replies on its own threads
-  // (?author=agent), answers back, and resolves settled threads.
   function buildReviewPrompt(): string {
     if (!review) return "";
     const origin = window.location.origin;
@@ -586,9 +552,8 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
   // only makes sense when head is current.
   const currentBranch = branches.find((b) => b.isCurrent)?.name;
   const headIsCurrent = !!head && head === currentBranch;
-  // Kept separate from the raw checkbox so hopping branches doesn't clear the
-  // choice, and — crucially — doesn't mutate `uncommitted` on a head change,
-  // which would fire the diff-refetch effect on top of the auto-start.
+  // Separate from the raw checkbox so a head change doesn't mutate `uncommitted`
+  // and fire the diff-refetch effect on top of the auto-start.
   const effectiveUncommitted = uncommitted && headIsCurrent;
   const orderedDiffFiles = useMemo(() => orderedFiles(files), [files]);
   const orderedFilePaths = useMemo(
@@ -596,8 +561,6 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
     [orderedDiffFiles]
   );
 
-  // Comment ids in reading order (file, then line) — what n/p steps through.
-  // Comments whose file isn't in the diff trail at the end.
   const orderedCommentIds = useMemo(() => {
     const ids: number[] = [];
     const seen = new Set<number>();
@@ -615,8 +578,6 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
     return ids;
   }, [orderedDiffFiles, comments]);
 
-  // Global keyboard shortcuts, suppressed while typing or with a modifier held.
-  // See the `?` overlay for the list.
   useEffect(() => {
     if (!review) return;
     const fileList = orderedDiffFiles.map((f) => f.newPath || f.oldPath);

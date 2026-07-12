@@ -1,5 +1,3 @@
-// Segmented control (Changed/Full, SVG Text/Image, export Preview/Raw). Generic
-// over the value type so callers pass their own string unions.
 export function ViewToggle<T extends string>({
   value,
   options,

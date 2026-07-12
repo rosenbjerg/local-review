@@ -9,10 +9,6 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
-// Keeps keyboard focus inside a modal while `active`. On activation it moves
-// focus in (a data-autofocus element, else the first focusable) and Tab/Shift+Tab
-// cycle within the container; on deactivation focus is restored to the trigger.
-// Attach the returned ref to the modal container.
 export function useFocusTrap<T extends HTMLElement>(active: boolean) {
   const ref = useRef<T>(null);
 
@@ -28,8 +24,6 @@ export function useFocusTrap<T extends HTMLElement>(active: boolean) {
         (el) => el.offsetParent !== null || el === document.activeElement
       );
 
-    // Prefer a data-autofocus control (e.g. the safe "Cancel" of a destructive
-    // dialog), else the first focusable element.
     const initial =
       container.querySelector<HTMLElement>("[data-autofocus]") ?? focusable()[0] ?? container;
     initial.focus();

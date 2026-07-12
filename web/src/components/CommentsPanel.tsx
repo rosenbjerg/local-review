@@ -6,7 +6,6 @@ import { Markdown } from "./Markdown";
 
 interface Props {
   comments: Comment[];
-  // Diff file paths in tree order, so this pane matches the explorer and diff.
   fileOrder: string[];
   onJump: (id: number) => void;
   onDelete: (id: number) => void;
@@ -19,14 +18,12 @@ export function CommentsPanel({ comments, fileOrder, onJump, onDelete }: Props) 
     arr.push(c);
     byFile.set(c.filePath, arr);
   }
-  // Open threads on top (actionable), resolved below, each sub-group by line.
   for (const arr of byFile.values()) {
     arr.sort((a, b) => {
       if (!!a.resolved !== !!b.resolved) return a.resolved ? 1 : -1;
       return a.startLine - b.startLine;
     });
   }
-  // Order files by diff position; files no longer in the diff trail at the end.
   const orderIndex = new Map(fileOrder.map((p, i) => [p, i]));
   const files = [...byFile.keys()].sort((a, b) => {
     const ia = orderIndex.get(a) ?? Infinity;
@@ -46,8 +43,7 @@ export function CommentsPanel({ comments, fileOrder, onJump, onDelete }: Props) 
         <div key={file} className="comment-file-group">
           <div className="comment-file-name">{file}</div>
           {byFile.get(file)!.map((c) => (
-            // Wrapper so the delete button is a sibling of the jump button —
-            // a <button> can't nest in another.
+            // a <button> can't nest in another, so the delete button is a sibling
             <div key={c.id} className="comment-nav-item">
               <button
                 className={`comment-nav${c.resolved ? " comment-nav-resolved" : ""}${

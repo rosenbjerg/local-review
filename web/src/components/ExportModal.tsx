@@ -81,7 +81,7 @@ export function ExportModal({ reviewId, onClose }: Props) {
           />
           agent reply instructions
         </label>
-        <CopyButton className="btn copy-btn" text={markdown} idleLabel="Copy markdown" />{/* always the raw markdown */}
+        <CopyButton className="btn copy-btn" text={markdown} idleLabel="Copy markdown" />
         <button className="btn btn-primary" onClick={download}>
           Download .md
         </button>

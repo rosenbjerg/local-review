@@ -1,5 +1,3 @@
-// Monochrome speech-bubble + number for thread/reply counts (inherits
-// currentColor, unlike a 💬 emoji). `label` names the unit for screen readers.
 export function CommentCount({ n, label = "comment" }: { n: number; label?: string }) {
   return (
     <span className="comment-count" aria-label={`${n} ${label}${n === 1 ? "" : "s"}`}>

@@ -43,7 +43,6 @@ export const api = {
     return req<{ path: string; ref: string; content: string }>(`/api/file?${p.toString()}`);
   },
 
-  // URL for an <img> src: raw bytes of a file at a ref (or the working tree).
   blobURL: (repo: string, path: string, ref: string, worktree?: boolean) => {
     const p = new URLSearchParams({ repo, path, ref });
     if (worktree) p.set("worktree", "true");
@@ -58,12 +57,10 @@ export const api = {
 
   getReview: (id: number) => req<Review>(`/api/reviews/${id}`),
 
-  // Clears all comments and reviewed-file marks from a review (keeps the review).
   resetReview: (id: number) => req<void>(`/api/reviews/${id}/reset`, { method: "POST" }),
 
   addComment: (
     reviewId: number,
-    // No snippet: the server captures it from the anchored line range.
     c: {
       filePath: string;
       startLine: number;
@@ -109,8 +106,6 @@ export const api = {
 
   deleteReply: (id: number) => req<void>(`/api/replies/${id}`, { method: "DELETE" }),
 
-  // worktree records which side the fingerprint is taken on, so a later change
-  // to that side reverts the file to unread.
   setReviewed: (reviewId: number, filePath: string, reviewed: boolean, worktree: boolean) =>
     req<void>(`/api/reviews/${reviewId}/reviewed`, {
       method: "POST",

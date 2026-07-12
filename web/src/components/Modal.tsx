@@ -3,16 +3,13 @@ import { useFocusTrap } from "../useFocusTrap";
 
 interface Props {
   onClose: () => void;
-  // id of the heading element inside, wired to aria-labelledby.
   labelledBy: string;
-  // Extra class on the panel, e.g. "modal-sm" for the compact content-sized size.
   className?: string;
   children: ReactNode;
 }
 
-// Shared modal shell: click-scrim, focus trap, Escape-to-close, dialog aria.
-// Render it conditionally (mounted only while open) so the trap restores focus
-// to the trigger on unmount. Callers supply the head + body as children.
+// Render conditionally (mounted only while open) so the focus trap restores focus
+// to the trigger on unmount.
 export function Modal({ onClose, labelledBy, className, children }: Props) {
   const trapRef = useFocusTrap<HTMLDivElement>(true);
 

@@ -6,8 +6,6 @@ import { AnchorBadge } from "./AnchorBadge";
 import { Markdown } from "./Markdown";
 import { MetaTimestamps } from "./MetaTimestamps";
 
-// The thread's mutation callbacks, bundled so components that render threads
-// forward one `actions` prop instead of six callbacks.
 export interface CommentActions {
   onUpdate: (id: number, body: string, type: CommentType) => Promise<boolean>;
   onDelete: (id: number) => Promise<void>;
@@ -22,8 +20,6 @@ interface Props {
   actions: CommentActions;
 }
 
-// Replies carry no type or anchor — just body — so their editor hides the
-// composer's type picker.
 function ReplyItem({
   reply,
   onUpdate,

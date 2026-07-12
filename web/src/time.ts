@@ -1,7 +1,3 @@
-// Human-friendly timestamps for comment/reply meta lines.
-
-// ISO → compact "3m ago" / "2h ago" / "5d ago", or a short date past a week.
-// "" for empty/unparseable input (older rows can be blank).
 export function relativeTime(iso: string): string {
   if (!iso) return "";
   const then = new Date(iso).getTime();
@@ -21,16 +17,14 @@ export function relativeTime(iso: string): string {
   });
 }
 
-// Full local timestamp, shown on hover behind relativeTime.
 export function absoluteTime(iso: string): string {
   if (!iso) return "";
   const d = new Date(iso);
   return Number.isFinite(d.getTime()) ? d.toLocaleString() : "";
 }
 
-// Whether the body was edited after creation. The backend keeps updated_at ==
-// created_at until a real body/type edit (resolve doesn't bump it), so a later
-// updated_at is genuine.
+// The backend leaves updated_at == created_at until a real body/type edit —
+// resolve deliberately doesn't bump it — so updatedAt > createdAt means edited.
 export function wasEdited(createdAt: string, updatedAt: string): boolean {
   if (!createdAt || !updatedAt) return false;
   const c = new Date(createdAt).getTime();

@@ -4,14 +4,11 @@ import { Modal } from "./Modal";
 import { ViewToggle } from "./ViewToggle";
 
 export interface AgentPrompt {
-  value: string; // stable key for the toggle
-  label: string; // segmented-control label
-  text: string; // the prompt body, copied verbatim
+  value: string;
+  label: string;
+  text: string;
 }
 
-// Modal that shows a set of agent prompts, one at a time, with a segmented
-// control to switch and a Copy button for the active one. Purely presentational:
-// the caller builds the prompt strings (they depend on the current review).
 export function AgentPromptsModal({
   prompts,
   onClose,

@@ -44,8 +44,6 @@ function buildTree(files: FileDiff[]): TreeNode[] {
   return root.children.map((c) => (c.kind === "dir" ? compress(c) : c));
 }
 
-// Files in the tree's render order (dirs first, then files, alphabetically), so
-// the middle pane matches the left pane.
 export function orderedFiles(files: FileDiff[]): FileDiff[] {
   const out: FileDiff[] = [];
   const walk = (nodes: TreeNode[]) => {
@@ -66,7 +64,6 @@ function sortDir(dir: DirNode) {
   for (const c of dir.children) if (c.kind === "dir") sortDir(c);
 }
 
-// Collapse chains of single-subdirectory folders into one row (a/b/c).
 function compress(dir: DirNode): DirNode {
   let d = dir;
   while (d.children.length === 1 && d.children[0].kind === "dir") {
@@ -87,7 +84,6 @@ export function FileExplorer({
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  // Badge counts open threads only (like the diff header and Export).
   const countByFile = new Map<string, number>();
   for (const c of comments) {
     if (c.resolved) continue;
