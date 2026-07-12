@@ -444,7 +444,7 @@ func (s *Store) listComments(reviewID int64) ([]Comment, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Comment
+	out := []Comment{} // never null in JSON — the API contract promises []
 	for rows.Next() {
 		c, err := scanComment(rows)
 		if err != nil {
