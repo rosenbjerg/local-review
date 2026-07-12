@@ -480,11 +480,19 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if req.StartLine < 0 {
+		httpError(w, http.StatusBadRequest, errString("startLine must be >= 0"))
+		return
+	}
 	if req.EndLine < req.StartLine {
 		req.EndLine = req.StartLine
 	}
 	if req.Type == "" {
 		req.Type = store.CommentSuggestion
+	}
+	if !validCommentType(req.Type) {
+		httpError(w, http.StatusBadRequest, errString("invalid comment type"))
+		return
 	}
 	if req.Author == "" {
 		// An omitted author is an API client (the coding agent); the browser sends "reviewer".
@@ -568,8 +576,16 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if req.StartLine < 0 {
+		httpError(w, http.StatusBadRequest, errString("startLine must be >= 0"))
+		return
+	}
 	if req.EndLine < req.StartLine {
 		req.EndLine = req.StartLine
+	}
+	if !validCommentType(req.Type) {
+		httpError(w, http.StatusBadRequest, errString("invalid comment type"))
+		return
 	}
 	c, err := s.Store.UpdateComment(id, req.Body, req.Type, req.StartLine, req.EndLine)
 	if err != nil {
@@ -735,6 +751,14 @@ func validRef(ref string) error {
 		return errString("invalid ref")
 	}
 	return nil
+}
+
+func validCommentType(t store.CommentType) bool {
+	switch t {
+	case store.CommentBug, store.CommentSuggestion, store.CommentQuestion, store.CommentNit:
+		return true
+	}
+	return false
 }
 
 func sanitize(s string) string {
