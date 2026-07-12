@@ -6,6 +6,8 @@ export interface Branch {
 
 export type LineKind = "context" | "add" | "del";
 
+export type FileStatus = "added" | "modified" | "deleted" | "renamed";
+
 export interface DiffLine {
   kind: LineKind;
   oldLine?: number;
@@ -21,7 +23,7 @@ export interface Hunk {
 export interface FileDiff {
   oldPath: string;
   newPath: string;
-  status: string;
+  status: FileStatus;
   binary?: boolean;
   hunks: Hunk[];
 }

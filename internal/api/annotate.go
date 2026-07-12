@@ -79,7 +79,7 @@ func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, cache map[
 		markCurrent(c)
 		return true
 	}
-	if fd.Status == "deleted" {
+	if fd.Status == git.FileDeleted {
 		markOutdated(c)
 		return true
 	}

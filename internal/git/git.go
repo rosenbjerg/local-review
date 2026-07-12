@@ -152,11 +152,19 @@ func (r *Repo) WorktreeFile(path string) (string, error) {
 
 // --- Diff parsing ---
 
+type LineKind string
+
+const (
+	LineContext LineKind = "context"
+	LineAdd     LineKind = "add"
+	LineDel     LineKind = "del"
+)
+
 type DiffLine struct {
-	Kind    string `json:"kind"` // "context" | "add" | "del"
-	OldLine int    `json:"oldLine,omitempty"`
-	NewLine int    `json:"newLine,omitempty"`
-	Content string `json:"content"`
+	Kind    LineKind `json:"kind"`
+	OldLine int      `json:"oldLine,omitempty"`
+	NewLine int      `json:"newLine,omitempty"`
+	Content string   `json:"content"`
 }
 
 type Hunk struct {
@@ -164,12 +172,21 @@ type Hunk struct {
 	Lines  []DiffLine `json:"lines"`
 }
 
+type FileStatus string
+
+const (
+	FileAdded    FileStatus = "added"
+	FileModified FileStatus = "modified"
+	FileDeleted  FileStatus = "deleted"
+	FileRenamed  FileStatus = "renamed"
+)
+
 type FileDiff struct {
-	OldPath string `json:"oldPath"`
-	NewPath string `json:"newPath"`
-	Status  string `json:"status"` // added | modified | deleted | renamed
-	Binary  bool   `json:"binary,omitempty"`
-	Hunks   []Hunk `json:"hunks"`
+	OldPath string     `json:"oldPath"`
+	NewPath string     `json:"newPath"`
+	Status  FileStatus `json:"status"`
+	Binary  bool       `json:"binary,omitempty"`
+	Hunks   []Hunk     `json:"hunks"`
 }
 
 // quotePath=false keeps non-ASCII paths verbatim (the default octal-escapes them,
@@ -208,18 +225,18 @@ func MapOldLine(hunks []Hunk, old int) (newLine int, alive bool) {
 		oldLn, newLn := oldStart, newStart
 		for _, l := range h.Lines {
 			switch l.Kind {
-			case "context":
+			case LineContext:
 				if oldLn == old {
 					return newLn, true
 				}
 				oldLn++
 				newLn++
-			case "del":
+			case LineDel:
 				if oldLn == old {
 					return 0, false
 				}
 				oldLn++
-			case "add":
+			case LineAdd:
 				newLn++
 			}
 		}
@@ -272,7 +289,7 @@ func (r *Repo) newFileDiff(path string) (FileDiff, bool) {
 	if err != nil {
 		return FileDiff{}, false // vanished or unreadable since ls-files listed it
 	}
-	fd := FileDiff{Status: "added", NewPath: path, Hunks: []Hunk{}}
+	fd := FileDiff{Status: FileAdded, NewPath: path, Hunks: []Hunk{}}
 	if strings.IndexByte(content, 0) >= 0 {
 		fd.Binary = true
 		return fd, true
@@ -283,7 +300,7 @@ func (r *Repo) newFileDiff(path string) (FileDiff, bool) {
 	lines := strings.Split(strings.TrimSuffix(content, "\n"), "\n")
 	hunk := Hunk{Header: fmt.Sprintf("@@ -0,0 +1,%d @@", len(lines))}
 	for i, l := range lines {
-		hunk.Lines = append(hunk.Lines, DiffLine{Kind: "add", NewLine: i + 1, Content: l})
+		hunk.Lines = append(hunk.Lines, DiffLine{Kind: LineAdd, NewLine: i + 1, Content: l})
 	}
 	fd.Hunks = []Hunk{hunk}
 	return fd, true
@@ -317,7 +334,7 @@ func parseDiff(text string) ([]FileDiff, error) {
 		switch {
 		case strings.HasPrefix(line, "diff --git "):
 			flush()
-			cur = &FileDiff{Status: "modified"}
+			cur = &FileDiff{Status: FileModified}
 			hunk = nil
 			// Seed paths from the header so binary/mode-only changes (no ---/+++ or
 			// rename lines) still get a name; authoritative lines override below.
@@ -335,37 +352,37 @@ func parseDiff(text string) ([]FileDiff, error) {
 			// a deleted "-- …" line becomes "--- …" and an added "++ …" becomes
 			// "+++ …", which would else match those headers and corrupt numbering.
 			if len(line) == 0 {
-				hunk.Lines = append(hunk.Lines, DiffLine{Kind: "context", OldLine: oldLn, NewLine: newLn, Content: ""})
+				hunk.Lines = append(hunk.Lines, DiffLine{Kind: LineContext, OldLine: oldLn, NewLine: newLn, Content: ""})
 				oldLn++
 				newLn++
 				continue
 			}
 			switch line[0] {
 			case '+':
-				hunk.Lines = append(hunk.Lines, DiffLine{Kind: "add", NewLine: newLn, Content: line[1:]})
+				hunk.Lines = append(hunk.Lines, DiffLine{Kind: LineAdd, NewLine: newLn, Content: line[1:]})
 				newLn++
 			case '-':
-				hunk.Lines = append(hunk.Lines, DiffLine{Kind: "del", OldLine: oldLn, Content: line[1:]})
+				hunk.Lines = append(hunk.Lines, DiffLine{Kind: LineDel, OldLine: oldLn, Content: line[1:]})
 				oldLn++
 			case '\\':
 				// "\ No newline at end of file" — ignore
 			default:
-				hunk.Lines = append(hunk.Lines, DiffLine{Kind: "context", OldLine: oldLn, NewLine: newLn, Content: line[1:]})
+				hunk.Lines = append(hunk.Lines, DiffLine{Kind: LineContext, OldLine: oldLn, NewLine: newLn, Content: line[1:]})
 				oldLn++
 				newLn++
 			}
 		case strings.HasPrefix(line, "new file"):
-			cur.Status = "added"
+			cur.Status = FileAdded
 			cur.OldPath = "" // added: nothing on the old side (the header seeded both)
 		case strings.HasPrefix(line, "deleted file"):
-			cur.Status = "deleted"
+			cur.Status = FileDeleted
 			cur.NewPath = "" // deleted: nothing on the new side
 		case strings.HasPrefix(line, "rename from "):
 			cur.OldPath = strings.TrimPrefix(line, "rename from ")
-			cur.Status = "renamed"
+			cur.Status = FileRenamed
 		case strings.HasPrefix(line, "rename to "):
 			cur.NewPath = strings.TrimPrefix(line, "rename to ")
-			cur.Status = "renamed"
+			cur.Status = FileRenamed
 		case strings.HasPrefix(line, "--- "):
 			cur.OldPath = stripDiffPath(strings.TrimPrefix(line, "--- "))
 		case strings.HasPrefix(line, "+++ "):
