@@ -58,6 +58,8 @@ web/src/
     CommentsPanel.tsx    right pane: cross-file comment overview, jump-to
     CommentComposer.tsx  type select + body textarea (reused for new/edit)
     ExportModal.tsx      rendered-markdown preview (markdown-it) + Raw toggle + copy/download
+    AgentPromptsModal.tsx  copyable agent prompts (Address-the-review / Do-a-review),
+                         ViewToggle to switch + Copy the active one
     Modal.tsx            shared dialog shell: backdrop, focus trap, Escape, dialog aria
     ViewToggle.tsx       data-driven segmented control (Changed/Full, Text/Image, Preview/Raw)
     CopyButton.tsx       clipboard button with idle/ok/fail state (lazy text builder)
@@ -121,6 +123,15 @@ web/src/
   columns' DDL/migration default is `'reviewer'`, so rows created before the
   field existed backfill as the reviewer's. Author shows in the thread meta and
   in the export heading/reply lines.
+- **`GET /api/reviews/{id}/comments`** returns a review's comments as JSON with
+  the same live annotation as `GetReview` (anchor status, replies nested), and an
+  optional `?author=` narrows to one root author. It's the read side for an
+  *adversarial-review* agent: `?author=agent` gives it only the threads it
+  started — its own comments plus any reviewer replies — without the reviewer's
+  separate comments or the reviewed-file list. Pure API-layer filter over
+  `GetReview`+`annotateReview` (no store/SQL change); empty result is `[]`, not
+  null. Distinct from the reply-oriented markdown `export`, which is the
+  reviewer→coding-agent artifact.
 - **Diff base** defaults to the main-branch *name* (stored on the review); the
   `/api/diff` handler resolves it to `merge-base(base, head)` at query time, so
   the review shows only what the branch introduces. `MainBranch()` prefers a
@@ -209,7 +220,7 @@ web/src/
   click, and use `useFocusTrap` for focus-in / Tab-trap / restore-on-close —
   give a new modal the same treatment (mark its safe default control
   `data-autofocus`). The global keyboard shortcuts in `App.tsx` must bail while
-  a modal is open (see the `showExport`/`showInstructions`/`showHelp`/
+  a modal is open (see the `showExport`/`showPrompts`/`showHelp`/
   `confirmingReset` guards).
 
 ## Gotchas

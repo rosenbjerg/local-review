@@ -318,9 +318,6 @@ textarea:focus-visible {
 .copy-btn {
   min-width: 8rem;
 }
-.copy-btn-wide {
-  min-width: 12rem;
-}
 
 /* File */
 .file {

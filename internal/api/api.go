@@ -98,6 +98,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/reviews/{id}/reviewed", s.handleSetReviewed)
 
 	mux.HandleFunc("POST /api/reviews/{id}/comments", s.handleAddComment)
+	mux.HandleFunc("GET /api/reviews/{id}/comments", s.handleListComments)
 	mux.HandleFunc("PATCH /api/comments/{id}", s.handleUpdateComment)
 	mux.HandleFunc("DELETE /api/comments/{id}", s.handleDeleteComment)
 	mux.HandleFunc("POST /api/comments/{id}/resolved", s.handleSetResolved)
@@ -544,6 +545,35 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 	}
 	s.notify(id)
 	writeJSON(w, c)
+}
+
+// handleListComments returns a review's comments with the same live annotation as
+// GetReview (anchor status, replies nested), optionally narrowed to one root
+// author via ?author=. The adversarial-review agent polls ?author=agent to see
+// only the threads it started — its own comments and any reviewer replies on
+// them — without the reviewer's separate comments or the reviewed-file list.
+func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	review, err := s.Store.GetReview(id)
+	if err != nil {
+		httpError(w, http.StatusNotFound, err)
+		return
+	}
+	s.annotateReview(review)
+	comments := review.Comments
+	if author := r.URL.Query().Get("author"); author != "" {
+		filtered := make([]store.Comment, 0, len(comments))
+		for _, c := range comments {
+			if c.Author == author {
+				filtered = append(filtered, c)
+			}
+		}
+		comments = filtered
+	}
+	writeJSON(w, map[string]any{"comments": comments})
 }
 
 type updateCommentReq struct {

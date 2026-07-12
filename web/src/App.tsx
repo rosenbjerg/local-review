@@ -7,9 +7,9 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { api } from "./api";
+import { AgentPromptsModal } from "./components/AgentPromptsModal";
 import { CommentsPanel } from "./components/CommentsPanel";
 import type { CommentActions } from "./components/CommentThread";
-import { CopyButton } from "./components/CopyButton";
 import { DiffView, LARGE_FILE_LINES } from "./components/DiffView";
 import { ExportModal } from "./components/ExportModal";
 import { FileExplorer, orderedFiles } from "./components/FileExplorer";
@@ -52,7 +52,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showExport, setShowExport] = useState(false);
-  const [showInstructions, setShowInstructions] = useState(false);
+  const [showPrompts, setShowPrompts] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
   // The comment last jumped to (via click or n/p), so n/p can step from it.
@@ -520,11 +520,13 @@ export default function App() {
     return Math.min(lines, 400) * 18 + 44;
   }
 
-  // Prompt telling a coding agent how to fetch this review and reply over the
-  // API. Uses the browser's origin so URLs match wherever the server is reached;
-  // shown in (and copied from) the agent-instructions modal, rebuilt on render so
-  // it reflects the current review.
-  function buildAgentInstructions(): string {
+  // Two agent prompts, shown in (and copied from) the prompts modal. Both use the
+  // browser's origin so URLs match wherever the server is reached, and are rebuilt
+  // on render so they reflect the current review.
+
+  // "Address the review": a coding agent fetches this review and replies to every
+  // open comment the reviewer left.
+  function buildReplyPrompt(): string {
     if (!review) return "";
     const origin = window.location.origin;
     return `This is a code review produced with local-review. Fetch it from the API and work through every open comment.
@@ -539,6 +541,42 @@ curl -s -X POST ${origin}/api/reviews/${review.id}/export | jq -r .markdown
 curl -s -X POST ${origin}/api/comments/<id>/replies \\
   -H 'Content-Type: application/json' \\
   -d '{"body": "your reply here"}'
+`;
+  }
+
+  // "Do an adversarial review": an agent reviews the branch itself and files its
+  // findings as comments, then reads the reviewer's replies on its own threads
+  // (?author=agent), answers back, and resolves settled threads.
+  function buildReviewPrompt(): string {
+    if (!review) return "";
+    const origin = window.location.origin;
+    return `Adversarially review the changes branch \`${review.headRef}\` introduces over \`${review.baseRef}\` in this repo, then file your findings as comments via the local-review API so the human reviewer sees them next to their own.
+
+See exactly what changed:
+git diff ${review.baseRef}...${review.headRef}
+
+Hunt for real defects — bugs, broken edge cases, race conditions, security holes, missing error handling, violated invariants. Read the surrounding code, not just the diff, to judge correctness. Favour a few high-confidence findings over noise.
+
+# File a comment. Anchor it to the NEW side: the file's post-change path and its
+# new-side line range, with the exact new-side lines as "snippet" so the comment
+# survives later edits. type is one of: bug | suggestion | question | nit.
+curl -s -X POST ${origin}/api/reviews/${review.id}/comments \\
+  -H 'Content-Type: application/json' \\
+  -d '{"filePath": "path/to/file", "startLine": 42, "endLine": 45, "snippet": "the exact lines as they appear on the new side", "type": "bug", "body": "what is wrong and why"}'
+
+# Re-read only the threads you started, with any reviewer replies nested under
+# each comment's "replies" (JSON). Poll this to continue the conversation.
+curl -s '${origin}/api/reviews/${review.id}/comments?author=agent'
+
+# Reply to a thread (use the comment's "id" from the JSON above).
+curl -s -X POST ${origin}/api/comments/<id>/replies \\
+  -H 'Content-Type: application/json' \\
+  -d '{"body": "your reply here"}'
+
+# Resolve a thread once it's addressed or you're satisfied it's a non-issue.
+curl -s -X POST ${origin}/api/comments/<id>/resolved \\
+  -H 'Content-Type: application/json' \\
+  -d '{"resolved": true}'
 `;
   }
 
@@ -614,7 +652,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
       }
       // Modals suppress the shortcuts below; the Modal shell owns Escape, so only
       // `?`-toggles-help stays here.
-      if (showHelp || confirmingReset || showExport || showInstructions) {
+      if (showHelp || confirmingReset || showExport || showPrompts) {
         if (showHelp && e.key === "?") {
           e.preventDefault();
           setShowHelp(false);
@@ -660,7 +698,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
   }, [
     review,
     showExport,
-    showInstructions,
+    showPrompts,
     showHelp,
     confirmingReset,
     loading,
@@ -759,11 +797,11 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
               {effectiveUncommitted && " + uncommitted"}
             </span>
             <button
-              className="btn copy-btn-wide"
-              onClick={() => setShowInstructions(true)}
-              title="Show a prompt telling a coding agent how to fetch this review from the API and reply to comments"
+              className="btn"
+              onClick={() => setShowPrompts(true)}
+              title="Copyable prompts: hand a coding agent this review to address, or have an agent review the branch itself"
             >
-              Agent instructions
+              Agent prompts
             </button>
             <button
               className="btn"
@@ -925,26 +963,14 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
         <ExportModal reviewId={review.id} onClose={() => setShowExport(false)} />
       )}
 
-      {showInstructions && review && (
-        <Modal
-          onClose={() => setShowInstructions(false)}
-          labelledBy="instructions-title"
-          className="modal-md"
-        >
-          <div className="modal-head">
-            <h2 id="instructions-title">Agent instructions</h2>
-            <span className="spacer" />
-            <CopyButton
-              className="btn copy-btn"
-              text={buildAgentInstructions()}
-              idleLabel="Copy"
-            />
-            <button className="btn" onClick={() => setShowInstructions(false)}>
-              Close
-            </button>
-          </div>
-          <pre className="markdown-preview">{buildAgentInstructions()}</pre>
-        </Modal>
+      {showPrompts && review && (
+        <AgentPromptsModal
+          onClose={() => setShowPrompts(false)}
+          prompts={[
+            { value: "reply", label: "Address the review", text: buildReplyPrompt() },
+            { value: "review", label: "Do a review", text: buildReviewPrompt() },
+          ]}
+        />
       )}
 
       {showHelp && (
