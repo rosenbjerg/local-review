@@ -1091,6 +1091,13 @@ textarea:focus-visible {
   height: auto;
   max-height: 88vh;
 }
+/* Content-sized but roomier than modal-sm — for the agent-instructions preview,
+   whose curl lines want more width. Head stays fixed; the pre scrolls within. */
+.modal-md {
+  width: min(720px, 94vw);
+  height: auto;
+  max-height: 88vh;
+}
 .help-body {
   padding: 8px 8px 12px;
   overflow: auto;

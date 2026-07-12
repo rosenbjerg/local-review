@@ -52,6 +52,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showExport, setShowExport] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
   // The comment last jumped to (via click or n/p), so n/p can step from it.
@@ -521,7 +522,8 @@ export default function App() {
 
   // Prompt telling a coding agent how to fetch this review and reply over the
   // API. Uses the browser's origin so URLs match wherever the server is reached;
-  // built at copy time (see CopyButton) so it reflects the current review.
+  // shown in (and copied from) the agent-instructions modal, rebuilt on render so
+  // it reflects the current review.
   function buildAgentInstructions(): string {
     if (!review) return "";
     const origin = window.location.origin;
@@ -612,7 +614,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
       }
       // Modals suppress the shortcuts below; the Modal shell owns Escape, so only
       // `?`-toggles-help stays here.
-      if (showHelp || confirmingReset || showExport) {
+      if (showHelp || confirmingReset || showExport || showInstructions) {
         if (showHelp && e.key === "?") {
           e.preventDefault();
           setShowHelp(false);
@@ -658,6 +660,7 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
   }, [
     review,
     showExport,
+    showInstructions,
     showHelp,
     confirmingReset,
     loading,
@@ -755,12 +758,13 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
               {shortSha}
               {effectiveUncommitted && " + uncommitted"}
             </span>
-            <CopyButton
+            <button
               className="btn copy-btn-wide"
-              text={buildAgentInstructions}
-              idleLabel="Copy agent instructions"
-              title="Copy a prompt telling a coding agent how to fetch this review from the API and reply to comments"
-            />
+              onClick={() => setShowInstructions(true)}
+              title="Show a prompt telling a coding agent how to fetch this review from the API and reply to comments"
+            >
+              Agent instructions
+            </button>
             <button
               className="btn"
               onClick={() => setShowExport(true)}
@@ -919,6 +923,28 @@ curl -s -X POST ${origin}/api/comments/<id>/replies \\
 
       {showExport && review && (
         <ExportModal reviewId={review.id} onClose={() => setShowExport(false)} />
+      )}
+
+      {showInstructions && review && (
+        <Modal
+          onClose={() => setShowInstructions(false)}
+          labelledBy="instructions-title"
+          className="modal-md"
+        >
+          <div className="modal-head">
+            <h2 id="instructions-title">Agent instructions</h2>
+            <span className="spacer" />
+            <CopyButton
+              className="btn copy-btn"
+              text={buildAgentInstructions()}
+              idleLabel="Copy"
+            />
+            <button className="btn" onClick={() => setShowInstructions(false)}>
+              Close
+            </button>
+          </div>
+          <pre className="markdown-preview">{buildAgentInstructions()}</pre>
+        </Modal>
       )}
 
       {showHelp && (

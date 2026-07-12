@@ -209,7 +209,8 @@ web/src/
   click, and use `useFocusTrap` for focus-in / Tab-trap / restore-on-close —
   give a new modal the same treatment (mark its safe default control
   `data-autofocus`). The global keyboard shortcuts in `App.tsx` must bail while
-  a modal is open (see the `showExport`/`showHelp`/`confirmingReset` guards).
+  a modal is open (see the `showExport`/`showInstructions`/`showHelp`/
+  `confirmingReset` guards).
 
 ## Gotchas
 
