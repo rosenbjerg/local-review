@@ -83,6 +83,12 @@ func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, cache map[
 		markOutdated(c)
 		return true
 	}
+	if fd.Status == git.FileRenamed {
+		// Mapped lines would land in the renamed file, but the comment is still
+		// keyed to its old FilePath — defer to snippet matching so we don't
+		// report a moved range against a path that no longer exists.
+		return false
+	}
 	if fd.Binary || len(fd.Hunks) == 0 {
 		return false // no textual hunks to map — let the snippet path decide
 	}
