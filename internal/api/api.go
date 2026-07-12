@@ -495,7 +495,8 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Author == "" {
-		// An omitted author is an API client (the coding agent); the browser sends "reviewer".
+		// An omitted author is the coding agent addressing the review; the browser
+		// sends "reviewer" and the adversarial reviewer sends "review-agent".
 		req.Author = "agent"
 	}
 	var repo *git.Repo
@@ -649,7 +650,8 @@ func (s *Server) handleAddReply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Author == "" {
-		// An omitted author is an API client (the coding agent); the browser sends "reviewer".
+		// An omitted author is the coding agent addressing the review; the browser
+		// sends "reviewer" and the adversarial reviewer sends "review-agent".
 		req.Author = "agent"
 	}
 	rep, reviewID, err := s.Store.AddReply(commentID, req.Body, req.Author)

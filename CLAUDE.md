@@ -123,18 +123,21 @@ web/src/
   last body/type edit, which the UI surfaces as an `(edited)` marker (`time.ts`
   `wasEdited`), and resolving isn't an edit (it has its own flag). Keep it that
   way if you touch `SetCommentResolved`, or the marker will fire on resolve.
-- **Comments and replies carry an `author`.** The API defaults an omitted
-  author to `"agent"` (so a coding agent posting via the API needn't set it);
-  the browser app tags its own creations `"reviewer"` explicitly (`api.ts`). The
-  columns' DDL/migration default is `'reviewer'`, so rows created before the
-  field existed backfill as the reviewer's. Author shows in the thread meta and
-  in the export heading/reply lines.
+- **Comments and replies carry an `author`.** Three identities the server tells
+  apart purely by this field (there's no auth/session): `"reviewer"` — the human,
+  tagged explicitly by the browser app (`api.ts`); `"agent"` — the coding agent
+  addressing the review, which is the API default so it needn't set it; and
+  `"review-agent"` — the adversarial reviewer, which the *Do-a-review* prompt has
+  it send on every comment and reply so its findings and follow-ups stay distinct
+  from the coding agent's replies to them. The columns' DDL/migration default is
+  `'reviewer'`, so rows created before the field existed backfill as the
+  reviewer's. Author shows in the thread meta and in the export heading/reply lines.
 - **`GET /api/reviews/{id}/comments`** returns a review's comments as JSON with
   the same live annotation as `GetReview` (anchor status, replies nested), and an
   optional `?author=` narrows to one root author. It's the read side for an
-  *adversarial-review* agent: `?author=agent` gives it only the threads it
-  started — its own comments plus any reviewer replies — without the reviewer's
-  separate comments or the reviewed-file list. Pure API-layer filter over
+  *adversarial-review* agent: `?author=review-agent` gives it only the threads it
+  started — its own comments plus any reviewer/coding-agent replies — without the
+  reviewer's separate comments or the reviewed-file list. Pure API-layer filter over
   `GetReview`+`annotateReview` (no store/SQL change); empty result is `[]`, not
   null. Distinct from the reply-oriented markdown `export`, which is the
   reviewer→coding-agent artifact.

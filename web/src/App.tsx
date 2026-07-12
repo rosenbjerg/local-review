@@ -525,19 +525,21 @@ Hunt for real defects — bugs, broken edge cases, race conditions, security hol
 
 # File a comment. Anchor it to the NEW side: the file's post-change path and its
 # new-side line range (the server captures the code snippet from that range, so
-# you don't send it). type is one of: bug | suggestion | question | nit.
+# you don't send it). type is one of: bug | suggestion | question | nit. Tag every
+# write with "author": "review-agent" so your findings stay distinct from the
+# coding agent that will address them.
 curl -s -X POST ${origin}/api/reviews/${review.id}/comments \\
   -H 'Content-Type: application/json' \\
-  -d '{"filePath": "path/to/file", "startLine": 42, "endLine": 45, "type": "bug", "body": "what is wrong and why"}'
+  -d '{"filePath": "path/to/file", "startLine": 42, "endLine": 45, "type": "bug", "body": "what is wrong and why", "author": "review-agent"}'
 
 # Re-read only the threads you started, with any reviewer replies nested under
 # each comment's "replies" (JSON). Poll this to continue the conversation.
-curl -s '${origin}/api/reviews/${review.id}/comments?author=agent'
+curl -s '${origin}/api/reviews/${review.id}/comments?author=review-agent'
 
 # Reply to a thread (use the comment's "id" from the JSON above).
 curl -s -X POST ${origin}/api/comments/<id>/replies \\
   -H 'Content-Type: application/json' \\
-  -d '{"body": "your reply here"}'
+  -d '{"body": "your reply here", "author": "review-agent"}'
 
 # Resolve a thread once it's addressed or you're satisfied it's a non-issue.
 curl -s -X POST ${origin}/api/comments/<id>/resolved \\
