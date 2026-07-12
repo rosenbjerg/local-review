@@ -61,7 +61,7 @@ func Render(r *store.Review, agentInstructions bool, baseURL string) string {
 		})
 		lang := langForExt(name)
 		for _, c := range comments {
-			fmt.Fprintf(&b, "\n### #%d · %s · %s · %s\n", c.ID, anchorLabel(c), inlineField(c.Type), inlineField(c.Author))
+			fmt.Fprintf(&b, "\n### #%d · %s · %s · %s\n", c.ID, anchorLabel(c), inlineField(string(c.Type)), inlineField(c.Author))
 			if strings.TrimSpace(c.Snippet) != "" {
 				snippet := strings.TrimRight(c.Snippet, "\n")
 				fence := fenceFor(snippet)

@@ -416,7 +416,7 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	s.annotateReview(review)
 	instructions := r.URL.Query().Get("instructions") == "true"
 	md := export.Render(review, instructions, "http://"+r.Host)
-	_ = s.Store.SetStatus(id, "exported")
+	_ = s.Store.SetStatus(id, store.StatusExported)
 
 	shortSHA := review.HeadSHA
 	if len(shortSHA) > 7 {
@@ -462,13 +462,13 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
 // --- comments ---
 
 type addCommentReq struct {
-	FilePath  string `json:"filePath"`
-	StartLine int    `json:"startLine"`
-	EndLine   int    `json:"endLine"`
-	Type      string `json:"type"`
-	Body      string `json:"body"`
-	Author    string `json:"author"`
-	Worktree  bool   `json:"worktree"`
+	FilePath  string            `json:"filePath"`
+	StartLine int               `json:"startLine"`
+	EndLine   int               `json:"endLine"`
+	Type      store.CommentType `json:"type"`
+	Body      string            `json:"body"`
+	Author    string            `json:"author"`
+	Worktree  bool              `json:"worktree"`
 }
 
 func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
@@ -484,7 +484,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		req.EndLine = req.StartLine
 	}
 	if req.Type == "" {
-		req.Type = "suggestion"
+		req.Type = store.CommentSuggestion
 	}
 	if req.Author == "" {
 		// An omitted author is an API client (the coding agent); the browser sends "reviewer".
@@ -553,10 +553,10 @@ func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateCommentReq struct {
-	Body      string `json:"body"`
-	Type      string `json:"type"`
-	StartLine int    `json:"startLine"`
-	EndLine   int    `json:"endLine"`
+	Body      string            `json:"body"`
+	Type      store.CommentType `json:"type"`
+	StartLine int               `json:"startLine"`
+	EndLine   int               `json:"endLine"`
 }
 
 func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {

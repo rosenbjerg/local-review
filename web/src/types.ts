@@ -76,13 +76,15 @@ export function lineLabel(c: Comment): string {
   return end > start ? `L${start}–${end}` : `L${start}`;
 }
 
+export type ReviewStatus = "draft" | "exported";
+
 export interface Review {
   id: number;
   repoPath: string;
   baseRef: string;
   headRef: string;
   headSha: string;
-  status: string;
+  status: ReviewStatus;
   createdAt: string;
   updatedAt: string;
   comments: Comment[] | null;

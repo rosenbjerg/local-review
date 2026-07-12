@@ -13,47 +13,65 @@ type Store struct {
 	db *sql.DB
 }
 
+type AnchorStatus string
+
 const (
-	AnchorCurrent  = "current"
-	AnchorMoved    = "moved"
-	AnchorOutdated = "outdated"
+	AnchorCurrent  AnchorStatus = "current"
+	AnchorMoved    AnchorStatus = "moved"
+	AnchorOutdated AnchorStatus = "outdated"
+)
+
+type ReviewStatus string
+
+const (
+	StatusDraft    ReviewStatus = "draft"
+	StatusExported ReviewStatus = "exported"
 )
 
 type Review struct {
-	ID            int64     `json:"id"`
-	RepoPath      string    `json:"repoPath"`
-	BaseRef       string    `json:"baseRef"`
-	HeadRef       string    `json:"headRef"`
-	HeadSHA       string    `json:"headSha"`
-	Status        string    `json:"status"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-	Comments      []Comment `json:"comments"`
-	ReviewedFiles []string  `json:"reviewedFiles"`
+	ID            int64        `json:"id"`
+	RepoPath      string       `json:"repoPath"`
+	BaseRef       string       `json:"baseRef"`
+	HeadRef       string       `json:"headRef"`
+	HeadSHA       string       `json:"headSha"`
+	Status        ReviewStatus `json:"status"`
+	CreatedAt     time.Time    `json:"createdAt"`
+	UpdatedAt     time.Time    `json:"updatedAt"`
+	Comments      []Comment    `json:"comments"`
+	ReviewedFiles []string     `json:"reviewedFiles"`
 }
 
+type CommentType string
+
+const (
+	CommentBug        CommentType = "bug"
+	CommentSuggestion CommentType = "suggestion"
+	CommentQuestion   CommentType = "question"
+	CommentNit        CommentType = "nit"
+)
+
 type Comment struct {
-	ID        int64     `json:"id"`
-	ReviewID  int64     `json:"reviewId"`
-	FilePath  string    `json:"filePath"`
-	StartLine int       `json:"startLine"`
-	EndLine   int       `json:"endLine"`
-	Snippet   string    `json:"snippet"`
-	Type      string    `json:"type"`
-	Body      string    `json:"body"`
-	Author    string    `json:"author"`
-	Resolved  bool      `json:"resolved"`
-	CommitSHA string    `json:"commitSha"`
-	Worktree  bool      `json:"worktree"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	Replies   []Reply   `json:"replies"`
+	ID        int64       `json:"id"`
+	ReviewID  int64       `json:"reviewId"`
+	FilePath  string      `json:"filePath"`
+	StartLine int         `json:"startLine"`
+	EndLine   int         `json:"endLine"`
+	Snippet   string      `json:"snippet"`
+	Type      CommentType `json:"type"`
+	Body      string      `json:"body"`
+	Author    string      `json:"author"`
+	Resolved  bool        `json:"resolved"`
+	CommitSHA string      `json:"commitSha"`
+	Worktree  bool        `json:"worktree"`
+	CreatedAt time.Time   `json:"createdAt"`
+	UpdatedAt time.Time   `json:"updatedAt"`
+	Replies   []Reply     `json:"replies"`
 
 	// Computed by the API layer, never persisted — all zero on rows read from the
 	// store; Current* carry the relocated range when moved.
-	AnchorStatus     string `json:"anchorStatus,omitempty"`
-	CurrentStartLine int    `json:"currentStartLine,omitempty"`
-	CurrentEndLine   int    `json:"currentEndLine,omitempty"`
+	AnchorStatus     AnchorStatus `json:"anchorStatus,omitempty"`
+	CurrentStartLine int          `json:"currentStartLine,omitempty"`
+	CurrentEndLine   int          `json:"currentEndLine,omitempty"`
 }
 
 type Reply struct {
@@ -413,7 +431,7 @@ func (s *Store) ResetReview(id int64) error {
 	return tx.Commit()
 }
 
-func (s *Store) SetStatus(id int64, status string) error {
+func (s *Store) SetStatus(id int64, status ReviewStatus) error {
 	_, err := s.db.Exec(`UPDATE reviews SET status=?, updated_at=? WHERE id=?`,
 		status, nowStr(), id)
 	return err
@@ -450,7 +468,7 @@ func (s *Store) AddComment(c Comment) (*Comment, error) {
 	return s.getComment(id)
 }
 
-func (s *Store) UpdateComment(id int64, body, ctype string, start, end int) (*Comment, error) {
+func (s *Store) UpdateComment(id int64, body string, ctype CommentType, start, end int) (*Comment, error) {
 	now := nowStr()
 	_, err := s.db.Exec(
 		`UPDATE comments SET body=?, type=?, start_line=?, end_line=?, updated_at=? WHERE id=?`,
@@ -529,7 +547,7 @@ func (s *Store) getReplies(commentID int64) ([]Reply, error) {
 }
 
 func (s *Store) getReply(id int64) (*Reply, error) {
-	rep, err := scanReply(s.db.QueryRow(`SELECT ` + replyCols + ` FROM replies WHERE id=?`, id))
+	rep, err := scanReply(s.db.QueryRow(`SELECT `+replyCols+` FROM replies WHERE id=?`, id))
 	if err != nil {
 		return nil, err
 	}
