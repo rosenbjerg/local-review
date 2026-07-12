@@ -11,11 +11,9 @@ import (
 	"local-review/internal/store"
 )
 
-// inlineField neutralizes a value interpolated into a single markdown line
-// (author, type, file heading). Those come from the API with no allow-list, so
-// a control character — a newline especially — could otherwise break out of the
-// line and inject a fake heading/section into the artifact a coding agent
-// consumes as its task list. Control runes collapse to spaces.
+// inlineField collapses control runes (a newline especially) to spaces, so an
+// unvalidated value interpolated into a single markdown line can't break out and
+// inject a fake heading into the artifact a coding agent consumes as its tasks.
 func inlineField(s string) string {
 	return strings.TrimSpace(strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
@@ -26,8 +24,7 @@ func inlineField(s string) string {
 }
 
 // Render produces the markdown artifact for a review. When agentInstructions is
-// set, a trailing section explains how to reply to comments over HTTP, using
-// baseURL (e.g. "http://127.0.0.1:7777") in the curl example.
+// set, a trailing section explains how to reply to comments over HTTP via baseURL.
 func Render(r *store.Review, agentInstructions bool, baseURL string) string {
 	var b strings.Builder
 
@@ -38,8 +35,7 @@ func Render(r *store.Review, agentInstructions bool, baseURL string) string {
 
 	fmt.Fprintf(&b, "# Review: %s → %s @ %s\n\n", r.HeadRef, r.BaseRef, shortSHA)
 
-	// Resolved threads are the reviewer's way of saying "no agent action needed",
-	// so the export carries only the open ones.
+	// Resolved threads need no agent action, so the export carries only open ones.
 	unresolved := make([]store.Comment, 0, len(r.Comments))
 	for _, c := range r.Comments {
 		if !c.Resolved {
@@ -95,9 +91,8 @@ func Render(r *store.Review, agentInstructions bool, baseURL string) string {
 	return b.String()
 }
 
-// renderAgentInstructions appends a section telling a coding agent how to reply
-// to a comment over HTTP. exampleID (when > 0) makes the curl example concrete;
-// otherwise a placeholder is used.
+// renderAgentInstructions appends the "how to reply over HTTP" section. exampleID
+// (when > 0) makes the curl example concrete, else a placeholder.
 func renderAgentInstructions(b *strings.Builder, baseURL string, exampleID int64) {
 	if baseURL == "" {
 		baseURL = "http://127.0.0.1:7777"
@@ -120,10 +115,9 @@ func renderAgentInstructions(b *strings.Builder, baseURL string, exampleID int64
 		"  -d '{\"body\": \"your reply here\"}'\n```\n", baseURL, id)
 }
 
-// renderReply writes a reply as an indented blockquote beneath its comment. The
-// body is emitted line-by-line with a "> " prefix so arbitrary multi-line text
-// stays inside the quote; a bare blank line between replies keeps each in its
-// own blockquote rather than merging them.
+// renderReply writes a reply as a blockquote. The body is prefixed line-by-line
+// with "> " so multi-line text stays quoted; a blank line between replies keeps
+// them from merging into one blockquote.
 func renderReply(b *strings.Builder, rep store.Reply) {
 	fmt.Fprintf(b, "\n> **↳ reply #%d · %s**\n", rep.ID, inlineField(rep.Author))
 	body := strings.TrimSpace(rep.Body)
@@ -136,10 +130,8 @@ func renderReply(b *strings.Builder, rep store.Reply) {
 	}
 }
 
-// fenceFor returns a backtick fence long enough to safely wrap s: one backtick
-// longer than the longest run of backticks inside it (CommonMark rule), and at
-// least three. Prevents a snippet containing ``` (e.g. from a reviewed .md
-// file) from prematurely closing the fenced block.
+// fenceFor returns a backtick fence long enough that a ``` inside s can't close
+// the block early: one longer than the longest run inside (CommonMark), min three.
 func fenceFor(s string) string {
 	longest, run := 0, 0
 	for _, r := range s {
@@ -174,11 +166,9 @@ func lineLabel(start, end int) string {
 	return fmt.Sprintf("L%d", start)
 }
 
-// anchorLabel renders a comment's line reference, folding in any drift the API
-// detected: a moved comment reports its current line (noting where it came
-// from) so the agent looks in the right place; an outdated one is flagged since
-// its snippet no longer exists at head. The captured snippet is emitted either
-// way, so outdated feedback stays legible.
+// anchorLabel renders a comment's line reference with any detected drift: a moved
+// comment reports its current line (noting where it came from); an outdated one
+// is flagged since its snippet no longer exists at head.
 func anchorLabel(c store.Comment) string {
 	if c.StartLine == 0 {
 		return "file" // file-level comment (binary/image), not anchored to a line

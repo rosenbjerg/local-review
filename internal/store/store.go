@@ -13,9 +13,9 @@ type Store struct {
 	db *sql.DB
 }
 
-// Anchor statuses for Comment.AnchorStatus, derived by the API layer from the
-// current head (see internal/api/annotate.go). Shared here because the field
-// lives on Comment and both the API and export packages compare against them.
+// Anchor statuses for Comment.AnchorStatus, derived by the API layer (see
+// internal/api/annotate.go). Shared here because the API and export packages
+// both compare against them.
 const (
 	AnchorCurrent  = "current"  // snippet still sits at the stored line range
 	AnchorMoved    = "moved"    // snippet relocated to a unique new range (Current* lines)
@@ -52,18 +52,16 @@ type Comment struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 	Replies   []Reply   `json:"replies"`
 
-	// Derived by the API layer (internal/api.annotate), never persisted: the
-	// live location of the comment relative to the current head. AnchorStatus is
-	// "current" | "moved" | "outdated"; the Current* lines carry the relocated
-	// range when moved. Zero-valued on rows loaded straight from the store.
+	// Derived by the API layer (internal/api.annotate), never persisted: the live
+	// location relative to the current head. Current* carry the relocated range
+	// when moved; all zero on rows loaded straight from the store.
 	AnchorStatus     string `json:"anchorStatus,omitempty"`
 	CurrentStartLine int    `json:"currentStartLine,omitempty"`
 	CurrentEndLine   int    `json:"currentEndLine,omitempty"`
 }
 
-// Reply is a follow-up on a Comment. It carries no anchor or type of its own —
-// those belong to the parent comment (the thread root). Threads are exactly two
-// levels deep: replies reference a comment and nothing references a reply.
+// Reply is a follow-up on a Comment (the thread root); it carries no anchor or
+// type of its own. Threads are exactly two levels deep — nothing references a reply.
 type Reply struct {
 	ID        int64     `json:"id"`
 	CommentID int64     `json:"commentId"`
@@ -74,19 +72,17 @@ type Reply struct {
 }
 
 func Open(path string) (*Store, error) {
-	// foreign_keys is a per-connection pragma, so set it in the DSN: every
-	// connection the pool ever opens then enforces ON DELETE CASCADE, even if
-	// the original connection is discarded and replaced (a one-time PRAGMA would
-	// silently stop applying). The non-URI "<path>?<query>" form avoids having to
-	// URL-encode a path with spaces. WAL journal mode is persisted in the DB
-	// file, so a one-time PRAGMA below still suffices for it.
+	// foreign_keys is per-connection, so set it in the DSN — every pooled
+	// connection then enforces ON DELETE CASCADE (a one-time PRAGMA could stop
+	// applying when the connection is replaced). The non-URI form avoids
+	// URL-encoding a path with spaces; WAL is persisted in the file, so the
+	// one-time PRAGMA below suffices for it.
 	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		return nil, err
 	}
-	// A single connection serializes DB access — free here (git diffs/file reads
-	// don't hit SQLite) and it gives CreateOrGetReview's transaction full
-	// check-then-insert atomicity.
+	// A single connection serializes DB access — free here and it gives
+	// CreateOrGetReview's check-then-insert transaction full atomicity.
 	db.SetMaxOpenConns(1)
 	if _, err := db.Exec(`PRAGMA journal_mode=WAL;`); err != nil {
 		return nil, err
@@ -150,9 +146,8 @@ CREATE TABLE IF NOT EXISTS reviewed_files (
 	if err != nil {
 		return err
 	}
-	// Columns added after the initial schema. CREATE TABLE IF NOT EXISTS won't
-	// backfill them onto tables created before they existed, so add them
-	// explicitly for older databases (each is a no-op once present).
+	// Columns added after the initial schema — CREATE TABLE IF NOT EXISTS won't
+	// backfill them onto older DBs, so add each explicitly (no-op once present).
 	if err := s.ensureColumn("comments", "resolved", "resolved INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
@@ -176,9 +171,9 @@ CREATE TABLE IF NOT EXISTS reviewed_files (
 	return s.ensureColumn("replies", "author", "author TEXT NOT NULL DEFAULT 'reviewer'")
 }
 
-// ensureColumn adds a column to a table if it is not already present, making a
-// new column idempotent across upgrades (SQLite has no ADD COLUMN IF NOT EXISTS).
-// table/column/ddl are trusted code constants, not user input.
+// ensureColumn adds a column if absent, so a new column is idempotent across
+// upgrades (SQLite lacks ADD COLUMN IF NOT EXISTS). table/column/ddl are trusted
+// code constants, not user input.
 func (s *Store) ensureColumn(table, column, ddl string) error {
 	rows, err := s.db.Query("PRAGMA table_info(" + table + ")")
 	if err != nil {
@@ -261,15 +256,12 @@ func scanReply(sc rowScanner) (Reply, error) {
 }
 
 // CreateOrGetReview returns the existing review for (repo, base, head) or creates
-// one. A review is matched regardless of status so that exporting (which marks it
-// 'exported') does not orphan an in-progress review — re-opening the same branch
-// resumes it with its comments intact. HeadSHA is refreshed on fetch.
+// one. Matched regardless of status so exporting (which marks it 'exported')
+// doesn't orphan an in-progress review; HeadSHA is refreshed on fetch.
 func (s *Store) CreateOrGetReview(repoPath, base, head, sha string) (*Review, error) {
-	// Run the check-then-insert in a transaction so two concurrent callers for
-	// the same (repo, base, head) can't both insert and split comments across
-	// duplicate rows. With the single connection (see Open), the transaction
-	// holds it end-to-end, so a concurrent creator blocks until commit and then
-	// its SELECT sees the inserted row.
+	// Check-then-insert in a transaction so two concurrent callers for the same
+	// (repo, base, head) can't both insert and split comments across duplicate
+	// rows (the single connection holds the transaction end-to-end).
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
@@ -336,8 +328,7 @@ func (s *Store) GetReview(id int64) (*Review, error) {
 }
 
 // ReviewRepoHead returns a review's repo path and head ref without loading its
-// comments — enough for the API to resolve the current head SHA when anchoring a
-// new comment.
+// comments — enough to resolve the head SHA when anchoring a new comment.
 func (s *Store) ReviewRepoHead(id int64) (repoPath, headRef string, err error) {
 	err = s.db.QueryRow(`SELECT repo_path, head_ref FROM reviews WHERE id=?`, id).Scan(&repoPath, &headRef)
 	return
@@ -361,19 +352,17 @@ func (s *Store) listReviewedFiles(reviewID int64) ([]string, error) {
 	return out, rows.Err()
 }
 
-// ReviewedFile is a reviewed-file mark with the fingerprint captured when it was
-// set: ContentHash of the file's new-side content and the Worktree flag telling
-// which side (head vs on-disk working tree) that content came from. The API
-// layer re-derives whether the mark still holds by re-hashing that side.
+// ReviewedFile is a reviewed-file mark with the fingerprint captured when set:
+// ContentHash of the new-side content and the Worktree flag for which side it
+// came from. The API layer re-hashes that side to check the mark still holds.
 type ReviewedFile struct {
 	Path        string
 	ContentHash string
 	Worktree    bool
 }
 
-// ListReviewedFilesFull returns the reviewed-file marks with their captured
-// fingerprints, for the API's staleness check (listReviewedFiles returns just
-// the paths for the review payload).
+// ListReviewedFilesFull returns the marks with their fingerprints for the API's
+// staleness check (listReviewedFiles returns just the paths for the payload).
 func (s *Store) ListReviewedFilesFull(reviewID int64) ([]ReviewedFile, error) {
 	rows, err := s.db.Query(
 		`SELECT file_path, content_hash, worktree FROM reviewed_files WHERE review_id=? ORDER BY file_path`, reviewID)
@@ -392,10 +381,9 @@ func (s *Store) ListReviewedFilesFull(reviewID int64) ([]ReviewedFile, error) {
 	return out, rows.Err()
 }
 
-// SetFileReviewed marks (or unmarks) a file as reviewed within a review. On mark
-// it records the content fingerprint (and its side) captured by the caller, so a
-// later change to the file can revert it to unread; re-marking refreshes the
-// fingerprint (DO UPDATE), which is what re-reviewing a changed file must do.
+// SetFileReviewed marks or unmarks a file reviewed. On mark it records the
+// caller's fingerprint (and side) so a later change can revert it to unread;
+// re-marking refreshes the fingerprint (DO UPDATE).
 func (s *Store) SetFileReviewed(reviewID int64, path string, reviewed bool, contentHash string, worktree bool) error {
 	if reviewed {
 		_, err := s.db.Exec(
@@ -431,10 +419,9 @@ func (s *Store) DeleteReview(id int64) error {
 	return err
 }
 
-// ResetReview clears a review's feedback in one transaction: every comment (its
-// replies cascade via the FK) and every reviewed-file mark. The review row
-// itself stays, so re-opening the same branch resumes it empty rather than
-// creating a fresh review.
+// ResetReview clears a review's comments (replies cascade) and reviewed-file
+// marks in one transaction. The review row stays, so re-opening the branch
+// resumes it empty rather than creating a fresh review.
 func (s *Store) ResetReview(id int64) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -498,11 +485,9 @@ func (s *Store) UpdateComment(id int64, body, ctype string, start, end int) (*Co
 	return s.getComment(id)
 }
 
-// SetCommentResolved marks a comment (thread root) resolved or reopened and
-// returns the id of its review so the caller can publish an SSE ping.
-// updated_at is intentionally left untouched: it tracks the last body/type edit
-// (which the UI surfaces as an "edited" marker), and resolving isn't an edit —
-// it has its own `resolved` flag.
+// SetCommentResolved toggles a comment's resolved flag and returns its review id.
+// updated_at is deliberately left untouched: it tracks the last body/type edit
+// (the UI's "edited" marker), and resolving isn't an edit.
 func (s *Store) SetCommentResolved(id int64, resolved bool) (int64, error) {
 	if _, err := s.db.Exec(
 		`UPDATE comments SET resolved=? WHERE id=?`, resolved, id); err != nil {
@@ -511,8 +496,8 @@ func (s *Store) SetCommentResolved(id int64, resolved bool) (int64, error) {
 	return s.reviewIDForComment(id)
 }
 
-// DeleteComment removes a comment and returns the id of the review it belonged
-// to, so the caller can notify subscribers of that review after the row is gone.
+// DeleteComment removes a comment and returns its review id (needed after the
+// row is gone, to notify subscribers).
 func (s *Store) DeleteComment(id int64) (int64, error) {
 	var reviewID int64
 	if err := s.db.QueryRow(`SELECT review_id FROM comments WHERE id=?`, id).Scan(&reviewID); err != nil {
@@ -551,8 +536,8 @@ func scanReplies(rows *sql.Rows) ([]Reply, error) {
 	return out, rows.Err()
 }
 
-// listReplies returns every reply belonging to a review (joined via its
-// comments), ordered so GetReview can bucket them under each comment.
+// listReplies returns every reply in a review (joined via comments), ordered so
+// GetReview can bucket them under each comment.
 func (s *Store) listReplies(reviewID int64) ([]Reply, error) {
 	rows, err := s.db.Query(
 		`SELECT r.id, r.comment_id, r.body, r.created_at, r.updated_at, r.author
@@ -582,8 +567,7 @@ func (s *Store) getReply(id int64) (*Reply, error) {
 	return &rep, nil
 }
 
-// AddReply appends a reply to a comment and returns it along with the id of the
-// review it belongs to, so the caller can publish an SSE ping for that review.
+// AddReply appends a reply and returns it with its review id (for the SSE ping).
 func (s *Store) AddReply(commentID int64, body, author string) (*Reply, int64, error) {
 	var reviewID int64
 	if err := s.db.QueryRow(`SELECT review_id FROM comments WHERE id=?`, commentID).Scan(&reviewID); err != nil {
@@ -615,8 +599,7 @@ func (s *Store) UpdateReply(id int64, body string) (*Reply, int64, error) {
 	return rep, reviewID, err
 }
 
-// DeleteReply removes a reply and returns the id of the review it belonged to,
-// so the caller can notify that review's subscribers after the row is gone.
+// DeleteReply removes a reply and returns its review id (to notify subscribers).
 func (s *Store) DeleteReply(id int64) (int64, error) {
 	var commentID int64
 	if err := s.db.QueryRow(`SELECT comment_id FROM replies WHERE id=?`, id).Scan(&commentID); err != nil {

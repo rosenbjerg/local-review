@@ -7,10 +7,9 @@ import (
 	"local-review/internal/store"
 )
 
-// annotateReview fills in derived, never-persisted review state on read: each
-// comment's live anchor status (from its captured snippet vs the current file at
-// head) and which reviewed-file marks still hold (from their captured content
-// fingerprint). The branch keeps moving, so both are recomputed every read.
+// annotateReview fills in derived, never-persisted state on read: each comment's
+// live anchor status and which reviewed-file marks still hold. Recomputed every
+// read because the branch keeps moving.
 func (s *Server) annotateReview(review *store.Review) {
 	if len(review.Comments) > 0 {
 		annotateComments(git.New(review.RepoPath), review.HeadRef, review.Comments)
@@ -18,10 +17,9 @@ func (s *Server) annotateReview(review *store.Review) {
 	s.annotateReviewedFiles(review)
 }
 
-// annotateComments annotates comments in place, reading each distinct file at
-// most once per side. Comments made against the working tree (an uncommitted
-// diff) are compared to the on-disk content; the rest to headRef — otherwise a
-// working-tree snippet never matches the committed head and reads as outdated.
+// annotateComments annotates comments in place, reading each file at most once
+// per side. Worktree comments compare to the on-disk content, the rest to headRef
+// (else a working-tree snippet never matches head and reads as outdated).
 func annotateComments(repo *git.Repo, headRef string, comments []store.Comment) {
 	readHead := fileReader(func(path string) (string, error) {
 		return repo.FileContent(headRef, path)
@@ -31,9 +29,8 @@ func annotateComments(repo *git.Repo, headRef string, comments []store.Comment) 
 	diffCache := map[string]*fileDiffResult{}
 	for i := range comments {
 		c := &comments[i]
-		// Prefer precise line tracking via the diff from the commit the comment
-		// was anchored against (commit_sha) to head — snippet matching can't tell
-		// a genuine move from a coincidental reappearance of the same lines.
+		// Prefer diff-based tracking (commit_sha → head): snippet matching can't
+		// tell a genuine move from a coincidental reappearance of the same lines.
 		if !c.Worktree && c.StartLine > 0 && c.CommitSHA != "" && c.CommitSHA != headSHA {
 			if annotateByDiff(repo, c, headRef, diffCache) {
 				continue
@@ -119,9 +116,8 @@ func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, cache map[
 	return true
 }
 
-// fileReader returns a cached line-reader. A readable file always yields a
-// non-nil slice (min [""]); nil is cached to mark an unreadable path
-// (deleted/renamed) so it isn't re-fetched.
+// fileReader returns a cached line-reader. Readable files yield a non-nil slice
+// (min [""]); nil is cached for an unreadable path so it isn't re-fetched.
 func fileReader(fetch func(string) (string, error)) func(string) ([]string, bool) {
 	cache := map[string][]string{}
 	return func(path string) ([]string, bool) {
@@ -139,9 +135,8 @@ func fileReader(fetch func(string) (string, error)) func(string) ([]string, bool
 	}
 }
 
-// annotateComment sets c.AnchorStatus (and Current* lines when moved) from the
-// current file lines. A comment with no captured snippet stays "current" — there
-// is nothing to verify drift against.
+// annotateComment sets the anchor status from the current file lines. A comment
+// with no captured snippet stays "current" — nothing to verify drift against.
 func annotateComment(c *store.Comment, read func(string) ([]string, bool)) {
 	markCurrent(c)
 
@@ -158,8 +153,8 @@ func annotateComment(c *store.Comment, read func(string) ([]string, bool)) {
 	if matchAt(lines, c.StartLine-1, snip) {
 		return // still anchored where it was captured
 	}
-	// Relocate only on an unambiguous hit; multiple matches can't be resolved
-	// safely, so they read as outdated rather than guessing.
+	// Relocate only on an unambiguous hit; multiple matches read as outdated
+	// rather than guessing.
 	starts := findMatches(lines, snip)
 	if len(starts) == 1 {
 		markMoved(c, starts[0]+1, starts[0]+len(snip))
@@ -192,8 +187,8 @@ func findMatches(lines, snip []string) []int {
 	return out
 }
 
-// splitLines splits file content into lines, dropping a single trailing newline
-// so it lines up with the diff's line numbering (mirrors the frontend).
+// splitLines splits content into lines, dropping one trailing newline so it lines
+// up with the diff's numbering (mirrors the frontend).
 func splitLines(content string) []string {
 	return strings.Split(strings.TrimSuffix(content, "\n"), "\n")
 }

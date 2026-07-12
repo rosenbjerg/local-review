@@ -2,11 +2,10 @@ package api
 
 import "sync"
 
-// hub fans review-change pings out to connected SSE subscribers, keyed by review
-// id. Each subscriber gets a buffered channel; publish does a non-blocking send,
-// so a stalled or dead client can never block a mutation handler. A dropped ping
-// is harmless: every ping makes the client refetch full canonical state, so at
-// most one refresh is ever owed per client (the size-1 buffer coalesces bursts).
+// hub fans review-change pings to connected SSE subscribers, keyed by review id.
+// publish sends non-blocking so a stalled client never blocks a mutation handler;
+// a dropped ping is harmless since each one triggers a full refetch, so the
+// size-1 buffer that coalesces bursts loses nothing.
 type hub struct {
 	mu      sync.Mutex
 	reviews map[int64]map[chan struct{}]struct{}
@@ -16,7 +15,6 @@ func newHub() *hub {
 	return &hub{reviews: map[int64]map[chan struct{}]struct{}{}}
 }
 
-// subscribe registers a new subscriber for a review and returns its channel.
 func (h *hub) subscribe(reviewID int64) chan struct{} {
 	ch := make(chan struct{}, 1) // size 1: coalesce, never block the publisher
 	h.mu.Lock()
@@ -28,8 +26,7 @@ func (h *hub) subscribe(reviewID int64) chan struct{} {
 	return ch
 }
 
-// unsubscribe removes a subscriber and prunes the review entry once its last
-// subscriber disconnects, so closed tabs leave nothing behind.
+// unsubscribe prunes the review entry once its last subscriber disconnects.
 func (h *hub) unsubscribe(reviewID int64, ch chan struct{}) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -43,7 +40,6 @@ func (h *hub) unsubscribe(reviewID int64, ch chan struct{}) {
 	}
 }
 
-// publish notifies every subscriber of a review that its state changed.
 func (h *hub) publish(reviewID int64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()

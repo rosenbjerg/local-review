@@ -7,11 +7,9 @@ import (
 	"strings"
 )
 
-// WithErrorLogging wraps h and logs any 4xx/5xx response to the server console
-// with the request method, path, status, and the response body (the JSON error
-// message httpError writes). 2xx responses are not logged. Wrapping the whole
-// mux is safe: static assets fall back to index.html (200), so only genuine
-// API failures are logged.
+// WithErrorLogging logs any 4xx/5xx response (with its JSON error body) to the
+// console. Wrapping the whole mux is safe: static assets fall back to index.html
+// (200), so only genuine API failures are logged.
 func WithErrorLogging(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
@@ -23,8 +21,7 @@ func WithErrorLogging(h http.Handler) http.Handler {
 	})
 }
 
-// statusRecorder captures the status code, and the body of error responses, so
-// WithErrorLogging can log them after the handler returns.
+// statusRecorder captures the status and error-response body for WithErrorLogging.
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
@@ -43,8 +40,8 @@ func (s *statusRecorder) Write(b []byte) (int, error) {
 	return s.ResponseWriter.Write(b)
 }
 
-// Flush forwards to the underlying writer so the SSE handler's Flusher type
-// assertion still succeeds through the wrapper.
+// Flush forwards to the underlying writer so the SSE handler's Flusher assertion
+// still succeeds through the wrapper.
 func (s *statusRecorder) Flush() {
 	if f, ok := s.ResponseWriter.(http.Flusher); ok {
 		f.Flush()

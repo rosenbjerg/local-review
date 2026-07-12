@@ -55,9 +55,8 @@ func main() {
 	}
 	defer st.Close()
 
-	// A non-positive retention would put the cutoff at (or after) now, deleting
-	// every draft review — so treat 0 or less as "keep drafts forever" rather
-	// than silently wiping all in-progress work.
+	// Non-positive retention would put the cutoff at/after now and wipe every
+	// draft, so treat it as "keep drafts forever".
 	if *retention <= 0 {
 		log.Print("retention-days <= 0: draft pruning disabled")
 	} else if n, err := st.PruneDrafts(time.Duration(*retention) * 24 * time.Hour); err != nil {
@@ -73,8 +72,8 @@ func main() {
 	addr := fmt.Sprintf("127.0.0.1:%d", *port)
 	url := "http://" + addr
 
-	// Bind explicitly so a failure (e.g. the port is already in use) aborts here,
-	// before we open a browser tab pointed at a server that isn't listening.
+	// Bind explicitly so a port-in-use failure aborts before we open a browser
+	// tab at a server that isn't listening.
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("listen on %s: %v", addr, err)
@@ -88,13 +87,12 @@ func main() {
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- srv.Serve(ln) }()
 
-	// The listener is up, so the browser will reach a live server.
 	if !*noOpen {
 		go openBrowser(url)
 	}
 
-	// Run until a shutdown signal or a fatal serve error, then drain in-flight
-	// requests and let the deferred st.Close() checkpoint the WAL cleanly.
+	// On signal, drain in-flight requests so the deferred st.Close() checkpoints
+	// the WAL cleanly.
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	select {
@@ -112,9 +110,8 @@ func main() {
 	}
 }
 
-// resolveDBPath returns the SQLite DB path inside the data directory, creating
-// the directory if needed. An empty dir defaults to ~/.local-review; a leading
-// ~ is expanded, and the path is made absolute.
+// resolveDBPath returns the SQLite DB path inside the data directory (created if
+// needed). An empty dir defaults to ~/.local-review; a leading ~ is expanded.
 func resolveDBPath(dir string) (string, error) {
 	if dir == "" {
 		home, err := os.UserHomeDir()
@@ -135,7 +132,6 @@ func resolveDBPath(dir string) (string, error) {
 	return filepath.Join(abs, "local-review.db"), nil
 }
 
-// expandHome resolves a leading ~ (or ~/…) to the user's home directory.
 func expandHome(p string) string {
 	if p == "~" || strings.HasPrefix(p, "~/") {
 		if home, err := os.UserHomeDir(); err == nil {
@@ -154,18 +150,16 @@ func mountStatic(mux *http.ServeMux) {
 	fileServer := http.FileServer(http.FS(sub))
 	// Serve assets, falling back to index.html for client-side routing.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// An unknown /api/* path must 404, not fall through to index.html: an API
-		// client hitting a removed/typo'd endpoint should get a JSON error, not a
-		// 200 HTML page (which also wouldn't be logged as an error).
+		// An unknown /api/* path must 404, not fall through to index.html, so an
+		// API client hitting a bad endpoint gets a JSON error rather than 200 HTML.
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"error":"not found"}`))
 			return
 		}
-		// path.Clean (not filepath.Clean): io/fs paths are always slash-separated,
-		// but filepath.Clean would emit backslashes on Windows, so the asset
-		// lookup would miss and every bundle fall back to index.html.
+		// path.Clean, not filepath.Clean: filepath.Clean emits backslashes on
+		// Windows, so the io/fs (slash-separated) lookup would miss.
 		if _, err := fs.Stat(sub, path.Clean(r.URL.Path[1:])); err == nil || r.URL.Path == "/" {
 			fileServer.ServeHTTP(w, r)
 			return
@@ -176,8 +170,8 @@ func mountStatic(mux *http.ServeMux) {
 }
 
 func openBrowser(url string) {
-	// The caller only starts this once the listener is bound, so no wait is
-	// needed — a connection to the bound socket queues until Serve accepts it.
+	// The listener is already bound, so a connection queues until Serve accepts
+	// it — no wait needed.
 	var cmd string
 	var args []string
 	switch runtime.GOOS {

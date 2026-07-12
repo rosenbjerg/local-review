@@ -8,12 +8,10 @@ import (
 	"local-review/internal/store"
 )
 
-// annotateReviewedFiles drops from review.ReviewedFiles any file whose content
-// has changed since it was marked reviewed, so new changes revert it to unread.
-// Derived state, like comment anchoring: the stored flag is never trusted on its
-// own — its captured fingerprint is re-verified against the current file on read.
-// A mark with no captured fingerprint (older rows, or a mark-time read failure)
-// can't be checked and stays reviewed.
+// annotateReviewedFiles drops any reviewed-file mark whose content changed since
+// it was set — re-verifying the captured fingerprint against the current file so
+// a later edit reverts it to unread. A mark with no fingerprint can't be checked
+// and stays reviewed.
 func (s *Server) annotateReviewedFiles(review *store.Review) {
 	if len(review.ReviewedFiles) == 0 {
 		return
@@ -32,11 +30,10 @@ func (s *Server) annotateReviewedFiles(review *store.Review) {
 	review.ReviewedFiles = kept
 }
 
-// reviewedMarkHolds reports whether a reviewed file still matches the content it
-// was reviewed against. An empty captured hash means no fingerprint was recorded
-// — nothing to compare, so the mark holds. Otherwise the current content of the
-// same side (working tree vs head) must hash to the same value; an unreadable
-// file (e.g. deleted since) hashes to "" and so counts as changed.
+// reviewedMarkHolds reports whether a mark still matches its content. An empty
+// captured hash means nothing was fingerprinted, so it holds; otherwise the
+// current same-side content must re-hash equal (a deleted/unreadable file hashes
+// to "" and so counts as changed).
 func reviewedMarkHolds(repo *git.Repo, headRef string, f store.ReviewedFile) bool {
 	if f.ContentHash == "" {
 		return true
@@ -44,9 +41,8 @@ func reviewedMarkHolds(repo *git.Repo, headRef string, f store.ReviewedFile) boo
 	return fileContentHash(repo, headRef, f.Path, f.Worktree) == f.ContentHash
 }
 
-// fileContentHash returns a fingerprint of a file's new-side content, or "" when
-// it can't be read. worktree selects the on-disk working-tree content (an
-// uncommitted diff's new side); otherwise the content at headRef.
+// fileContentHash hashes a file's new-side content — the working tree when
+// worktree is set, else the content at headRef — or "" when it can't be read.
 func fileContentHash(repo *git.Repo, headRef, path string, worktree bool) string {
 	var content string
 	var err error

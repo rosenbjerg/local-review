@@ -53,9 +53,8 @@ func (s *Server) listRepos() ([]string, error) {
 	return repos, nil
 }
 
-// repoFor resolves a client-supplied repo name to a Repo, rejecting anything
-// that isn't a single path segment naming a git repo under the root (guards
-// against path traversal).
+// repoFor resolves a client-supplied repo name to a Repo, rejecting anything that
+// isn't a single path segment naming a git repo under the root (path-traversal guard).
 func (s *Server) repoFor(name string) (*git.Repo, error) {
 	if name == "" {
 		return nil, errString("repo is required")
@@ -152,8 +151,8 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	// Resolve base to its merge-base with head so the review shows only what
-	// head introduces. Default to the main branch when no base is given.
+	// Resolve base to its merge-base with head so the review shows only what head
+	// introduces; default to the main branch when none is given.
 	baseRef := base
 	if baseRef == "" {
 		baseRef = repo.MainBranch()
@@ -168,8 +167,7 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	base = mb
-	// When uncommitted is set, diff base against the working tree (committed +
-	// staged + unstaged tracked changes) instead of the head commit.
+	// uncommitted diffs base against the working tree instead of the head commit.
 	uncommitted := r.URL.Query().Get("uncommitted") == "true"
 	var diff []git.FileDiff
 	if uncommitted {
@@ -184,12 +182,10 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"base": base, "head": head, "files": diff})
 }
 
-// readFileContent resolves the file requested by r, shared by handleFile and
-// handleBlob. It validates the repo and path, then reads the content from the
-// working tree (?worktree=true) or the given ref — falling back to the working
-// tree when the ref lacks the file (an uncommitted new file, or a stale request
-// mid-mode-switch). On any failure it writes the error response and returns
-// ok=false; on success it returns the content and validated path.
+// readFileContent reads the file requested by r (shared by handleFile/handleBlob):
+// the working tree (?worktree=true) or the given ref, falling back to the working
+// tree when the ref lacks the file. On failure it writes the error and returns
+// ok=false.
 func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (content, path string, ok bool) {
 	repo, ok := s.repoParam(w, r)
 	if !ok {
@@ -202,8 +198,7 @@ func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (conten
 	}
 	var err error
 	if r.URL.Query().Get("worktree") == "true" {
-		// worktree reads the on-disk (uncommitted) new side, which git show can't
-		// reach — e.g. a new file that isn't committed at the head ref.
+		// worktree reads the on-disk new side, which git show can't reach.
 		content, err = repo.WorktreeFile(path)
 	} else {
 		ref := r.URL.Query().Get("ref")
@@ -213,9 +208,8 @@ func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (conten
 		}
 		content, err = repo.FileContent(ref, path)
 		if err != nil {
-			// The ref may not have the file — e.g. an uncommitted new file shown
-			// in an uncommitted diff, or a stale request mid-mode-switch. If it's
-			// on disk, serve that instead of failing.
+			// The ref may lack the file (uncommitted new file, or a stale
+			// mid-mode-switch request); serve the on-disk copy instead of failing.
 			if wt, wtErr := repo.WorktreeFile(path); wtErr == nil {
 				content, err = wt, nil
 			}
@@ -236,9 +230,8 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"path": path, "ref": r.URL.Query().Get("ref"), "content": content})
 }
 
-// handleBlob serves a file's raw bytes with an image-friendly Content-Type, for
-// <img> rendering of image files. Same ref/worktree resolution (and working-tree
-// fallback) as handleFile.
+// handleBlob serves a file's raw bytes with an image-friendly Content-Type for
+// <img> rendering.
 func (s *Server) handleBlob(w http.ResponseWriter, r *http.Request) {
 	content, path, ok := s.readFileContent(w, r)
 	if !ok {
@@ -249,8 +242,8 @@ func (s *Server) handleBlob(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(content))
 }
 
-// mimeForPath maps a file extension to a Content-Type, covering the image types
-// the UI renders; falls back to the stdlib table, then octet-stream.
+// mimeForPath maps an extension to a Content-Type (the image types the UI
+// renders), falling back to the stdlib table, then octet-stream.
 func mimeForPath(path string) string {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".png":
@@ -306,9 +299,8 @@ func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) {
 	}
 	base := req.Base
 	if base == "" {
-		// Store the main branch name (readable in the export). The diff
-		// endpoint resolves it to the merge-base with head at query time,
-		// so the review still shows only what head introduces.
+		// Store the main branch name (readable in the export); the diff endpoint
+		// resolves it to the merge-base with head at query time.
 		base = repo.MainBranch()
 	}
 	if base == "" {
@@ -353,11 +345,10 @@ func (s *Server) handleGetReview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, review)
 }
 
-// handleEvents streams review-change notifications to the client over SSE. It
-// emits a "changed" event whenever a comment or reviewed-file of this review is
-// mutated (by any tab); the client responds by refetching the review. Keepalive
-// comments keep the stream warm and surface a half-open connection as a write
-// error, so an unclean disconnect still unsubscribes and prunes the hub entry.
+// handleEvents streams review-change pings over SSE: a "changed" event on every
+// comment/reviewed-file mutation of this review (by any tab), which the client
+// answers by refetching. Keepalives surface a half-open connection as a write
+// error, so an unclean disconnect still unsubscribes.
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
@@ -395,8 +386,8 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			}
 			flusher.Flush()
 		case <-keepalive.C:
-			// Comment line (never triggers EventSource.onmessage). Forces a
-			// write on an idle stream so a dead connection errors out here.
+			// Comment line (no onmessage): forces a write on an idle stream so a
+			// dead connection errors out here.
 			if _, err := fmt.Fprint(w, ": keepalive\n\n"); err != nil {
 				return
 			}
@@ -417,8 +408,8 @@ func (s *Server) handleDeleteReview(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// handleResetReview clears all comments and reviewed-file marks from a review,
-// keeping the review itself. Notifies subscribers so other tabs empty out too.
+// handleResetReview clears a review's comments and reviewed-file marks, keeping
+// the review itself.
 func (s *Server) handleResetReview(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
@@ -474,9 +465,8 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, errString("filePath is required"))
 		return
 	}
-	// Capture a fingerprint of the file's current content so a later change can
-	// revert it to unread. Best-effort: an unreadable file leaves the hash empty,
-	// which the staleness check treats as "can't tell" and keeps reviewed.
+	// Fingerprint the current content so a later change can revert it to unread.
+	// Best-effort: an unreadable file leaves the hash empty (kept reviewed).
 	var contentHash string
 	if req.Reviewed {
 		if repoPath, headRef, err := s.Store.ReviewRepoHead(id); err == nil {
@@ -520,12 +510,11 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		req.Type = "suggestion"
 	}
 	if req.Author == "" {
-		// An omitted author means an API client that doesn't set the field —
-		// in practice the coding agent. The browser app sends "reviewer".
+		// An omitted author is an API client (the coding agent); the browser sends "reviewer".
 		req.Author = "agent"
 	}
-	// Record which head commit this comment anchors to. Best-effort: a comment
-	// is still valid if the repo can't be reached, so failures leave it empty.
+	// Record the head commit this comment anchors to. Best-effort: failures leave
+	// it empty (the comment is still valid).
 	var repo *git.Repo
 	var headRef, sha string
 	if repoPath, hr, err := s.Store.ReviewRepoHead(id); err == nil {
@@ -638,8 +627,7 @@ func (s *Server) handleAddReply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Author == "" {
-		// An omitted author means an API client that doesn't set the field —
-		// in practice the coding agent. The browser app sends "reviewer".
+		// An omitted author is an API client (the coding agent); the browser sends "reviewer".
 		req.Author = "agent"
 	}
 	rep, reviewID, err := s.Store.AddReply(commentID, req.Body, req.Author)
@@ -685,18 +673,15 @@ func (s *Server) handleDeleteReply(w http.ResponseWriter, r *http.Request) {
 
 // --- helpers ---
 
-// notify records a mutation on a review: it bumps the review's updated_at and
-// pings SSE subscribers so every open tab refetches. Every write handler ends
-// with this. Touch failures are non-fatal (the mutation already landed), so its
-// error is dropped just as the inline callers did.
+// notify bumps the review's updated_at and pings SSE subscribers so every open
+// tab refetches. A Touch failure is non-fatal (the mutation already landed).
 func (s *Server) notify(reviewID int64) {
 	_ = s.Store.Touch(reviewID)
 	s.hub.publish(reviewID)
 }
 
-// decodeBody decodes the JSON request body into T. On malformed input it writes
-// a 400 and returns ok=false, signalling the handler to return without writing
-// anything further.
+// decodeBody decodes the JSON body into T, writing a 400 and returning ok=false
+// on malformed input.
 func decodeBody[T any](w http.ResponseWriter, r *http.Request) (req T, ok bool) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpError(w, http.StatusBadRequest, err)
@@ -725,8 +710,8 @@ func httpError(w http.ResponseWriter, code int, err error) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 }
 
-// storeError maps a store error to a response: mutating a comment/reply id that
-// doesn't exist surfaces as sql.ErrNoRows and should be a 404, not a 500.
+// storeError maps a store error to a response: a missing comment/reply id is
+// sql.ErrNoRows → 404, not 500.
 func storeError(w http.ResponseWriter, err error) {
 	if errors.Is(err, sql.ErrNoRows) {
 		httpError(w, http.StatusNotFound, errString("not found"))
@@ -739,9 +724,8 @@ type errString string
 
 func (e errString) Error() string { return string(e) }
 
-// validRef rejects empty refs and refs git would treat as an option (leading
-// "-"). Legitimate git ref names never start with "-", so this is safe and
-// prevents a client-supplied ref like "--output=/path" from becoming a git flag.
+// validRef rejects empty refs and refs starting with "-" (which git would treat
+// as a flag, e.g. "--output=/path"); legitimate ref names never start with "-".
 func validRef(ref string) error {
 	if ref == "" {
 		return errString("empty ref")
