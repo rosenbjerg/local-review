@@ -77,7 +77,13 @@ web/src/
 - **Backend is source of truth** for review state; React caches it and mutates
   via the API. Discrete actions (add/delete/toggle) save immediately.
 - **Comments anchor to the new side** (HEAD path + line) and store a captured
-  `snippet` so feedback survives line drift. Each comment also records the
+  `snippet` so feedback survives line drift. The **server** captures that snippet
+  from the anchored range at add time (`captureSnippet` in `annotate.go`, reading
+  the same side the staleness check will — working tree for a `worktree` anchor,
+  else `head_ref`), so every client — the browser and API agents alike — sends
+  only the line range; a bogus client-supplied snippet can't drift the record and
+  the stored text always matches the file. Line-0 file comments keep an empty
+  snippet. Each comment also records the
   `commit_sha` it was anchored against (resolved live at add time; best-effort,
   may be empty) — an immutable record of the original position and when it held.
   A `worktree` flag records whether it was anchored against an uncommitted

@@ -63,11 +63,11 @@ export const api = {
 
   addComment: (
     reviewId: number,
+    // No snippet: the server captures it from the anchored line range.
     c: {
       filePath: string;
       startLine: number;
       endLine: number;
-      snippet: string;
       type: CommentType;
       body: string;
       worktree: boolean;

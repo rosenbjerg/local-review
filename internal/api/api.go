@@ -488,11 +488,12 @@ type addCommentReq struct {
 	FilePath  string `json:"filePath"`
 	StartLine int    `json:"startLine"`
 	EndLine   int    `json:"endLine"`
-	Snippet   string `json:"snippet"`
 	Type      string `json:"type"`
 	Body      string `json:"body"`
 	Author    string `json:"author"`
 	Worktree  bool   `json:"worktree"`
+	// Snippet is deliberately absent: the server captures it from the anchored
+	// range (see captureSnippet) so every client sends only the line numbers.
 }
 
 func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
@@ -522,12 +523,19 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		repo, headRef = git.New(repoPath), hr
 		sha, _ = repo.ResolveSHA(hr)
 	}
+	// Capture the snippet from the anchored lines ourselves rather than trust the
+	// client's copy, so the browser and API agents alike only send the range and
+	// the stored text always matches the file. Line-0 file comments stay empty.
+	snippet := ""
+	if req.StartLine > 0 {
+		snippet = captureSnippet(repo, headRef, req.FilePath, req.StartLine, req.EndLine, req.Worktree)
+	}
 	c, err := s.Store.AddComment(store.Comment{
 		ReviewID:  id,
 		FilePath:  req.FilePath,
 		StartLine: req.StartLine,
 		EndLine:   req.EndLine,
-		Snippet:   req.Snippet,
+		Snippet:   snippet,
 		Type:      req.Type,
 		Body:      req.Body,
 		Author:    req.Author,

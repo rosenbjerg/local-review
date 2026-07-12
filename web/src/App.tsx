@@ -309,7 +309,6 @@ export default function App() {
     filePath: string;
     startLine: number;
     endLine: number;
-    snippet: string;
     body: string;
     type: CommentType;
   }): Promise<boolean> {
@@ -317,7 +316,8 @@ export default function App() {
     setError(null);
     try {
       // Anchor to the working tree when reviewing uncommitted changes, so the
-      // snippet is later checked against it and doesn't read as instantly outdated.
+      // server captures the snippet from it (and the staleness check later reads
+      // the same side) rather than from head, which would read as instantly outdated.
       const c = await api.addComment(review.id, { ...args, worktree: effectiveUncommitted });
       setComments((cs) => [...cs, c]);
       return true;
@@ -558,11 +558,11 @@ git diff ${review.baseRef}...${review.headRef}
 Hunt for real defects — bugs, broken edge cases, race conditions, security holes, missing error handling, violated invariants. Read the surrounding code, not just the diff, to judge correctness. Favour a few high-confidence findings over noise.
 
 # File a comment. Anchor it to the NEW side: the file's post-change path and its
-# new-side line range, with the exact new-side lines as "snippet" so the comment
-# survives later edits. type is one of: bug | suggestion | question | nit.
+# new-side line range (the server captures the code snippet from that range, so
+# you don't send it). type is one of: bug | suggestion | question | nit.
 curl -s -X POST ${origin}/api/reviews/${review.id}/comments \\
   -H 'Content-Type: application/json' \\
-  -d '{"filePath": "path/to/file", "startLine": 42, "endLine": 45, "snippet": "the exact lines as they appear on the new side", "type": "bug", "body": "what is wrong and why"}'
+  -d '{"filePath": "path/to/file", "startLine": 42, "endLine": 45, "type": "bug", "body": "what is wrong and why"}'
 
 # Re-read only the threads you started, with any reviewer replies nested under
 # each comment's "replies" (JSON). Poll this to continue the conversation.

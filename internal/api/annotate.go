@@ -192,3 +192,36 @@ func findMatches(lines, snip []string) []int {
 func splitLines(content string) []string {
 	return strings.Split(strings.TrimSuffix(content, "\n"), "\n")
 }
+
+// captureSnippet reads the anchored range's text at add time from the same side
+// the staleness check will later read — the working tree for an uncommitted
+// anchor, else headRef — so the stored snippet matches what annotateComment
+// compares it against. start/end are 1-based inclusive. Best-effort: a nil repo,
+// unreadable file, or start past EOF yields "" (an empty snippet always reads as
+// current), and end is clamped to the file's length.
+func captureSnippet(repo *git.Repo, headRef, path string, start, end int, worktree bool) string {
+	if repo == nil || start <= 0 {
+		return ""
+	}
+	var content string
+	var err error
+	if worktree {
+		content, err = repo.WorktreeFile(path)
+	} else {
+		content, err = repo.FileContent(headRef, path)
+	}
+	if err != nil {
+		return ""
+	}
+	lines := splitLines(content)
+	if start > len(lines) {
+		return ""
+	}
+	if end > len(lines) {
+		end = len(lines)
+	}
+	if end < start {
+		end = start
+	}
+	return strings.Join(lines[start-1:end], "\n")
+}
