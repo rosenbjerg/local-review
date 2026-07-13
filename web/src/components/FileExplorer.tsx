@@ -9,6 +9,7 @@ interface Props {
   selected: string | null;
   onSelect: (path: string) => void;
   onToggleReviewed: (path: string, reviewed: boolean) => void;
+  onToggleFolder: (paths: string[], reviewed: boolean) => void;
   onAddFile: () => void;
   searchRef?: RefObject<HTMLInputElement>;
 }
@@ -77,6 +78,18 @@ function compress(dir: DirNode): DirNode {
   return d;
 }
 
+// Every file path under a folder node. During a search the tree is built from the
+// matching files only, so this naturally covers just the visible matches.
+function collectFilePaths(node: DirNode): string[] {
+  const out: string[] = [];
+  const walk = (n: TreeNode) => {
+    if (n.kind === "file") out.push(n.path);
+    else n.children.forEach(walk);
+  };
+  walk(node);
+  return out;
+}
+
 // Wrap each occurrence of the (already-lowercased) needle in a <mark>. Runs on
 // each rendered folder/file name so a match inside any path segment shows.
 function highlightMatch(text: string, needle: string): ReactNode {
@@ -109,6 +122,7 @@ export function FileExplorer({
   selected,
   onSelect,
   onToggleReviewed,
+  onToggleFolder,
   onAddFile,
   searchRef,
 }: Props) {
@@ -182,6 +196,18 @@ export function FileExplorer({
               }
             }}
           >
+            <input
+              type="checkbox"
+              checked={done}
+              ref={(el) => {
+                // Partial → indeterminate; can't be set via a JSX attribute.
+                if (el) el.indeterminate = stats.reviewed > 0 && stats.reviewed < stats.total;
+              }}
+              title="Mark all files in this folder reviewed"
+              aria-label={`Mark ${n.name} folder reviewed`}
+              onChange={(e) => onToggleFolder(collectFilePaths(n), e.target.checked)}
+              onClick={(e) => e.stopPropagation()}
+            />
             <Chevron open={!isCollapsed} size={10} className="tree-chevron" />
             <span className={`tree-folder${done ? " reviewed" : ""}`}>
               {highlightMatch(n.name, q)}

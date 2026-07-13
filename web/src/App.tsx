@@ -486,28 +486,30 @@ export default function App() {
     );
   }
 
-  async function toggleReviewed(path: string, reviewed: boolean) {
+  // Mark/unmark a set of files at once (one file, or every file under a folder).
+  async function setReviewedPaths(paths: string[], reviewed: boolean) {
+    if (!review || paths.length === 0) return;
     setError(null);
-    setReviewedFiles((s) => {
-      const n = new Set(s);
-      if (reviewed) n.add(path);
-      else n.delete(path);
-      return n;
-    });
-    if (!review) return;
-    try {
-      // Fingerprint the side on screen (uncommitted ⇒ working tree), like addComment.
-      await api.setReviewed(review.id, path, reviewed, effectiveUncommitted);
-    } catch (e) {
+    const apply = (add: boolean) =>
       setReviewedFiles((s) => {
         const n = new Set(s);
-        if (reviewed) n.delete(path);
-        else n.add(path);
+        for (const p of paths) {
+          if (add) n.add(p);
+          else n.delete(p);
+        }
         return n;
       });
+    apply(reviewed); // optimistic
+    try {
+      // Fingerprint the side on screen (uncommitted ⇒ working tree), like addComment.
+      await api.setReviewed(review.id, paths, reviewed, effectiveUncommitted);
+    } catch (e) {
+      apply(!reviewed); // rollback the whole batch
       setError((e as Error).message);
     }
   }
+
+  const toggleReviewed = (path: string, reviewed: boolean) => setReviewedPaths([path], reviewed);
 
   function estFileHeight(f: FileDiff): number {
     const path = f.newPath || f.oldPath;
@@ -893,6 +895,7 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
               selected={selectedFile}
               onSelect={jumpToFile}
               onToggleReviewed={toggleReviewed}
+              onToggleFolder={setReviewedPaths}
               onAddFile={() => setShowAddFile(true)}
               searchRef={explorerSearchRef}
             />

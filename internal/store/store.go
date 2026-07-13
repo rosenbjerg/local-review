@@ -379,17 +379,38 @@ func (s *Store) ListReviewedFilesFull(reviewID int64) ([]ReviewedFile, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) SetFileReviewed(reviewID int64, path string, reviewed bool, contentHash string, worktree bool) error {
-	if reviewed {
-		_, err := s.db.Exec(
-			`INSERT INTO reviewed_files (review_id, file_path, reviewed_at, content_hash, worktree) VALUES (?,?,?,?,?)
-			 ON CONFLICT(review_id, file_path) DO UPDATE SET
-			   reviewed_at=excluded.reviewed_at, content_hash=excluded.content_hash, worktree=excluded.worktree`,
-			reviewID, path, nowStr(), contentHash, worktree)
+// FileReviewMark pairs a path with the content fingerprint captured for it (empty
+// when unmarking). One batch shares a single reviewed flag and worktree side.
+type FileReviewMark struct {
+	Path        string
+	ContentHash string
+}
+
+// SetFilesReviewed marks (or unmarks) a set of files in one transaction, so a
+// folder-level toggle lands atomically and fires a single change notification.
+// The upsert refreshes the fingerprint, so re-reviewing a changed file re-pins it.
+func (s *Store) SetFilesReviewed(reviewID int64, marks []FileReviewMark, reviewed, worktree bool) error {
+	tx, err := s.db.Begin()
+	if err != nil {
 		return err
 	}
-	_, err := s.db.Exec(`DELETE FROM reviewed_files WHERE review_id=? AND file_path=?`, reviewID, path)
-	return err
+	defer tx.Rollback()
+	now := nowStr()
+	for _, m := range marks {
+		if reviewed {
+			_, err = tx.Exec(
+				`INSERT INTO reviewed_files (review_id, file_path, reviewed_at, content_hash, worktree) VALUES (?,?,?,?,?)
+				 ON CONFLICT(review_id, file_path) DO UPDATE SET
+				   reviewed_at=excluded.reviewed_at, content_hash=excluded.content_hash, worktree=excluded.worktree`,
+				reviewID, m.Path, now, m.ContentHash, worktree)
+		} else {
+			_, err = tx.Exec(`DELETE FROM reviewed_files WHERE review_id=? AND file_path=?`, reviewID, m.Path)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *Store) ListReviews() ([]Review, error) {

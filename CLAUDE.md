@@ -162,9 +162,13 @@ web/src/
   current content of that side and drops any file whose fingerprint no longer
   matches — so a file that changes after being marked reviewed reverts to unread.
   An empty fingerprint (older rows, or a mark-time read failure) can't be checked
-  and stays reviewed. `SetFileReviewed` upserts (`DO UPDATE`), so re-reviewing a
+  and stays reviewed. `SetFilesReviewed` upserts (`DO UPDATE`), so re-reviewing a
   changed file refreshes the fingerprint. (Surfaces on the next review refetch —
   SSE ping or focus — not instantly on an out-of-band push, same as the diff.)
+  It writes a whole batch in one transaction with a single change ping, so a
+  **folder-level toggle** (mark/unmark every file under a folder) lands atomically.
+  The API always takes a `filePaths` array — a single file is just a one-element
+  batch.
 - **Live multi-tab sync** via SSE: `GET /api/reviews/{id}/events` streams a
   `data: changed` ping whenever a comment or reviewed-file of that review is
   mutated (the four mutation handlers call `hub.publish`). The client refetches

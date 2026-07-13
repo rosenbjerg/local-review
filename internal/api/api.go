@@ -448,9 +448,9 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 }
 
 type setReviewedReq struct {
-	FilePath string `json:"filePath"`
-	Reviewed bool   `json:"reviewed"`
-	Worktree bool   `json:"worktree"`
+	FilePaths []string `json:"filePaths"` // one file, or every file under a folder
+	Reviewed  bool     `json:"reviewed"`
+	Worktree  bool     `json:"worktree"`
 }
 
 func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
@@ -462,17 +462,31 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if req.FilePath == "" {
-		httpError(w, http.StatusBadRequest, errString("filePath is required"))
-		return
-	}
-	var contentHash string
+	// Capture the fingerprint of each file's on-screen side — dropped later if the
+	// content changes (see reviewed.go).
+	var repo *git.Repo
+	var headRef string
 	if req.Reviewed {
-		if repoPath, headRef, err := s.Store.ReviewRepoHead(id); err == nil {
-			contentHash = fileContentHash(git.New(repoPath), headRef, req.FilePath, req.Worktree)
+		if repoPath, hr, err := s.Store.ReviewRepoHead(id); err == nil {
+			repo, headRef = git.New(repoPath), hr
 		}
 	}
-	if err := s.Store.SetFileReviewed(id, req.FilePath, req.Reviewed, contentHash, req.Worktree); err != nil {
+	marks := make([]store.FileReviewMark, 0, len(req.FilePaths))
+	for _, p := range req.FilePaths {
+		if p == "" {
+			continue
+		}
+		hash := ""
+		if req.Reviewed && repo != nil {
+			hash = fileContentHash(repo, headRef, p, req.Worktree)
+		}
+		marks = append(marks, store.FileReviewMark{Path: p, ContentHash: hash})
+	}
+	if len(marks) == 0 {
+		httpError(w, http.StatusBadRequest, errString("filePaths is required"))
+		return
+	}
+	if err := s.Store.SetFilesReviewed(id, marks, req.Reviewed, req.Worktree); err != nil {
 		httpError(w, http.StatusInternalServerError, err)
 		return
 	}

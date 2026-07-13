@@ -111,10 +111,10 @@ export const api = {
 
   deleteReply: (id: number) => req<void>(`/api/replies/${id}`, { method: "DELETE" }),
 
-  setReviewed: (reviewId: number, filePath: string, reviewed: boolean, worktree: boolean) =>
+  setReviewed: (reviewId: number, filePaths: string[], reviewed: boolean, worktree: boolean) =>
     req<void>(`/api/reviews/${reviewId}/reviewed`, {
       method: "POST",
-      body: JSON.stringify({ filePath, reviewed, worktree }),
+      body: JSON.stringify({ filePaths, reviewed, worktree }),
     }),
 
   export: (reviewId: number, instructions?: boolean) => {
