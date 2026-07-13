@@ -852,6 +852,15 @@ textarea:focus-visible {
 .row-commented .gutter {
   border-left: 2px solid var(--accent);
 }
+/* The line range of the thread you jumped to (n/p or the comments panel) stays
+   lit until another is picked, so it's clear which lines the thread is about.
+   !important to override the add/del row shades, like .row-selected. */
+.row-comment-active {
+  background: var(--sel-bg) !important;
+}
+.row-comment-active .gutter {
+  border-left: 3px solid var(--accent);
+}
 
 /* Inline threads */
 .thread-row > td {

@@ -952,6 +952,7 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
                     onToggleReviewed={(r) => toggleReviewed(path, r)}
                     expandTarget={expandTarget}
                     expandComment={expandComment}
+                    activeComment={activeComment}
                   />
                 </LazyFile>
               );
