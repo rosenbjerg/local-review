@@ -37,6 +37,11 @@ export const api = {
     return req<DiffResponse>(`/api/diff?${p.toString()}`);
   },
 
+  files: (repo: string, ref: string) => {
+    const p = new URLSearchParams({ repo, ref });
+    return req<{ files: string[] }>(`/api/files?${p.toString()}`);
+  },
+
   file: (repo: string, path: string, ref: string, worktree?: boolean) => {
     const p = new URLSearchParams({ repo, path, ref });
     if (worktree) p.set("worktree", "true");

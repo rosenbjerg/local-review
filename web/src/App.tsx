@@ -7,6 +7,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { api } from "./api";
+import { AddFileModal } from "./components/AddFileModal";
 import { AgentPromptsModal } from "./components/AgentPromptsModal";
 import { CommentsPanel } from "./components/CommentsPanel";
 import type { CommentActions } from "./components/CommentThread";
@@ -47,6 +48,11 @@ export default function App() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [reviewedFiles, setReviewedFiles] = useState<Set<string>>(new Set());
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  // Files the branch didn't change, opened so they can be commented on. Session
+  // state (not persisted): comment-bearing ones re-derive from `comments` on
+  // reload; uncommented ones are transient.
+  const [openedFiles, setOpenedFiles] = useState<string[]>([]);
+  const [showAddFile, setShowAddFile] = useState(false);
   const [uncommitted, setUncommitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +158,7 @@ export default function App() {
     setComments([]);
     setReviewedFiles(new Set());
     setSelectedFile(null);
+    setOpenedFiles([]);
     setExpandTarget(null);
     setBase("");
     setUncommitted(false);
@@ -463,6 +470,17 @@ export default function App() {
     document.getElementById(`file-${path}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  function openFile(path: string) {
+    setShowAddFile(false);
+    setOpenedFiles((s) => (s.includes(path) ? s : [...s, path]));
+    setSelectedFile(path);
+    // The card mounts on the next render; defer the scroll until it exists.
+    setTimeout(
+      () => document.getElementById(`file-${path}`)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      50
+    );
+  }
+
   async function toggleReviewed(path: string, reviewed: boolean) {
     setError(null);
     setReviewedFiles((s) => {
@@ -557,7 +575,25 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
   // Separate from the raw checkbox so a head change doesn't mutate `uncommitted`
   // and fire the diff-refetch effect on top of the auto-start.
   const effectiveUncommitted = uncommitted && headIsCurrent;
-  const orderedDiffFiles = useMemo(() => orderedFiles(files), [files]);
+  // Fold in synthetic cards for paths the diff didn't touch but that were opened
+  // to comment on — explicitly (openedFiles) or because a comment (browser- or
+  // agent-authored) already anchors there. Deriving from comments both surfaces
+  // agent comments on non-changed files and restores opened files after a reload.
+  const allFiles = useMemo(() => {
+    const inDiff = new Set(files.map((f) => f.newPath || f.oldPath));
+    const extras = new Set<string>();
+    for (const p of openedFiles) if (p && !inDiff.has(p)) extras.add(p);
+    for (const c of comments) if (c.filePath && !inDiff.has(c.filePath)) extras.add(c.filePath);
+    const synthetic: FileDiff[] = [...extras].map((p) => ({
+      oldPath: p,
+      newPath: p,
+      status: "unchanged",
+      hunks: [],
+    }));
+    return [...files, ...synthetic];
+  }, [files, openedFiles, comments]);
+
+  const orderedDiffFiles = useMemo(() => orderedFiles(allFiles), [allFiles]);
   const orderedFilePaths = useMemo(
     () => orderedDiffFiles.map((f) => f.newPath || f.oldPath),
     [orderedDiffFiles]
@@ -615,7 +651,7 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
       }
       // Modals suppress the shortcuts below; the Modal shell owns Escape, so only
       // `?`-toggles-help stays here.
-      if (showHelp || confirmingReset || showExport || showPrompts) {
+      if (showHelp || confirmingReset || showExport || showPrompts || showAddFile) {
         if (showHelp && e.key === "?") {
           e.preventDefault();
           setShowHelp(false);
@@ -663,6 +699,7 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
     showExport,
     showPrompts,
     showHelp,
+    showAddFile,
     confirmingReset,
     loading,
     repo,
@@ -842,12 +879,13 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
         >
           <aside className="explorer-column">
             <FileExplorer
-              files={files}
+              files={allFiles}
               comments={comments}
               reviewed={reviewedFiles}
               selected={selectedFile}
               onSelect={jumpToFile}
               onToggleReviewed={toggleReviewed}
+              onAddFile={() => setShowAddFile(true)}
             />
           </aside>
           <div
@@ -863,13 +901,13 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
             onKeyDown={(e) => onResizeKey(e, "left")}
           />
           <div className="diff-column" ref={diffColRef}>
-            {files.length === 0 && loading && (
+            {allFiles.length === 0 && loading && (
               <div className="empty">
                 <span className="spinner" aria-hidden="true" />
                 Loading diff…
               </div>
             )}
-            {files.length === 0 && !loading && (
+            {allFiles.length === 0 && !loading && (
               <div className="empty">No changes between base and head.</div>
             )}
             {orderedDiffFiles.map((f) => {
@@ -920,6 +958,16 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
             />
           </aside>
         </div>
+      )}
+
+      {showAddFile && review && (
+        <AddFileModal
+          repo={repo}
+          headRef={review.headRef}
+          present={new Set(orderedFilePaths)}
+          onSelect={openFile}
+          onClose={() => setShowAddFile(false)}
+        />
       )}
 
       {showExport && review && (

@@ -121,6 +121,25 @@ func (r *Repo) FileContent(ref, path string) (string, error) {
 	return r.run("show", ref+":"+path)
 }
 
+// ListFiles returns the tracked file paths at ref, for the "comment on a
+// non-changed file" picker. quotePath=false keeps non-ASCII paths verbatim, to
+// match the diff parser (see diffArgs).
+func (r *Repo) ListFiles(ref string) ([]string, error) {
+	out, err := r.run("-c", "core.quotePath=false", "ls-tree", "-r", "--name-only", ref)
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	sc := bufio.NewScanner(strings.NewReader(out))
+	sc.Buffer(make([]byte, 1024*1024), 16*1024*1024)
+	for sc.Scan() {
+		if line := sc.Text(); line != "" {
+			files = append(files, line)
+		}
+	}
+	return files, sc.Err()
+}
+
 // Reads the working-tree (on-disk) side, which git show can't. The path is
 // confined to the repo below — no ".." escape, no reaching into .git.
 func (r *Repo) WorktreeFile(path string) (string, error) {

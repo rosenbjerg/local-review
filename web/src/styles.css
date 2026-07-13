@@ -440,6 +440,9 @@ textarea:focus-visible {
   color: var(--info);
   border-color: var(--info-border);
 }
+.status-unchanged {
+  color: var(--muted);
+}
 
 /* File explorer */
 .explorer {
@@ -463,6 +466,11 @@ textarea:focus-visible {
 .explorer-head .muted {
   font-weight: 400;
   font-size: 11px;
+}
+.explorer-add {
+  padding: 0 6px;
+  font-size: 16px;
+  line-height: 1.4;
 }
 .explorer-list {
   padding: 4px 0;
@@ -518,6 +526,9 @@ textarea:focus-visible {
 }
 .fstat-modified {
   color: var(--accent);
+}
+.fstat-unchanged {
+  color: var(--muted);
 }
 .fname {
   font-family: var(--font-mono);
@@ -1105,6 +1116,60 @@ textarea:focus-visible {
   font-weight: 600;
   color: var(--muted);
 }
+/* Add-file picker */
+.addfile-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 10px;
+  padding: 12px 16px 16px;
+}
+.addfile-search {
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.addfile-empty {
+  font-size: 13px;
+  padding: 2px;
+}
+.addfile-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  max-height: 50vh;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.addfile-list:empty {
+  display: none;
+}
+.addfile-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  padding: 5px 10px;
+}
+.addfile-item.active {
+  background: var(--bg-hover);
+}
+.addfile-present {
+  margin-left: auto;
+  font-size: 11px;
+  flex: none;
+}
+
 .confirm-body {
   padding: 16px;
   font-size: 14px;

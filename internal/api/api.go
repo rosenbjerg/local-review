@@ -80,6 +80,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/repos", s.handleRepos)
 	mux.HandleFunc("GET /api/branches", s.handleBranches)
 	mux.HandleFunc("GET /api/diff", s.handleDiff)
+	mux.HandleFunc("GET /api/files", s.handleFiles)
 	mux.HandleFunc("GET /api/file", s.handleFile)
 	mux.HandleFunc("GET /api/blob", s.handleBlob)
 
@@ -175,6 +176,26 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"base": base, "head": head, "files": diff})
+}
+
+// handleFiles lists the tracked files at ref, feeding the picker that lets a
+// reviewer comment on a file the branch didn't change.
+func (s *Server) handleFiles(w http.ResponseWriter, r *http.Request) {
+	repo, ok := s.repoParam(w, r)
+	if !ok {
+		return
+	}
+	ref := r.URL.Query().Get("ref")
+	if err := validRef(ref); err != nil {
+		httpError(w, http.StatusBadRequest, err)
+		return
+	}
+	files, err := repo.ListFiles(ref)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, map[string]any{"files": files})
 }
 
 func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (content, path string, ok bool) {

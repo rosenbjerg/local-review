@@ -9,6 +9,7 @@ interface Props {
   selected: string | null;
   onSelect: (path: string) => void;
   onToggleReviewed: (path: string, reviewed: boolean) => void;
+  onAddFile: () => void;
 }
 
 const STATUS_MARK: Record<string, string> = {
@@ -16,6 +17,7 @@ const STATUS_MARK: Record<string, string> = {
   modified: "M",
   deleted: "D",
   renamed: "R",
+  unchanged: "U",
 };
 
 type FileNode = { kind: "file"; name: string; path: string; file: FileDiff };
@@ -81,6 +83,7 @@ export function FileExplorer({
   selected,
   onSelect,
   onToggleReviewed,
+  onAddFile,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -186,9 +189,18 @@ export function FileExplorer({
     <div className="explorer">
       <div className="explorer-head">
         <span>Files</span>
+        <span className="spacer" />
         <span className="muted">
           {reviewedCount}/{files.length} reviewed
         </span>
+        <button
+          className="btn btn-icon explorer-add"
+          onClick={onAddFile}
+          title="Comment on a file the branch didn't change"
+          aria-label="Add a file to comment on"
+        >
+          +
+        </button>
       </div>
       <div className="explorer-list">{renderNodes(tree, 0)}</div>
     </div>

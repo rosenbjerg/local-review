@@ -6,7 +6,9 @@ export interface Branch {
 
 export type LineKind = "context" | "add" | "del";
 
-export type FileStatus = "added" | "modified" | "deleted" | "renamed";
+// "unchanged" is a synthetic status for a file the diff didn't touch, opened so
+// the reviewer (or an agent) can comment on it; such a FileDiff has no hunks.
+export type FileStatus = "added" | "modified" | "deleted" | "renamed" | "unchanged";
 
 export interface DiffLine {
   kind: LineKind;
