@@ -2,6 +2,7 @@ export interface Branch {
   name: string;
   isCurrent: boolean;
   isMain: boolean;
+  isRemote: boolean;
 }
 
 export type LineKind = "context" | "add" | "del";

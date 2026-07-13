@@ -35,6 +35,7 @@ type Branch struct {
 	Name      string `json:"name"`
 	IsCurrent bool   `json:"isCurrent"`
 	IsMain    bool   `json:"isMain"`
+	IsRemote  bool   `json:"isRemote"`
 }
 
 func (r *Repo) ListBranches() ([]Branch, error) {
@@ -58,7 +59,43 @@ func (r *Repo) ListBranches() ([]Branch, error) {
 		}
 		branches = append(branches, Branch{Name: name, IsCurrent: current, IsMain: name == main})
 	}
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	// Remote-tracking branches feed the base picker, so a branch worked off
+	// origin/main with no local trunk can still be diffed against origin/main.
+	remotes, err := r.remoteBranches(main)
+	if err != nil {
+		return nil, err
+	}
+	branches = append(branches, remotes...)
 	sortBranches(branches)
+	return branches, nil
+}
+
+// remoteBranches lists remote-tracking branches (e.g. "origin/main"). It skips
+// the symbolic origin/HEAD pointer via %(symref) rather than fragile "->"
+// parsing, and reflects only what the last fetch pulled — it does not fetch.
+func (r *Repo) remoteBranches(main string) ([]Branch, error) {
+	out, err := r.run("for-each-ref", "--format=%(refname:short) %(symref)", "refs/remotes")
+	if err != nil {
+		return nil, err
+	}
+	var branches []Branch
+	sc := bufio.NewScanner(strings.NewReader(out))
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" {
+			continue
+		}
+		// A non-empty symref marks the "origin/HEAD -> origin/main" pointer, not a
+		// real branch. After trimming, a normal ref leaves just its short name.
+		name, symref, _ := strings.Cut(line, " ")
+		if strings.TrimSpace(symref) != "" {
+			continue
+		}
+		branches = append(branches, Branch{Name: name, IsMain: name == main, IsRemote: true})
+	}
 	return branches, sc.Err()
 }
 
@@ -74,6 +111,10 @@ func sortBranches(branches []Branch) {
 		return len(pinnedBranches)
 	}
 	sort.SliceStable(branches, func(i, j int) bool {
+		// Locals before remotes, then pinned trunks, then alphabetical.
+		if branches[i].IsRemote != branches[j].IsRemote {
+			return !branches[i].IsRemote
+		}
 		ri, rj := rank(branches[i].Name), rank(branches[j].Name)
 		if ri != rj {
 			return ri < rj

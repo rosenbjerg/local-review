@@ -168,7 +168,9 @@ export default function App() {
         if (reqSeq.current !== seq) return; // superseded by another repo switch
         setBranches(r.branches);
         const current = r.branches.find((b) => b.isCurrent);
-        setHead(current?.name ?? r.branches[0]?.name ?? "");
+        const firstLocal = r.branches.find((b) => !b.isRemote);
+        // Head is a local-only picker, so never default it to a remote.
+        setHead(current?.name ?? firstLocal?.name ?? "");
         const savedBase = readBasePref(repo);
         if (savedBase === "" || r.branches.some((b) => b.name === savedBase)) {
           setBase(savedBase);
@@ -277,7 +279,8 @@ export default function App() {
         if (reqSeq.current === seq && !r.branches.some((b) => b.name === head)) {
           setBranches(r.branches);
           const current = r.branches.find((b) => b.isCurrent);
-          setHead(current?.name ?? r.branches[0]?.name ?? "");
+          const firstLocal = r.branches.find((b) => !b.isRemote);
+          setHead(current?.name ?? firstLocal?.name ?? "");
           recovered = true;
         }
       } catch {
@@ -740,12 +743,14 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
             onChange={(e) => setHead(e.target.value)}
             disabled={loading}
           >
-            {branches.map((b) => (
-              <option key={b.name} value={b.name}>
-                {b.name}
-                {b.isCurrent ? " (current)" : ""}
-              </option>
-            ))}
+            {branches
+              .filter((b) => !b.isRemote)
+              .map((b) => (
+                <option key={b.name} value={b.name}>
+                  {b.name}
+                  {b.isCurrent ? " (current)" : ""}
+                </option>
+              ))}
           </select>
         </label>
         <span className="arrow">→</span>
@@ -762,12 +767,26 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
             <option value="">
               auto{mainBranch ? ` (${mainBranch})` : ""}
             </option>
-            {branches.map((b) => (
-              <option key={b.name} value={b.name}>
-                {b.name}
-                {b.isMain ? " (main)" : ""}
-              </option>
-            ))}
+            {branches
+              .filter((b) => !b.isRemote)
+              .map((b) => (
+                <option key={b.name} value={b.name}>
+                  {b.name}
+                  {b.isMain ? " (main)" : ""}
+                </option>
+              ))}
+            {branches.some((b) => b.isRemote) && (
+              <optgroup label="remote (last fetched)">
+                {branches
+                  .filter((b) => b.isRemote)
+                  .map((b) => (
+                    <option key={b.name} value={b.name}>
+                      {b.name}
+                      {b.isMain ? " (main)" : ""}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
           </select>
         </label>
         {headIsCurrent && (
