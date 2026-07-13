@@ -1,17 +1,9 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { AddFileModal } from "./components/AddFileModal";
 import { AgentPromptsModal } from "./components/AgentPromptsModal";
 import { type ComboOption } from "./components/Combobox";
 import { CommentsPanel } from "./components/CommentsPanel";
-import type { CommentActions } from "./components/CommentThread";
 import { DiffView, LARGE_FILE_LINES } from "./components/DiffView";
 import { ExportModal } from "./components/ExportModal";
 import { FileExplorer, orderedFiles } from "./components/FileExplorer";
@@ -20,21 +12,13 @@ import { LazyFile } from "./components/LazyFile";
 import { ResetConfirmModal } from "./components/ResetConfirmModal";
 import { TopBar } from "./components/TopBar";
 import { buildReplyPrompt, buildReviewPrompt } from "./prompts";
-import type { Branch, Comment, CommentType, FileDiff, Reply, Review } from "./types";
+import { useCommentActions } from "./useCommentActions";
+import { useJump } from "./useJump";
+import { usePanelResize } from "./usePanelResize";
+import type { Branch, Comment, FileDiff, Review } from "./types";
 import { effectiveLines } from "./types";
-import {
-  LS,
-  getNumber,
-  getString,
-  readBasePref,
-  setNumber,
-  setString,
-  writeBasePref,
-} from "./storage";
-
-function clamp(n: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, n));
-}
+import { LS, getString, readBasePref, setString, writeBasePref } from "./storage";
+import { clamp } from "./util";
 
 export default function App() {
   const [repos, setRepos] = useState<string[]>([]);
@@ -61,77 +45,32 @@ export default function App() {
   const [showPrompts, setShowPrompts] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
-  const [activeComment, setActiveComment] = useState<number | null>(null);
-  const [leftW, setLeftW] = useState(() => getNumber(LS.leftWidth, 260));
-  const [rightW, setRightW] = useState(() => getNumber(LS.rightWidth, 380));
-  const mainRef = useRef<HTMLDivElement>(null);
   const diffColRef = useRef<HTMLDivElement>(null);
   const explorerSearchRef = useRef<HTMLInputElement>(null);
-  const expandN = useRef(0);
-  const expandCommentN = useRef(0);
-  const jumpPoll = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [expandTarget, setExpandTarget] = useState<{ path: string; n: number } | null>(null);
-  // Nonce so jumping to the same collapsed thread twice re-expands it.
-  const [expandComment, setExpandComment] = useState<{ id: number; n: number } | null>(null);
   // Bumped on each load; in-flight responses check it before applying state, so
   // a stale repo's review/diff can't repopulate the UI for the new selection.
   const reqSeq = useRef(0);
 
-  useEffect(
-    () => () => {
-      if (jumpPoll.current !== null) clearTimeout(jumpPoll.current);
-    },
-    []
-  );
+  // The working tree reflects the checked-out branch, so the uncommitted toggle
+  // only makes sense when head is current. Kept separate from the raw checkbox so
+  // a head change doesn't mutate `uncommitted` and refire the diff-refetch effect.
+  const currentBranch = branches.find((b) => b.isCurrent)?.name;
+  const headIsCurrent = !!head && head === currentBranch;
+  const effectiveUncommitted = uncommitted && headIsCurrent;
 
-  useEffect(() => {
-    setNumber(LS.leftWidth, leftW);
-  }, [leftW]);
-  useEffect(() => {
-    setNumber(LS.rightWidth, rightW);
-  }, [rightW]);
+  const { leftW, rightW, mainRef, startResize, onResizeKey } = usePanelResize();
+  const { activeComment, expandTarget, expandComment, jumpTo, jumpToFile, resetJump } = useJump({
+    comments,
+    setSelectedFile,
+  });
+  const { commentActions, handleAddComment, handleDelete } = useCommentActions({
+    review,
+    comments,
+    setComments,
+    setError,
+    worktree: effectiveUncommitted,
+  });
 
-  // Write grid-template-columns straight to the DOM during the drag — a
-  // per-mousemove setState re-renders every mounted diff — then commit on release.
-  function startResize(e: ReactMouseEvent, side: "left" | "right") {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startLeft = leftW;
-    const startRight = rightW;
-    let finalLeft = startLeft;
-    let finalRight = startRight;
-    const onMove = (ev: MouseEvent) => {
-      const dx = ev.clientX - startX;
-      if (side === "left") finalLeft = clamp(startLeft + dx, 160, 560);
-      else finalRight = clamp(startRight - dx, 220, 640);
-      if (mainRef.current) {
-        mainRef.current.style.gridTemplateColumns = `${finalLeft}px 6px 1fr 6px ${finalRight}px`;
-      }
-    };
-    const onUp = () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      document.body.style.userSelect = "";
-      document.body.style.cursor = "";
-      setLeftW(finalLeft);
-      setRightW(finalRight);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    document.body.style.userSelect = "none";
-    document.body.style.cursor = "col-resize";
-  }
-
-  function onResizeKey(e: ReactKeyboardEvent, side: "left" | "right") {
-    const step = e.shiftKey ? 40 : 12;
-    let delta = 0;
-    if (e.key === "ArrowLeft") delta = -step;
-    else if (e.key === "ArrowRight") delta = step;
-    else return;
-    e.preventDefault();
-    if (side === "left") setLeftW((w) => clamp(w + delta, 160, 560));
-    else setRightW((w) => clamp(w - delta, 220, 640));
-  }
 
   useEffect(() => {
     document.title = review
@@ -164,7 +103,7 @@ export default function App() {
     setReviewedFiles(new Set());
     setSelectedFile(null);
     setOpenedFiles([]);
-    setExpandTarget(null);
+    resetJump();
     setBase("");
     setUncommitted(false);
     api
@@ -304,121 +243,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repo, head, base]);
 
-  // Returns success so the caller can keep the composer (and its text) open on failure.
-  async function handleAddComment(args: {
-    filePath: string;
-    startLine: number;
-    endLine: number;
-    body: string;
-    type: CommentType;
-  }): Promise<boolean> {
-    if (!review) return false;
-    setError(null);
-    try {
-      // Anchor to the working tree for uncommitted reviews, so the server captures
-      // the snippet from the side the staleness check reads (head would read outdated).
-      const c = await api.addComment(review.id, { ...args, worktree: effectiveUncommitted });
-      setComments((cs) => [...cs, c]);
-      return true;
-    } catch (e) {
-      setError((e as Error).message);
-      return false;
-    }
-  }
-
-  async function handleUpdate(id: number, body: string, type: CommentType): Promise<boolean> {
-    const existing = comments.find((c) => c.id === id);
-    if (!existing) return false;
-    setError(null);
-    try {
-      const updated = await api.updateComment(id, {
-        body,
-        type,
-        startLine: existing.startLine,
-        endLine: existing.endLine,
-      });
-      setComments((cs) => cs.map((c) => (c.id === id ? updated : c)));
-      return true;
-    } catch (e) {
-      setError((e as Error).message);
-      return false;
-    }
-  }
-
-  async function handleDelete(id: number) {
-    setError(null);
-    try {
-      await api.deleteComment(id);
-      setComments((cs) => cs.filter((c) => c.id !== id));
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
-  function updateCommentReplies(commentId: number, fn: (replies: Reply[]) => Reply[]) {
-    setComments((cs) =>
-      cs.map((c) => (c.id === commentId ? { ...c, replies: fn(c.replies ?? []) } : c))
-    );
-  }
-
-  async function handleAddReply(commentId: number, body: string): Promise<boolean> {
-    setError(null);
-    try {
-      const rep = await api.addReply(commentId, body);
-      updateCommentReplies(commentId, (replies) => [...replies, rep]);
-      return true;
-    } catch (e) {
-      setError((e as Error).message);
-      return false;
-    }
-  }
-
-  async function handleUpdateReply(
-    commentId: number,
-    replyId: number,
-    body: string
-  ): Promise<boolean> {
-    setError(null);
-    try {
-      const rep = await api.updateReply(replyId, body);
-      updateCommentReplies(commentId, (replies) => replies.map((r) => (r.id === replyId ? rep : r)));
-      return true;
-    } catch (e) {
-      setError((e as Error).message);
-      return false;
-    }
-  }
-
-  async function handleDeleteReply(commentId: number, replyId: number) {
-    setError(null);
-    try {
-      await api.deleteReply(replyId);
-      updateCommentReplies(commentId, (replies) => replies.filter((r) => r.id !== replyId));
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
-  async function handleResolve(id: number, resolved: boolean) {
-    setError(null);
-    setComments((cs) => cs.map((c) => (c.id === id ? { ...c, resolved } : c)));
-    try {
-      await api.setCommentResolved(id, resolved);
-    } catch (e) {
-      setComments((cs) => cs.map((c) => (c.id === id ? { ...c, resolved: !resolved } : c)));
-      setError((e as Error).message);
-    }
-  }
-
-  // Rebuilt each render so the handlers close over live `comments`; do not memoize.
-  const commentActions: CommentActions = {
-    onUpdate: handleUpdate,
-    onDelete: handleDelete,
-    onAddReply: handleAddReply,
-    onUpdateReply: handleUpdateReply,
-    onDeleteReply: handleDeleteReply,
-    onResolve: handleResolve,
-  };
 
   function requestReset() {
     if (!review) return;
@@ -439,48 +263,6 @@ export default function App() {
     }
   }
 
-  function flashComment(id: number): boolean {
-    const el = document.getElementById(`comment-${id}`);
-    if (!el) return false;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.classList.add("thread-flash");
-    setTimeout(() => el.classList.remove("thread-flash"), 1200);
-    return true;
-  }
-
-  function jumpTo(id: number) {
-    // Supersede any in-flight jump so rapid n/p doesn't stack scroll loops.
-    if (jumpPoll.current !== null) {
-      clearTimeout(jumpPoll.current);
-      jumpPoll.current = null;
-    }
-    setActiveComment(id);
-    // Expand the thread if it's collapsed (resolved threads start collapsed), so
-    // jumping to it reveals the body. Set before the early return below, since a
-    // collapsed thread's node exists and flashComment would otherwise return first.
-    setExpandComment({ id, n: ++expandCommentN.current });
-    if (flashComment(id)) return;
-    // The file may be lazy-unmounted/collapsed: signal expand, scroll to trigger
-    // mount, then retry the flash once it renders.
-    const c = comments.find((x) => x.id === id);
-    if (!c) return;
-    setExpandTarget({ path: c.filePath, n: ++expandN.current });
-    document.getElementById(`file-${c.filePath}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    let tries = 0;
-    const poll = () => {
-      if (flashComment(id) || tries++ > 40) {
-        jumpPoll.current = null;
-        return;
-      }
-      jumpPoll.current = setTimeout(poll, 100);
-    };
-    jumpPoll.current = setTimeout(poll, 100);
-  }
-
-  function jumpToFile(path: string) {
-    setSelectedFile(path);
-    document.getElementById(`file-${path}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
 
   function openFile(path: string) {
     setShowAddFile(false);
@@ -545,13 +327,6 @@ export default function App() {
     }
     return opts;
   }, [branches, localBranches, mainBranch]);
-  // The working tree reflects the checked-out branch, so the uncommitted toggle
-  // only makes sense when head is current.
-  const currentBranch = branches.find((b) => b.isCurrent)?.name;
-  const headIsCurrent = !!head && head === currentBranch;
-  // Separate from the raw checkbox so a head change doesn't mutate `uncommitted`
-  // and fire the diff-refetch effect on top of the auto-start.
-  const effectiveUncommitted = uncommitted && headIsCurrent;
   // Fold in synthetic cards for paths the diff didn't touch but that were opened
   // to comment on — explicitly (openedFiles) or because a comment (browser- or
   // agent-authored) already anchors there. Deriving from comments both surfaces
