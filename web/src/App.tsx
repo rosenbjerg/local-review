@@ -9,28 +9,28 @@ import {
 import { api } from "./api";
 import { AddFileModal } from "./components/AddFileModal";
 import { AgentPromptsModal } from "./components/AgentPromptsModal";
-import { Combobox, type ComboOption } from "./components/Combobox";
+import { type ComboOption } from "./components/Combobox";
 import { CommentsPanel } from "./components/CommentsPanel";
 import type { CommentActions } from "./components/CommentThread";
 import { DiffView, LARGE_FILE_LINES } from "./components/DiffView";
 import { ExportModal } from "./components/ExportModal";
 import { FileExplorer, orderedFiles } from "./components/FileExplorer";
+import { HelpModal } from "./components/HelpModal";
 import { LazyFile } from "./components/LazyFile";
-import { Modal } from "./components/Modal";
+import { ResetConfirmModal } from "./components/ResetConfirmModal";
+import { TopBar } from "./components/TopBar";
+import { buildReplyPrompt, buildReviewPrompt } from "./prompts";
 import type { Branch, Comment, CommentType, FileDiff, Reply, Review } from "./types";
 import { effectiveLines } from "./types";
-import { LS, getJSON, getNumber, getString, setJSON, setNumber, setString } from "./storage";
-
-function readBasePref(repo: string): string {
-  const v = getJSON<Record<string, string>>(LS.baseByRepo, {})[repo];
-  return typeof v === "string" ? v : "";
-}
-
-function writeBasePref(repo: string, base: string): void {
-  const map = getJSON<Record<string, string>>(LS.baseByRepo, {});
-  map[repo] = base;
-  setJSON(LS.baseByRepo, map);
-}
+import {
+  LS,
+  getNumber,
+  getString,
+  readBasePref,
+  setNumber,
+  setString,
+  writeBasePref,
+} from "./storage";
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -527,59 +527,6 @@ export default function App() {
     return Math.min(lines, 400) * 18 + 44;
   }
 
-  function buildReplyPrompt(): string {
-    if (!review) return "";
-    const origin = window.location.origin;
-    return `This is a code review produced with local-review. Fetch it from the API and work through every open comment.
-
-For each comment: if you agree, make the change and reply noting what you did; if you disagree or need clarification, reply explaining why or asking a question. Comment types signal intent — bug and suggestion want a fix (or a reason it's declined), question wants an answer, nit is optional. A comment marked (outdated) or (moved from …) means the code shifted since it was written — trust the quoted snippet over the line number.
-
-# Fetch the review as markdown. The response is JSON; read its "markdown" field.
-# Each comment is headed with an id like "#42".
-curl -s -X POST ${origin}/api/reviews/${review.id}/export | jq -r .markdown
-
-# Reply to a comment by its id (the #42 in each heading; different per comment).
-curl -s -X POST ${origin}/api/comments/<id>/replies \\
-  -H 'Content-Type: application/json' \\
-  -d '{"body": "your reply here"}'
-`;
-  }
-
-  function buildReviewPrompt(): string {
-    if (!review) return "";
-    const origin = window.location.origin;
-    return `Adversarially review the changes branch \`${review.headRef}\` introduces over \`${review.baseRef}\` in this repo, then file your findings as comments via the local-review API so the human reviewer sees them next to their own.
-
-See exactly what changed:
-git diff ${review.baseRef}...${review.headRef}
-
-Hunt for real defects — bugs, broken edge cases, race conditions, security holes, missing error handling, violated invariants. Read the surrounding code, not just the diff, to judge correctness. Favour a few high-confidence findings over noise.
-
-# File a comment. Anchor it to the NEW side: the file's post-change path and its
-# new-side line range (the server captures the code snippet from that range, so
-# you don't send it). type is one of: bug | suggestion | question | nit. Tag every
-# write with "author": "review-agent" so your findings stay distinct from the
-# coding agent that will address them.
-curl -s -X POST ${origin}/api/reviews/${review.id}/comments \\
-  -H 'Content-Type: application/json' \\
-  -d '{"filePath": "path/to/file", "startLine": 42, "endLine": 45, "type": "bug", "body": "what is wrong and why", "author": "review-agent"}'
-
-# Re-read only the threads you started, with any reviewer replies nested under
-# each comment's "replies" (JSON). Poll this to continue the conversation.
-curl -s '${origin}/api/reviews/${review.id}/comments?author=review-agent'
-
-# Reply to a thread (use the comment's "id" from the JSON above).
-curl -s -X POST ${origin}/api/comments/<id>/replies \\
-  -H 'Content-Type: application/json' \\
-  -d '{"body": "your reply here", "author": "review-agent"}'
-
-# Resolve a thread once it's addressed or you're satisfied it's a non-issue.
-curl -s -X POST ${origin}/api/comments/<id>/resolved \\
-  -H 'Content-Type: application/json' \\
-  -d '{"resolved": true}'
-`;
-  }
-
   const shortSha = review?.headSha.slice(0, 7);
   const mainBranch = branches.find((b) => b.isMain)?.name;
   const repoOptions = useMemo<ComboOption[]>(() => repos.map((r) => ({ value: r, label: r })), [repos]);
@@ -747,117 +694,37 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
 
   return (
     <div className="app">
-      <header className="topbar">
-        <span className="logo">local-review</span>
-        <label>
-          repo
-          <Combobox
-            ariaLabel="repository"
-            value={repo}
-            options={repoOptions}
-            onChange={(v) => {
-              setRepo(v);
-              setString(LS.repo, v);
-            }}
-            disabled={loading}
-            emptyText="(none found)"
-          />
-        </label>
-        <label>
-          head
-          <Combobox
-            ariaLabel="head branch"
-            value={head}
-            options={headOptions}
-            onChange={setHead}
-            disabled={loading}
-          />
-        </label>
-        <span className="arrow">→</span>
-        <label>
-          base
-          <Combobox
-            ariaLabel="base branch"
-            value={base}
-            options={baseOptions}
-            onChange={(v) => {
-              setBase(v);
-              writeBasePref(repo, v);
-            }}
-            disabled={loading}
-          />
-        </label>
-        {headIsCurrent && (
-          <label className="checkbox" title="Diff against the working tree instead of the head commit (staged + unstaged tracked changes; excludes untracked files)">
-            <input
-              type="checkbox"
-              checked={uncommitted}
-              onChange={(e) => setUncommitted(e.target.checked)}
-              disabled={loading}
-            />
-            uncommitted
-          </label>
-        )}
-        <button
-          className="btn"
-          onClick={startReview}
-          disabled={loading || !repo || !head}
-          title="Re-run the review to pick up new commits"
-        >
-          {loading ? "Loading…" : "Reload"}
-        </button>
-        <span className="spacer" />
-        {review && (
-          <>
-            <span className="muted">
-              {shortSha}
-              {effectiveUncommitted && " + uncommitted"}
-            </span>
-            <button
-              className="btn"
-              onClick={() => setShowPrompts(true)}
-              title="Copyable prompts: hand a coding agent this review to address, or have an agent review the branch itself"
-            >
-              Agent prompts
-            </button>
-            <button
-              className="btn"
-              onClick={() => setShowExport(true)}
-              title="Exports unresolved threads"
-            >
-              Export ({comments.filter((c) => !c.resolved).length})
-            </button>
-            <button
-              className="btn danger"
-              onClick={requestReset}
-              disabled={comments.length === 0 && reviewedFiles.size === 0}
-              title="Delete all comments and unmark all reviewed files"
-            >
-              Reset
-            </button>
-          </>
-        )}
-        <button
-          className="btn btn-icon"
-          onClick={() => setShowHelp(true)}
-          title="Keyboard shortcuts (?)"
-          aria-label="Keyboard shortcuts"
-        >
-          ?
-        </button>
-        <a
-          className="btn btn-icon"
-          href="https://github.com/rosenbjerg/local-review"
-          target="_blank"
-          rel="noopener noreferrer"
-          title="View local-review on GitHub"
-          aria-label="View local-review on GitHub"
-        >
-          <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-            <path d="M10.226 17.284c-2.965-.36-5.054-2.493-5.054-5.256 0-1.123.404-2.336 1.078-3.144-.292-.741-.247-2.314.09-2.965.898-.112 2.111.36 2.83 1.01.853-.269 1.752-.404 2.853-.404 1.1 0 1.999.135 2.807.382.696-.629 1.932-1.1 2.83-.988.315.606.36 2.179.067 2.942.72.854 1.101 2 1.101 3.167 0 2.763-2.089 4.852-5.098 5.234.763.494 1.28 1.572 1.28 2.807v2.336c0 .674.561 1.056 1.235.786 4.066-1.55 7.255-5.615 7.255-10.646C23.5 6.188 18.334 1 11.978 1 5.62 1 .5 6.188.5 12.545c0 4.986 3.167 9.12 7.435 10.669.606.225 1.19-.18 1.19-.786V20.63a2.9 2.9 0 0 1-1.078.224c-1.483 0-2.359-.808-2.987-2.313-.247-.607-.517-.966-1.034-1.033-.27-.023-.359-.135-.359-.27 0-.27.45-.471.898-.471.652 0 1.213.404 1.797 1.235.45.651.921.943 1.483.943.561 0 .92-.202 1.437-.719.382-.381.674-.718.944-.943"></path>
-          </svg>
-        </a>
-      </header>
+      <TopBar
+        repo={repo}
+        repoOptions={repoOptions}
+        onRepoChange={(v) => {
+          setRepo(v);
+          setString(LS.repo, v);
+        }}
+        head={head}
+        headOptions={headOptions}
+        onHeadChange={setHead}
+        base={base}
+        baseOptions={baseOptions}
+        onBaseChange={(v) => {
+          setBase(v);
+          writeBasePref(repo, v);
+        }}
+        headIsCurrent={headIsCurrent}
+        uncommitted={uncommitted}
+        onUncommittedChange={setUncommitted}
+        loading={loading}
+        onReload={startReview}
+        review={review}
+        shortSha={shortSha}
+        effectiveUncommitted={effectiveUncommitted}
+        openCommentCount={comments.filter((c) => !c.resolved).length}
+        canReset={comments.length > 0 || reviewedFiles.size > 0}
+        onShowPrompts={() => setShowPrompts(true)}
+        onShowExport={() => setShowExport(true)}
+        onReset={requestReset}
+        onShowHelp={() => setShowHelp(true)}
+      />
 
       {error && (
         <div className="error banner" role="alert">
@@ -999,122 +866,29 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
         <AgentPromptsModal
           onClose={() => setShowPrompts(false)}
           prompts={[
-            { value: "reply", label: "Address the review", text: buildReplyPrompt() },
-            { value: "review", label: "Do a review", text: buildReviewPrompt() },
+            {
+              value: "reply",
+              label: "Address the review",
+              text: buildReplyPrompt(review, window.location.origin),
+            },
+            {
+              value: "review",
+              label: "Do a review",
+              text: buildReviewPrompt(review, window.location.origin),
+            },
           ]}
         />
       )}
 
-      {showHelp && (
-        <Modal onClose={() => setShowHelp(false)} labelledBy="help-title" className="modal-sm">
-          <div className="modal-head">
-            <h2 id="help-title">Keyboard shortcuts</h2>
-            <span className="spacer" />
-            <button className="btn" onClick={() => setShowHelp(false)}>
-              Close
-            </button>
-          </div>
-          <div className="help-body">
-              <table className="shortcuts">
-                <tbody>
-                  <tr>
-                    <td>
-                      <kbd>j</kbd> / <kbd>k</kbd>
-                    </td>
-                    <td>Next / previous file</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <kbd>n</kbd> / <kbd>p</kbd>
-                    </td>
-                    <td>Next / previous comment</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <kbd>e</kbd>
-                    </td>
-                    <td>Export review</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <kbd>r</kbd>
-                    </td>
-                    <td>Reload review</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <kbd>/</kbd>
-                    </td>
-                    <td>Search files</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <kbd>?</kbd>
-                    </td>
-                    <td>Toggle this help</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <kbd>Esc</kbd>
-                    </td>
-                    <td>Close a dialog / cancel a comment</td>
-                  </tr>
-                </tbody>
-              </table>
-              <h3 className="help-subhead">Reviewing</h3>
-              <table className="shortcuts">
-                <tbody>
-                  <tr>
-                    <td>Click a line №</td>
-                    <td>Start a comment on that line</td>
-                  </tr>
-                  <tr>
-                    <td>Drag / Shift-click</td>
-                    <td>Comment on a line range</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>Enter</kbd>
-                    </td>
-                    <td>Submit the comment</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-        </Modal>
-      )}
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
       {confirmingReset && (
-        <Modal
-          onClose={() => setConfirmingReset(false)}
-          labelledBy="reset-title"
-          className="modal-sm"
-        >
-          <div className="modal-head">
-            <h2 id="reset-title">Reset review?</h2>
-          </div>
-          <div className="confirm-body">
-              <p>
-                This deletes{" "}
-                <strong>
-                  {comments.length} comment{comments.length === 1 ? "" : "s"}
-                </strong>{" "}
-                and unmarks{" "}
-                <strong>
-                  {reviewedFiles.size} reviewed file{reviewedFiles.size === 1 ? "" : "s"}
-                </strong>{" "}
-                in this review. It can't be undone.
-              </p>
-            </div>
-            <div className="confirm-actions">
-              <button className="btn" data-autofocus onClick={() => setConfirmingReset(false)}>
-                Cancel
-              </button>
-              <button className="btn danger" onClick={performReset}>
-                Delete everything
-              </button>
-            </div>
-        </Modal>
+        <ResetConfirmModal
+          commentCount={comments.length}
+          reviewedCount={reviewedFiles.size}
+          onCancel={() => setConfirmingReset(false)}
+          onConfirm={performReset}
+        />
       )}
     </div>
   );

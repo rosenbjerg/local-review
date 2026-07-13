@@ -60,3 +60,15 @@ export function setJSON(key: string, value: unknown): void {
     // best-effort
   }
 }
+
+// Per-repo remembered base branch, under lr.baseByRepo (a { repo: base } map).
+export function readBasePref(repo: string): string {
+  const v = getJSON<Record<string, string>>(LS.baseByRepo, {})[repo];
+  return typeof v === "string" ? v : "";
+}
+
+export function writeBasePref(repo: string, base: string): void {
+  const map = getJSON<Record<string, string>>(LS.baseByRepo, {});
+  map[repo] = base;
+  setJSON(LS.baseByRepo, map);
+}
