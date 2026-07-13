@@ -161,8 +161,12 @@ web/src/
   flag alone**: on every review read `internal/api/reviewed.go` re-hashes the
   current content of that side and drops any file whose fingerprint no longer
   matches — so a file that changes after being marked reviewed reverts to unread.
-  An empty fingerprint (older rows, or a mark-time read failure) can't be checked
-  and stays reviewed. `SetFilesReviewed` upserts (`DO UPDATE`), so re-reviewing a
+  A file whose side can't be read at mark time (a reviewed **deletion** has no
+  new-side content) stores an `absentContentHash` sentinel, not a real hash: it
+  holds only while the file stays unreadable and reverts if the file returns —
+  so re-adding a deleted-then-reviewed file drops the mark. An empty fingerprint
+  is reserved for legacy pre-fingerprint rows and always holds. `SetFilesReviewed`
+  upserts (`DO UPDATE`), so re-reviewing a
   changed file refreshes the fingerprint. (Surfaces on the next review refetch —
   SSE ping or focus — not instantly on an out-of-band push, same as the diff.)
   It writes a whole batch in one transaction with a single change ping, so a

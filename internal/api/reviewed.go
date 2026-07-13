@@ -26,9 +26,15 @@ func (s *Server) annotateReviewedFiles(review *store.Review) {
 	review.ReviewedFiles = kept
 }
 
+// Sentinel stored when the marked side couldn't be read (a reviewed deletion has
+// no new-side content). It never equals a real 64-hex-char hash, so the mark holds
+// only while the file stays unreadable and reverts once it reappears with content.
+// Distinct from "" — a legacy, pre-fingerprint row that always holds.
+const absentContentHash = "absent"
+
 // An empty captured hash (older/unfingerprinted rows) always holds; otherwise the
-// current same-side content must re-hash equal — a deleted/unreadable file hashes
-// to "" and so counts as changed.
+// current same-side content must re-hash equal. A deleted/unreadable file hashes to
+// the absent sentinel, so it holds only against another absent read.
 func reviewedMarkHolds(repo *git.Repo, headRef string, f store.ReviewedFile) bool {
 	if f.ContentHash == "" {
 		return true
@@ -45,7 +51,9 @@ func fileContentHash(repo *git.Repo, headRef, path string, worktree bool) string
 		content, err = repo.FileContent(headRef, path)
 	}
 	if err != nil {
-		return ""
+		// Unreadable side (deleted file, etc.) — a sentinel that reverts if the
+		// file later returns, rather than "" which would pin it reviewed forever.
+		return absentContentHash
 	}
 	sum := sha256.Sum256([]byte(content))
 	return hex.EncodeToString(sum[:])
