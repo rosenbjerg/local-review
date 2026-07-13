@@ -83,7 +83,16 @@ func main() {
 	log.Printf("db: %s", dbPath)
 	log.Printf("listening on %s", url)
 
-	srv := &http.Server{Handler: api.WithErrorLogging(mux)}
+	// Every request context derives from baseCtx, so cancelling it on shutdown
+	// unblocks the long-lived SSE streams (handleEvents waits on r.Context()).
+	// Without this, Shutdown waits on those open streams until the deadline.
+	baseCtx, cancelBase := context.WithCancel(context.Background())
+	defer cancelBase()
+
+	srv := &http.Server{
+		Handler:     api.WithErrorLogging(mux),
+		BaseContext: func(net.Listener) context.Context { return baseCtx },
+	}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- srv.Serve(ln) }()
 
@@ -102,6 +111,10 @@ func main() {
 		}
 	case s := <-sig:
 		log.Printf("received %s, shutting down", s)
+		// Cancel in-flight request contexts first so SSE streams return at once;
+		// DB writes use context.Background (not the request ctx), so this doesn't
+		// abort a mutation mid-flight — it just stops the endless event streams.
+		cancelBase()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
