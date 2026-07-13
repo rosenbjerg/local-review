@@ -47,8 +47,12 @@ type fileDiffResult struct {
 
 // Route every anchor decision through these so AnchorStatus and the Current*
 // lines are always assigned together.
-func markCurrent(c *store.Comment)  { c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorCurrent, 0, 0 }
-func markOutdated(c *store.Comment) { c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorOutdated, 0, 0 }
+func markCurrent(c *store.Comment) {
+	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorCurrent, 0, 0
+}
+func markOutdated(c *store.Comment) {
+	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorOutdated, 0, 0
+}
 
 func markMoved(c *store.Comment, start, end int) {
 	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorMoved, start, end
