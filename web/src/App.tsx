@@ -9,6 +9,7 @@ import {
 import { api } from "./api";
 import { AddFileModal } from "./components/AddFileModal";
 import { AgentPromptsModal } from "./components/AgentPromptsModal";
+import { Combobox, type ComboOption } from "./components/Combobox";
 import { CommentsPanel } from "./components/CommentsPanel";
 import type { CommentActions } from "./components/CommentThread";
 import { DiffView, LARGE_FILE_LINES } from "./components/DiffView";
@@ -571,6 +572,22 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
 
   const shortSha = review?.headSha.slice(0, 7);
   const mainBranch = branches.find((b) => b.isMain)?.name;
+  const repoOptions = useMemo<ComboOption[]>(() => repos.map((r) => ({ value: r, label: r })), [repos]);
+  const localBranches = useMemo(() => branches.filter((b) => !b.isRemote), [branches]);
+  const headOptions = useMemo<ComboOption[]>(
+    () => localBranches.map((b) => ({ value: b.name, label: b.name, hint: b.isCurrent ? "current" : undefined })),
+    [localBranches]
+  );
+  const baseOptions = useMemo<ComboOption[]>(() => {
+    const opts: ComboOption[] = [{ value: "", label: `auto${mainBranch ? ` (${mainBranch})` : ""}` }];
+    for (const b of localBranches) {
+      opts.push({ value: b.name, label: b.name, hint: b.isMain ? "main" : undefined });
+    }
+    for (const b of branches.filter((b) => b.isRemote)) {
+      opts.push({ value: b.name, label: b.name, hint: b.isMain ? "main" : undefined, group: "remote (last fetched)" });
+    }
+    return opts;
+  }, [branches, localBranches, mainBranch]);
   // The working tree reflects the checked-out branch, so the uncommitted toggle
   // only makes sense when head is current.
   const currentBranch = branches.find((b) => b.isCurrent)?.name;
@@ -720,74 +737,41 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
         <span className="logo">local-review</span>
         <label>
           repo
-          <select
+          <Combobox
+            ariaLabel="repository"
             value={repo}
-            onChange={(e) => {
-              setRepo(e.target.value);
-              setString(LS.repo, e.target.value);
+            options={repoOptions}
+            onChange={(v) => {
+              setRepo(v);
+              setString(LS.repo, v);
             }}
             disabled={loading}
-          >
-            {repos.length === 0 && <option value="">(none found)</option>}
-            {repos.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
+            emptyText="(none found)"
+          />
         </label>
         <label>
           head
-          <select
+          <Combobox
+            ariaLabel="head branch"
             value={head}
-            onChange={(e) => setHead(e.target.value)}
+            options={headOptions}
+            onChange={setHead}
             disabled={loading}
-          >
-            {branches
-              .filter((b) => !b.isRemote)
-              .map((b) => (
-                <option key={b.name} value={b.name}>
-                  {b.name}
-                  {b.isCurrent ? " (current)" : ""}
-                </option>
-              ))}
-          </select>
+          />
         </label>
         <span className="arrow">→</span>
         <label>
           base
-          <select
+          <Combobox
+            ariaLabel="base branch"
             value={base}
-            onChange={(e) => {
-              setBase(e.target.value);
-              writeBasePref(repo, e.target.value);
+            options={baseOptions}
+            onChange={(v) => {
+              setBase(v);
+              writeBasePref(repo, v);
             }}
             disabled={loading}
-          >
-            <option value="">
-              auto{mainBranch ? ` (${mainBranch})` : ""}
-            </option>
-            {branches
-              .filter((b) => !b.isRemote)
-              .map((b) => (
-                <option key={b.name} value={b.name}>
-                  {b.name}
-                  {b.isMain ? " (main)" : ""}
-                </option>
-              ))}
-            {branches.some((b) => b.isRemote) && (
-              <optgroup label="remote (last fetched)">
-                {branches
-                  .filter((b) => b.isRemote)
-                  .map((b) => (
-                    <option key={b.name} value={b.name}>
-                      {b.name}
-                      {b.isMain ? " (main)" : ""}
-                    </option>
-                  ))}
-              </optgroup>
-            )}
-          </select>
+          />
         </label>
         {headIsCurrent && (
           <label className="checkbox" title="Diff against the working tree instead of the head commit (staged + unstaged tracked changes; excludes untracked files)">

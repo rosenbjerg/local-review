@@ -144,6 +144,89 @@ select {
   font-size: 13px;
 }
 
+/* Searchable combobox (repo/head/base pickers) */
+.combobox {
+  position: relative;
+  width: 160px;
+}
+.combobox-input {
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 4px 24px 4px 8px;
+  font-size: 13px;
+}
+.combobox-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.combobox-caret {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  /* Centre with a margin, not translateY — a transform here would override the
+     chevron's own rotate() (equal specificity, .chevron.open wins on order) and
+     make the ▸→▾ spin look off-centre. -6px = half the 12px icon. */
+  margin-top: -6px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.combobox-list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 2px);
+  left: 0;
+  min-width: 100%;
+  max-width: 340px;
+  max-height: 320px;
+  overflow: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px var(--backdrop);
+}
+.combobox-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.combobox-option.active {
+  background: var(--bg-hover);
+}
+.combobox-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+}
+.combobox-hint {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+.combobox-group {
+  padding: 6px 8px 2px;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.combobox-empty {
+  padding: 6px 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 /* Buttons */
 .btn {
   background: var(--bg-elev);
