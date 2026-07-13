@@ -68,8 +68,11 @@ export default function App() {
   const diffColRef = useRef<HTMLDivElement>(null);
   const explorerSearchRef = useRef<HTMLInputElement>(null);
   const expandN = useRef(0);
+  const expandCommentN = useRef(0);
   const jumpPoll = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [expandTarget, setExpandTarget] = useState<{ path: string; n: number } | null>(null);
+  // Nonce so jumping to the same collapsed thread twice re-expands it.
+  const [expandComment, setExpandComment] = useState<{ id: number; n: number } | null>(null);
   // Bumped on each load; in-flight responses check it before applying state, so
   // a stale repo's review/diff can't repopulate the UI for the new selection.
   const reqSeq = useRef(0);
@@ -452,6 +455,10 @@ export default function App() {
       jumpPoll.current = null;
     }
     setActiveComment(id);
+    // Expand the thread if it's collapsed (resolved threads start collapsed), so
+    // jumping to it reveals the body. Set before the early return below, since a
+    // collapsed thread's node exists and flashComment would otherwise return first.
+    setExpandComment({ id, n: ++expandCommentN.current });
     if (flashComment(id)) return;
     // The file may be lazy-unmounted/collapsed: signal expand, scroll to trigger
     // mount, then retry the flash once it renders.
@@ -944,6 +951,7 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
                     reviewed={reviewedFiles.has(path)}
                     onToggleReviewed={(r) => toggleReviewed(path, r)}
                     expandTarget={expandTarget}
+                    expandComment={expandComment}
                   />
                 </LazyFile>
               );

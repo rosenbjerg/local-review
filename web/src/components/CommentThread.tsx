@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Comment, CommentType, Reply } from "../types";
 import { lineLabel } from "../types";
+import { Chevron } from "./Chevron";
 import { CommentComposer } from "./CommentComposer";
 import { AnchorBadge } from "./AnchorBadge";
 import { Markdown } from "./Markdown";
@@ -18,6 +19,8 @@ export interface CommentActions {
 interface Props {
   comment: Comment;
   actions: CommentActions;
+  // Bumped by a jump-to; expands this thread when it targets this comment.
+  expandSignal?: { id: number; n: number } | null;
 }
 
 function ReplyItem({
@@ -66,13 +69,47 @@ function ReplyItem({
   );
 }
 
-export function CommentThread({ comment, actions }: Props) {
+export function CommentThread({ comment, actions, expandSignal }: Props) {
   const { onUpdate, onDelete, onAddReply, onUpdateReply, onDeleteReply, onResolve } = actions;
   const [editing, setEditing] = useState(false);
   const [replying, setReplying] = useState(false);
+  // Resolved threads start collapsed — they're done and dimmed, so tuck them away.
+  const [collapsed, setCollapsed] = useState(comment.resolved);
   const replies = comment.replies ?? [];
 
+  // Expand when jumped to (e.g. n/p navigation or the comments panel), so a
+  // collapsed thread reveals its body. Keyed on the signal's nonce, so a manual
+  // re-collapse afterwards sticks until the next jump.
+  useEffect(() => {
+    if (expandSignal && expandSignal.id === comment.id) setCollapsed(false);
+  }, [expandSignal, comment.id]);
+
   const outdated = comment.anchorStatus === "outdated";
+
+  function toggle() {
+    setCollapsed((c) => {
+      if (!c) {
+        // Collapsing: drop any open composer so it can't linger hidden.
+        setEditing(false);
+        setReplying(false);
+      }
+      return !c;
+    });
+  }
+
+  function handleResolve() {
+    const next = !comment.resolved;
+    onResolve(comment.id, next);
+    // Resolving tucks the thread away; reopening brings it back.
+    setCollapsed(next);
+    if (next) {
+      setEditing(false);
+      setReplying(false);
+    }
+  }
+
+  // Markdown flattened to one line for the collapsed preview.
+  const preview = comment.body.replace(/\s+/g, " ").trim();
 
   return (
     <div
@@ -80,6 +117,15 @@ export function CommentThread({ comment, actions }: Props) {
       id={`comment-${comment.id}`}
     >
       <div className="thread-meta">
+        <button
+          className="thread-toggle"
+          onClick={toggle}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "Expand thread" : "Collapse thread"}
+          title={collapsed ? "Expand thread" : "Collapse thread"}
+        >
+          <Chevron open={!collapsed} size={10} />
+        </button>
         <span className="muted meta-id">#{comment.id}</span>
         <span className={`badge badge-${comment.type}`}>{comment.type}</span>
         <span className="muted">{lineLabel(comment)}</span>
@@ -90,60 +136,76 @@ export function CommentThread({ comment, actions }: Props) {
           updatedAt={comment.updatedAt}
         />
         {comment.resolved && <span className="badge badge-resolved">✓ resolved</span>}
+        {collapsed && replies.length > 0 && (
+          <span className="muted thread-reply-count">
+            {replies.length} repl{replies.length === 1 ? "y" : "ies"}
+          </span>
+        )}
         <span className="spacer" />
-        <button className="link" onClick={() => onResolve(comment.id, !comment.resolved)}>
+        <button className="link" onClick={handleResolve}>
           {comment.resolved ? "reopen" : "resolve"}
         </button>
-        <button className="link" onClick={() => setEditing((e) => !e)}>
-          {editing ? "close" : "edit"}
-        </button>
+        {!collapsed && (
+          <button className="link" onClick={() => setEditing((e) => !e)}>
+            {editing ? "close" : "edit"}
+          </button>
+        )}
         <button className="link danger" onClick={() => onDelete(comment.id)}>
           delete
         </button>
       </div>
-      {editing ? (
-        <CommentComposer
-          initialBody={comment.body}
-          initialType={comment.type}
-          submitLabel="Save"
-          onCancel={() => setEditing(false)}
-          onSubmit={async (body, type) => {
-            if (await onUpdate(comment.id, body, type)) setEditing(false);
-          }}
-        />
-      ) : (
-        <Markdown className="thread-body md-body" source={comment.body} />
-      )}
 
-      {replies.length > 0 && (
-        <div className="thread-replies">
-          {replies.map((r) => (
-            <ReplyItem
-              key={r.id}
-              reply={r}
-              onUpdate={(body) => onUpdateReply(comment.id, r.id, body)}
-              onDelete={() => onDeleteReply(comment.id, r.id)}
-            />
-          ))}
-        </div>
-      )}
-
-      {replying ? (
-        <div className="thread-reply-composer">
-          <CommentComposer
-            hideType
-            submitLabel="Reply"
-            placeholder="Reply…"
-            onCancel={() => setReplying(false)}
-            onSubmit={async (body) => {
-              if (await onAddReply(comment.id, body)) setReplying(false);
-            }}
-          />
-        </div>
-      ) : (
-        <button className="link reply-add" onClick={() => setReplying(true)}>
-          Reply
+      {collapsed ? (
+        <button className="thread-collapsed" onClick={toggle} title="Expand thread">
+          {preview || <span className="muted">(no description)</span>}
         </button>
+      ) : (
+        <>
+          {editing ? (
+            <CommentComposer
+              initialBody={comment.body}
+              initialType={comment.type}
+              submitLabel="Save"
+              onCancel={() => setEditing(false)}
+              onSubmit={async (body, type) => {
+                if (await onUpdate(comment.id, body, type)) setEditing(false);
+              }}
+            />
+          ) : (
+            <Markdown className="thread-body md-body" source={comment.body} />
+          )}
+
+          {replies.length > 0 && (
+            <div className="thread-replies">
+              {replies.map((r) => (
+                <ReplyItem
+                  key={r.id}
+                  reply={r}
+                  onUpdate={(body) => onUpdateReply(comment.id, r.id, body)}
+                  onDelete={() => onDeleteReply(comment.id, r.id)}
+                />
+              ))}
+            </div>
+          )}
+
+          {replying ? (
+            <div className="thread-reply-composer">
+              <CommentComposer
+                hideType
+                submitLabel="Reply"
+                placeholder="Reply…"
+                onCancel={() => setReplying(false)}
+                onSubmit={async (body) => {
+                  if (await onAddReply(comment.id, body)) setReplying(false);
+                }}
+              />
+            </div>
+          ) : (
+            <button className="link reply-add" onClick={() => setReplying(true)}>
+              Reply
+            </button>
+          )}
+        </>
       )}
     </div>
   );

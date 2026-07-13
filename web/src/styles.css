@@ -881,6 +881,37 @@ textarea:focus-visible {
   gap: 8px;
   margin-bottom: 6px;
 }
+.thread-toggle {
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  cursor: pointer;
+}
+.thread-reply-count {
+  font-size: 11px;
+}
+/* One-line body preview shown while a thread is collapsed. */
+.thread-collapsed {
+  display: block;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.thread-collapsed:hover {
+  color: var(--text);
+}
 .thread-body {
   font-size: 13px;
 }
