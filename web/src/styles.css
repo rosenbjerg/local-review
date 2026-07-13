@@ -1007,8 +1007,14 @@ textarea:focus-visible {
   border-radius: var(--radius-sm);
   padding: 0.1em 0.35em;
 }
+/* Comment threads sit on --bg, so code on --bg (as the export preview uses on its
+   lighter --bg-elev modal) would vanish into the card. Lift it to --bg-hover here
+   so code stands out from the prose. */
+.md-body code {
+  background: var(--bg-hover);
+}
 .md-body pre {
-  background: var(--bg);
+  background: var(--bg-hover);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 8px 10px;
