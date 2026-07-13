@@ -12,6 +12,7 @@ import { TopBar } from "./components/TopBar";
 import { buildReplyPrompt, buildReviewPrompt } from "./prompts";
 import { useCommentActions } from "./useCommentActions";
 import { useJump } from "./useJump";
+import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 import { usePanelResize } from "./usePanelResize";
 import { useReview } from "./useReview";
 import type { FileDiff } from "./types";
@@ -166,137 +167,80 @@ export default function App() {
     return ids;
   }, [orderedDiffFiles, comments]);
 
-  useEffect(() => {
-    if (!review) return;
+  function moveFile(delta: number) {
     const fileList = orderedDiffFiles.map((f) => f.newPath || f.oldPath);
-    const moveFile = (delta: number) => {
-      if (fileList.length === 0) return;
-      const cur = selectedFile ? fileList.indexOf(selectedFile) : -1;
-      const next =
-        cur === -1 ? (delta > 0 ? 0 : fileList.length - 1) : clamp(cur + delta, 0, fileList.length - 1);
-      jumpToFile(fileList[next]);
-    };
-    const moveComment = (delta: number) => {
-      if (orderedCommentIds.length === 0) return;
-      const cur = activeComment != null ? orderedCommentIds.indexOf(activeComment) : -1;
-      const next =
-        cur === -1
-          ? delta > 0
-            ? 0
-            : orderedCommentIds.length - 1
-          : clamp(cur + delta, 0, orderedCommentIds.length - 1);
-      jumpTo(orderedCommentIds[next]);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const t = e.target as HTMLElement | null;
-      if (
-        t &&
-        (t.tagName === "INPUT" ||
-          t.tagName === "TEXTAREA" ||
-          t.tagName === "SELECT" ||
-          t.isContentEditable)
-      ) {
-        return;
-      }
-      // Modals suppress the shortcuts below; the Modal shell owns Escape, so only
-      // `?`-toggles-help stays here.
-      if (showHelp || confirmingReset || showExport || showPrompts || showAddFile) {
-        if (showHelp && e.key === "?") {
-          e.preventDefault();
-          setShowHelp(false);
-        }
-        return;
-      }
-      switch (e.key) {
-        case "j":
-          e.preventDefault();
-          moveFile(1);
-          break;
-        case "k":
-          e.preventDefault();
-          moveFile(-1);
-          break;
-        case "n":
-          e.preventDefault();
-          moveComment(1);
-          break;
-        case "p":
-          e.preventDefault();
-          moveComment(-1);
-          break;
-        case "e":
-          e.preventDefault();
-          setShowExport(true);
-          break;
-        case "r":
-          if (!loading) {
-            e.preventDefault();
-            startReview();
-          }
-          break;
-        case "?":
-          e.preventDefault();
-          setShowHelp(true);
-          break;
-        case "/":
-          e.preventDefault();
-          explorerSearchRef.current?.focus();
-          break;
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    review,
-    showExport,
-    showPrompts,
-    showHelp,
-    showAddFile,
-    confirmingReset,
+    if (fileList.length === 0) return;
+    const cur = selectedFile ? fileList.indexOf(selectedFile) : -1;
+    const next =
+      cur === -1 ? (delta > 0 ? 0 : fileList.length - 1) : clamp(cur + delta, 0, fileList.length - 1);
+    jumpToFile(fileList[next]);
+  }
+  function moveComment(delta: number) {
+    if (orderedCommentIds.length === 0) return;
+    const cur = activeComment != null ? orderedCommentIds.indexOf(activeComment) : -1;
+    const next =
+      cur === -1
+        ? delta > 0
+          ? 0
+          : orderedCommentIds.length - 1
+        : clamp(cur + delta, 0, orderedCommentIds.length - 1);
+    jumpTo(orderedCommentIds[next]);
+  }
+
+  useKeyboardShortcuts({
+    enabled: !!review,
+    modalOpen: showHelp || confirmingReset || showExport || showPrompts || showAddFile,
+    helpOpen: showHelp,
     loading,
-    repo,
-    head,
-    base,
-    orderedDiffFiles,
-    orderedCommentIds,
-    selectedFile,
-    activeComment,
-  ]);
+    onNextFile: () => moveFile(1),
+    onPrevFile: () => moveFile(-1),
+    onNextComment: () => moveComment(1),
+    onPrevComment: () => moveComment(-1),
+    onExport: () => setShowExport(true),
+    onReload: startReview,
+    onOpenHelp: () => setShowHelp(true),
+    onCloseHelp: () => setShowHelp(false),
+    onFocusSearch: () => explorerSearchRef.current?.focus(),
+  });
 
   return (
     <div className="app">
       <TopBar
-        repo={repo}
-        repoOptions={repoOptions}
-        onRepoChange={(v) => {
-          setRepo(v);
-          setString(LS.repo, v);
+        selection={{
+          repo,
+          repoOptions,
+          onRepoChange: (v) => {
+            setRepo(v);
+            setString(LS.repo, v);
+          },
+          head,
+          headOptions,
+          onHeadChange: setHead,
+          base,
+          baseOptions,
+          onBaseChange: (v) => {
+            setBase(v);
+            writeBasePref(repo, v);
+          },
+          headIsCurrent,
+          uncommitted,
+          onUncommittedChange: setUncommitted,
+          loading,
+          onReload: startReview,
         }}
-        head={head}
-        headOptions={headOptions}
-        onHeadChange={setHead}
-        base={base}
-        baseOptions={baseOptions}
-        onBaseChange={(v) => {
-          setBase(v);
-          writeBasePref(repo, v);
+        actions={{
+          onShowPrompts: () => setShowPrompts(true),
+          onShowExport: () => setShowExport(true),
+          onReset: requestReset,
+          onShowHelp: () => setShowHelp(true),
         }}
-        headIsCurrent={headIsCurrent}
-        uncommitted={uncommitted}
-        onUncommittedChange={setUncommitted}
-        loading={loading}
-        onReload={startReview}
-        review={review}
-        shortSha={shortSha}
-        effectiveUncommitted={effectiveUncommitted}
-        openCommentCount={comments.filter((c) => !c.resolved).length}
-        canReset={comments.length > 0 || reviewedFiles.size > 0}
-        onShowPrompts={() => setShowPrompts(true)}
-        onShowExport={() => setShowExport(true)}
-        onReset={requestReset}
-        onShowHelp={() => setShowHelp(true)}
+        status={{
+          review,
+          shortSha,
+          effectiveUncommitted,
+          openCommentCount: comments.filter((c) => !c.resolved).length,
+          canReset: comments.length > 0 || reviewedFiles.size > 0,
+        }}
       />
 
       {error && (

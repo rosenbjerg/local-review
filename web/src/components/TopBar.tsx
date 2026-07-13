@@ -1,7 +1,8 @@
 import { Combobox, type ComboOption } from "./Combobox";
 import type { Review } from "../types";
 
-interface Props {
+// Repo/head/base pickers + the uncommitted toggle + reload.
+export interface Selection {
   repo: string;
   repoOptions: ComboOption[];
   onRepoChange: (v: string) => void;
@@ -16,44 +17,34 @@ interface Props {
   onUncommittedChange: (v: boolean) => void;
   loading: boolean;
   onReload: () => void;
-  review: Review | null;
-  shortSha?: string;
-  effectiveUncommitted: boolean;
-  openCommentCount: number;
-  canReset: boolean;
+}
+
+// The review-scoped buttons.
+export interface TopBarActions {
   onShowPrompts: () => void;
   onShowExport: () => void;
   onReset: () => void;
   onShowHelp: () => void;
 }
 
+// Review status shown on the right (only when a review is open).
+export interface TopBarStatus {
+  review: Review | null;
+  shortSha?: string;
+  effectiveUncommitted: boolean;
+  openCommentCount: number;
+  canReset: boolean;
+}
+
+interface Props {
+  selection: Selection;
+  actions: TopBarActions;
+  status: TopBarStatus;
+}
+
 // The top toolbar: repo/head/base pickers, the uncommitted toggle, reload, and the
 // review-scoped actions (agent prompts / export / reset) plus help & repo links.
-export function TopBar({
-  repo,
-  repoOptions,
-  onRepoChange,
-  head,
-  headOptions,
-  onHeadChange,
-  base,
-  baseOptions,
-  onBaseChange,
-  headIsCurrent,
-  uncommitted,
-  onUncommittedChange,
-  loading,
-  onReload,
-  review,
-  shortSha,
-  effectiveUncommitted,
-  openCommentCount,
-  canReset,
-  onShowPrompts,
-  onShowExport,
-  onReset,
-  onShowHelp,
-}: Props) {
+export function TopBar({ selection: s, actions, status }: Props) {
   return (
     <header className="topbar">
       <span className="logo">local-review</span>
@@ -61,10 +52,10 @@ export function TopBar({
         repo
         <Combobox
           ariaLabel="repository"
-          value={repo}
-          options={repoOptions}
-          onChange={onRepoChange}
-          disabled={loading}
+          value={s.repo}
+          options={s.repoOptions}
+          onChange={s.onRepoChange}
+          disabled={s.loading}
           emptyText="(none found)"
         />
       </label>
@@ -72,10 +63,10 @@ export function TopBar({
         head
         <Combobox
           ariaLabel="head branch"
-          value={head}
-          options={headOptions}
-          onChange={onHeadChange}
-          disabled={loading}
+          value={s.head}
+          options={s.headOptions}
+          onChange={s.onHeadChange}
+          disabled={s.loading}
         />
       </label>
       <span className="arrow">→</span>
@@ -83,52 +74,52 @@ export function TopBar({
         base
         <Combobox
           ariaLabel="base branch"
-          value={base}
-          options={baseOptions}
-          onChange={onBaseChange}
-          disabled={loading}
+          value={s.base}
+          options={s.baseOptions}
+          onChange={s.onBaseChange}
+          disabled={s.loading}
         />
       </label>
-      {headIsCurrent && (
+      {s.headIsCurrent && (
         <label className="checkbox" title="Diff against the working tree instead of the head commit (staged + unstaged tracked changes; excludes untracked files)">
           <input
             type="checkbox"
-            checked={uncommitted}
-            onChange={(e) => onUncommittedChange(e.target.checked)}
-            disabled={loading}
+            checked={s.uncommitted}
+            onChange={(e) => s.onUncommittedChange(e.target.checked)}
+            disabled={s.loading}
           />
           uncommitted
         </label>
       )}
       <button
         className="btn"
-        onClick={onReload}
-        disabled={loading || !repo || !head}
+        onClick={s.onReload}
+        disabled={s.loading || !s.repo || !s.head}
         title="Re-run the review to pick up new commits"
       >
-        {loading ? "Loading…" : "Reload"}
+        {s.loading ? "Loading…" : "Reload"}
       </button>
       <span className="spacer" />
-      {review && (
+      {status.review && (
         <>
           <span className="muted">
-            {shortSha}
-            {effectiveUncommitted && " + uncommitted"}
+            {status.shortSha}
+            {status.effectiveUncommitted && " + uncommitted"}
           </span>
           <button
             className="btn"
-            onClick={onShowPrompts}
+            onClick={actions.onShowPrompts}
             title="Copyable prompts: hand a coding agent this review to address, or have an agent review the branch itself"
           >
             Agent prompts
           </button>
-          <button className="btn" onClick={onShowExport} title="Exports unresolved threads">
-            Export ({openCommentCount})
+          <button className="btn" onClick={actions.onShowExport} title="Exports unresolved threads">
+            Export ({status.openCommentCount})
           </button>
           <button
             className="btn danger"
-            onClick={onReset}
-            disabled={!canReset}
+            onClick={actions.onReset}
+            disabled={!status.canReset}
             title="Delete all comments and unmark all reviewed files"
           >
             Reset
@@ -137,7 +128,7 @@ export function TopBar({
       )}
       <button
         className="btn btn-icon"
-        onClick={onShowHelp}
+        onClick={actions.onShowHelp}
         title="Keyboard shortcuts (?)"
         aria-label="Keyboard shortcuts"
       >
