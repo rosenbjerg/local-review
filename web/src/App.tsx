@@ -66,6 +66,7 @@ export default function App() {
   const [rightW, setRightW] = useState(() => getNumber(LS.rightWidth, 380));
   const mainRef = useRef<HTMLDivElement>(null);
   const diffColRef = useRef<HTMLDivElement>(null);
+  const explorerSearchRef = useRef<HTMLInputElement>(null);
   const expandN = useRef(0);
   const jumpPoll = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [expandTarget, setExpandTarget] = useState<{ path: string; n: number } | null>(null);
@@ -709,6 +710,10 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
           e.preventDefault();
           setShowHelp(true);
           break;
+        case "/":
+          e.preventDefault();
+          explorerSearchRef.current?.focus();
+          break;
       }
     };
     window.addEventListener("keydown", onKey);
@@ -889,6 +894,7 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
               onSelect={jumpToFile}
               onToggleReviewed={toggleReviewed}
               onAddFile={() => setShowAddFile(true)}
+              searchRef={explorerSearchRef}
             />
           </aside>
           <div
@@ -1022,6 +1028,12 @@ curl -s -X POST ${origin}/api/comments/<id>/resolved \\
                       <kbd>r</kbd>
                     </td>
                     <td>Reload review</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <kbd>/</kbd>
+                    </td>
+                    <td>Search files</td>
                   </tr>
                   <tr>
                     <td>

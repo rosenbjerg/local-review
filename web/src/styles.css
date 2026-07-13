@@ -531,6 +531,15 @@ textarea:focus-visible {
 .explorer {
   padding: 8px 0;
 }
+/* Header + search pin together above the scrolling rows (which have
+   hover/active backgrounds), mirroring .file-header. Keeping them in one sticky
+   wrapper avoids hard-coding the header's height as the search row's top offset. */
+.explorer-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-elev);
+}
 .explorer-head {
   display: flex;
   justify-content: space-between;
@@ -539,12 +548,6 @@ textarea:focus-visible {
   font-weight: 600;
   font-size: 13px;
   border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  /* Sit above the scrolling rows below (which have hover/active backgrounds),
-     mirroring .file-header. */
-  z-index: 1;
-  background: var(--bg-elev);
 }
 .explorer-head .muted {
   font-weight: 400;
@@ -554,6 +557,50 @@ textarea:focus-visible {
   padding: 0 6px;
   font-size: 16px;
   line-height: 1.4;
+}
+.explorer-search-row {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.explorer-search-wrap {
+  position: relative;
+  display: flex;
+}
+.explorer-search {
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 4px 24px 4px 8px; /* right room for the clear button */
+  font-size: 12px;
+}
+.explorer-search-clear {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: var(--radius-sm);
+}
+.explorer-search-clear:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+.explorer-empty {
+  padding: 10px 12px;
+  font-size: 12px;
+}
+.search-hl {
+  background: var(--sel-bg);
+  color: var(--text);
+  border-radius: var(--radius-sm);
 }
 .explorer-list {
   padding: 4px 0;

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, type RefObject } from "react";
 import type { Comment, FileDiff } from "../types";
 import { Chevron } from "./Chevron";
 
@@ -10,6 +10,7 @@ interface Props {
   onSelect: (path: string) => void;
   onToggleReviewed: (path: string, reviewed: boolean) => void;
   onAddFile: () => void;
+  searchRef?: RefObject<HTMLInputElement>;
 }
 
 const STATUS_MARK: Record<string, string> = {
@@ -76,6 +77,31 @@ function compress(dir: DirNode): DirNode {
   return d;
 }
 
+// Wrap each occurrence of the (already-lowercased) needle in a <mark>. Runs on
+// each rendered folder/file name so a match inside any path segment shows.
+function highlightMatch(text: string, needle: string): ReactNode {
+  if (!needle) return text;
+  const lower = text.toLowerCase();
+  const parts: ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+  for (;;) {
+    const idx = lower.indexOf(needle, i);
+    if (idx < 0) {
+      parts.push(text.slice(i));
+      break;
+    }
+    if (idx > i) parts.push(text.slice(i, idx));
+    parts.push(
+      <mark key={key++} className="search-hl">
+        {text.slice(idx, idx + needle.length)}
+      </mark>
+    );
+    i = idx + needle.length;
+  }
+  return parts;
+}
+
 export function FileExplorer({
   files,
   comments,
@@ -84,8 +110,10 @@ export function FileExplorer({
   onSelect,
   onToggleReviewed,
   onAddFile,
+  searchRef,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
 
   const countByFile = new Map<string, number>();
   for (const c of comments) {
@@ -93,7 +121,15 @@ export function FileExplorer({
     countByFile.set(c.filePath, (countByFile.get(c.filePath) ?? 0) + 1);
   }
 
-  const tree = buildTree(files);
+  // Filtering just reruns buildTree on the matching files — it only ever creates
+  // folders for the files it's given, so the result is exactly the matches plus
+  // their ancestors, already sorted and compressed.
+  const q = query.trim().toLowerCase();
+  const searching = q !== "";
+  const shown = searching
+    ? files.filter((f) => (f.newPath || f.oldPath).toLowerCase().includes(q))
+    : files;
+  const tree = buildTree(shown);
   const reviewedCount = files.filter((f) => reviewed.has(f.newPath || f.oldPath)).length;
 
   function toggle(path: string) {
@@ -125,7 +161,8 @@ export function FileExplorer({
     for (const n of nodes) {
       const indent = { paddingLeft: depth * 12 + 8 };
       if (n.kind === "dir") {
-        const isCollapsed = collapsed.has(n.path);
+        // While searching, force every surviving folder open (ignore collapse).
+        const isCollapsed = !searching && collapsed.has(n.path);
         const stats = folderStats(n);
         const done = stats.total > 0 && stats.reviewed === stats.total;
         out.push(
@@ -146,7 +183,9 @@ export function FileExplorer({
             }}
           >
             <Chevron open={!isCollapsed} size={10} className="tree-chevron" />
-            <span className={`tree-folder${done ? " reviewed" : ""}`}>{n.name}</span>
+            <span className={`tree-folder${done ? " reviewed" : ""}`}>
+              {highlightMatch(n.name, q)}
+            </span>
             <span className="muted tree-progress">
               {stats.reviewed}/{stats.total}
             </span>
@@ -175,7 +214,7 @@ export function FileExplorer({
               <span className={`fstat fstat-${n.file.status}`}>
                 {STATUS_MARK[n.file.status] ?? "M"}
               </span>
-              <span className="fname">{n.name}</span>
+              <span className="fname">{highlightMatch(n.name, q)}</span>
             </button>
             {count > 0 && <span className="explorer-count">{count}</span>}
           </div>
@@ -187,22 +226,66 @@ export function FileExplorer({
 
   return (
     <div className="explorer">
-      <div className="explorer-head">
-        <span>Files</span>
-        <span className="spacer" />
-        <span className="muted">
-          {reviewedCount}/{files.length} reviewed
-        </span>
-        <button
-          className="btn btn-icon explorer-add"
-          onClick={onAddFile}
-          title="Comment on a file the branch didn't change"
-          aria-label="Add a file to comment on"
-        >
-          +
-        </button>
+      <div className="explorer-sticky">
+        <div className="explorer-head">
+          <span>Files</span>
+          <span className="spacer" />
+          <span className="muted">
+            {searching
+              ? `${shown.length} match${shown.length === 1 ? "" : "es"}`
+              : `${reviewedCount}/${files.length} reviewed`}
+          </span>
+          <button
+            className="btn btn-icon explorer-add"
+            onClick={onAddFile}
+            title="Comment on a file the branch didn't change"
+            aria-label="Add a file to comment on"
+          >
+            +
+          </button>
+        </div>
+        <div className="explorer-search-row">
+          <div className="explorer-search-wrap">
+            <input
+              ref={searchRef}
+              type="text"
+              className="explorer-search"
+              placeholder="Search files… ( / )"
+              value={query}
+              aria-label="Search files"
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.stopPropagation(); // don't let it bubble to global/modal handlers
+                  if (query) setQuery("");
+                  else e.currentTarget.blur();
+                }
+              }}
+            />
+            {query && (
+              <button
+                type="button"
+                className="explorer-search-clear"
+                aria-label="Clear search"
+                title="Clear search"
+                onClick={() => {
+                  setQuery("");
+                  searchRef?.current?.focus();
+                }}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </div>
       </div>
-      <div className="explorer-list">{renderNodes(tree, 0)}</div>
+      <div className="explorer-list">
+        {searching && shown.length === 0 ? (
+          <div className="explorer-empty muted">No files match “{query.trim()}”.</div>
+        ) : (
+          renderNodes(tree, 0)
+        )}
+      </div>
     </div>
   );
 }
