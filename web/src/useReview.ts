@@ -79,9 +79,24 @@ export function useReview() {
       });
   }, [repo]);
 
-  // Refetch the whole review on an SSE "changed" ping; HEAD is pinned so the diff
-  // isn't refetched. The focus/visibility refetch is a fallback for a dead stream,
-  // gated on the stream not being OPEN so a healthy one doesn't double-fetch.
+  // The SSE effect below is keyed only on review.id, so it can't close over the
+  // live diff params — repo and the uncommitted toggle change without the id moving.
+  // Mirror them into a ref the ping refetch reads, so a diff refresh uses the
+  // current selection rather than a stale one.
+  const diffParams = useRef({ repo, headRef: "", baseRef: "", uncommitted: effectiveUncommitted });
+  useEffect(() => {
+    diffParams.current = {
+      repo,
+      headRef: review?.headRef ?? "",
+      baseRef: review?.baseRef ?? "",
+      uncommitted: effectiveUncommitted,
+    };
+  });
+
+  // Refetch the review and the diff on an SSE "changed" ping, so an agent's edits
+  // (or a fresh commit) surface without a manual reload. The focus/visibility
+  // refetch is a fallback for a dead stream, gated on the stream not being OPEN so a
+  // healthy one doesn't double-fetch.
   useEffect(() => {
     if (!review) return;
     const id = review.id;
@@ -98,11 +113,21 @@ export function useReview() {
       }
       inFlight = true;
       try {
-        const rev = await api.getReview(id);
+        const p = diffParams.current;
+        const [rev, d] = await Promise.all([
+          api.getReview(id),
+          p.repo && p.headRef
+            ? api.diff(p.repo, p.headRef, p.baseRef, p.uncommitted)
+            : Promise.resolve(null),
+        ]);
         if (!cancelled) {
           setReview(rev);
           setComments(rev.comments ?? []);
           setReviewedFiles(new Set(rev.reviewedFiles ?? []));
+          if (d) {
+            setFiles(d.files ?? []);
+            setBaseSha(d.base ?? "");
+          }
         }
       } catch {
         // Transient refresh failure — keep the current state.

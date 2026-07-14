@@ -181,8 +181,11 @@ web/src/
 - **Live multi-tab sync** via SSE: `GET /api/reviews/{id}/events` streams a
   `data: changed` ping whenever a comment or reviewed-file of that review is
   mutated (the four mutation handlers call `hub.publish`). The client refetches
-  the whole review on a ping (ping-and-refetch — backend stays source of truth,
-  no per-event payloads). The hub (`internal/api/events.go`) is in-memory with
+  the whole review **and the diff** on a ping (ping-and-refetch — backend stays
+  source of truth, no per-event payloads), so an agent's on-disk edits or a fresh
+  commit surface without a manual reload. The diff params (repo + the uncommitted
+  toggle) come from a ref in `useReview`, since the SSE effect is keyed only on
+  `review.id`. The hub (`internal/api/events.go`) is in-memory with
   non-blocking coalescing sends, so a stalled tab never blocks a handler; empty
   review entries are pruned on the last unsubscribe. A 25s keepalive comment
   keeps the stream warm and turns a half-open connection into a write error so
