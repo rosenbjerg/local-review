@@ -93,22 +93,25 @@ export function useReview() {
     };
   });
 
-  // Refetch the review and the diff on an SSE "changed" ping, so an agent's edits
-  // (or a fresh commit) surface without a manual reload. The focus/visibility
-  // refetch is a fallback for a dead stream, gated on the stream not being OPEN so a
-  // healthy one doesn't double-fetch.
+  // Refetch on an SSE ping: a `diff` ping (a commit or on-disk edit) refetches the
+  // review and the diff, so an agent's changes surface without a manual reload; a
+  // `meta` ping (comment/reply/reviewed-file) refetches only the review, since those
+  // never move file content. The focus/visibility refetch is a fallback for a dead
+  // stream, gated on the stream not being OPEN so a healthy one doesn't double-fetch.
   useEffect(() => {
     if (!review) return;
     const id = review.id;
     let cancelled = false;
     let inFlight = false;
     let pending = false;
-    async function refresh() {
+    let pendingDiff = false;
+    async function refresh(withDiff: boolean) {
       if (cancelled || document.visibilityState !== "visible") return;
       if (inFlight) {
-        // Ping mid-fetch: the in-flight response may predate the change, so
-        // queue exactly one trailing refetch rather than drop it.
+        // Ping mid-fetch: the in-flight response may predate the change, so queue
+        // exactly one trailing refetch — carrying the diff if any queued ping wanted it.
         pending = true;
+        pendingDiff = pendingDiff || withDiff;
         return;
       }
       inFlight = true;
@@ -116,7 +119,7 @@ export function useReview() {
         const p = diffParams.current;
         const [rev, d] = await Promise.all([
           api.getReview(id),
-          p.repo && p.headRef
+          withDiff && p.repo && p.headRef
             ? api.diff(p.repo, p.headRef, p.baseRef, p.uncommitted)
             : Promise.resolve(null),
         ]);
@@ -135,16 +138,21 @@ export function useReview() {
         inFlight = false;
         if (pending && !cancelled) {
           pending = false;
-          refresh();
+          const wantDiff = pendingDiff;
+          pendingDiff = false;
+          refresh(wantDiff);
         }
       }
     }
     const es = new EventSource(`/api/reviews/${id}/events`);
-    es.onmessage = () => refresh();
+    // `diff` (a commit / on-disk edit) refetches the diff too; `meta` (comment,
+    // reply, reviewed-file) refetches only the review.
+    es.onmessage = (e) => refresh(e.data === "diff");
     // No onerror — EventSource auto-reconnects; the focus fallback covers the gap.
     function onFocus() {
       if (es.readyState === EventSource.OPEN) return; // stream live — it'll push
-      refresh();
+      // A dead stream may have missed a content change, so refetch the diff to be safe.
+      refresh(true);
     }
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);

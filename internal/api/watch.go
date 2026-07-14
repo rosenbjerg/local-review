@@ -15,7 +15,7 @@ const watchInterval = 1500 * time.Millisecond
 
 // watchRegistry runs one filesystem poller per review that has live SSE
 // subscribers, turning out-of-band changes (an agent editing files or committing)
-// into the same `changed` ping a mutation handler would publish. It ref-counts
+// into a `diff` ping so the client refetches the diff, not just the review. It ref-counts
 // subscribers so several tabs on one review share a single poller, and stops
 // polling the instant a review's last tab disconnects.
 type watchRegistry struct {
@@ -84,7 +84,7 @@ func (wr *watchRegistry) poll(ctx context.Context, reviewID int64, repoPath stri
 			}
 			if fp != last {
 				last = fp
-				wr.hub.publish(reviewID)
+				wr.hub.publish(reviewID, true) // on-disk change moved content: refetch the diff
 			}
 		}
 	}

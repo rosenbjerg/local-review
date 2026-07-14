@@ -369,8 +369,8 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	ch := s.hub.subscribe(id)
-	defer s.hub.unsubscribe(id, ch) // fires on every exit path — no orphaned channel
+	sub := s.hub.subscribe(id)
+	defer s.hub.unsubscribe(id, sub) // fires on every exit path — no orphaned channel
 
 	// Poll the repo for out-of-band changes while this stream is open, so an agent's
 	// edits/commits ping even when they don't hit a mutation handler. Ref-counted, so
@@ -393,8 +393,14 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ch:
-			if _, err := fmt.Fprint(w, "data: changed\n\n"); err != nil {
+		case <-sub.signal:
+			// diffPending set since the last read ⇒ file content moved: tell the
+			// client to refetch the diff too, not just the review.
+			event := "meta"
+			if sub.diffPending.Swap(false) {
+				event = "diff"
+			}
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", event); err != nil {
 				return
 			}
 			flusher.Flush()
@@ -742,10 +748,12 @@ func (s *Server) handleDeleteReply(w http.ResponseWriter, r *http.Request) {
 
 // --- helpers ---
 
-// A Touch failure is non-fatal — the mutation already landed.
+// A Touch failure is non-fatal — the mutation already landed. Metadata-only
+// (comment/reply/reviewed-file) never moves file content, so it publishes a
+// diff=false ping and the client refetches the review but not the diff.
 func (s *Server) notify(reviewID int64) {
 	_ = s.Store.Touch(reviewID)
-	s.hub.publish(reviewID)
+	s.hub.publish(reviewID, false)
 }
 
 func decodeBody[T any](w http.ResponseWriter, r *http.Request) (req T, ok bool) {

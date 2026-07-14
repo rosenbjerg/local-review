@@ -181,21 +181,28 @@ web/src/
   The API always takes a `filePaths` array — a single file is just a one-element
   batch.
 - **Live multi-tab sync** via SSE: `GET /api/reviews/{id}/events` streams a
-  `data: changed` ping whenever a comment or reviewed-file of that review is
-  mutated (the four mutation handlers call `hub.publish`). The client refetches
-  the whole review **and the diff** on a ping (ping-and-refetch — backend stays
-  source of truth, no per-event payloads), so an agent's on-disk edits or a fresh
-  commit surface without a manual reload. The diff params (repo + the uncommitted
-  toggle) come from a ref in `useReview`, since the SSE effect is keyed only on
-  `review.id`. The hub (`internal/api/events.go`) is in-memory with
-  non-blocking coalescing sends, so a stalled tab never blocks a handler; empty
-  review entries are pruned on the last unsubscribe. A 25s keepalive comment
-  keeps the stream warm and turns a half-open connection into a write error so
-  it unsubscribes. The frontend keeps a focus/visibility refetch as a fallback
-  for the reconnect gap, gated on the stream not being `OPEN`.
-  Besides the mutation handlers, a **filesystem poller** publishes the same ping
-  for **out-of-band** changes an agent makes without hitting the API — editing
-  files or committing. `internal/api/watch.go` runs one poller per review *while it
+  **typed** ping — `data: meta` or `data: diff` — whenever that review changes.
+  `publish(reviewID, diff bool)` distinguishes them: metadata-only mutations
+  (comment/reply/reviewed-file, via the `notify` helper) send `meta`; changes that
+  move file content send `diff`. The client refetches the whole review on either,
+  but the **diff only on a `diff` ping** (ping-and-refetch — backend stays source of
+  truth, no per-event payloads), so comment churn doesn't re-pull the whole diff
+  while an agent's edits or a fresh commit still surface without a manual reload.
+  `diff` is a superset that **upgrades** a pending `meta`: a per-subscriber
+  `atomic.Bool diffPending` rides alongside the coalescing wakeup channel and the
+  handler clears it with `Swap`, so a dropped (coalesced) wakeup never loses the
+  fact that the diff moved. The diff params (repo + the uncommitted toggle) come
+  from a ref in `useReview`, since the SSE effect is keyed only on `review.id`. The
+  hub (`internal/api/events.go`) is in-memory with non-blocking coalescing sends, so
+  a stalled tab never blocks a handler; empty review entries are pruned on the last
+  unsubscribe. A 25s keepalive comment keeps the stream warm and turns a half-open
+  connection into a write error so it unsubscribes. The frontend keeps a
+  focus/visibility refetch as a fallback for the reconnect gap, gated on the stream
+  not being `OPEN` — and it passes `diff` (a dead stream may have missed a content
+  change).
+  The `diff` pings come not just from commits landing but from a **filesystem
+  poller** covering **out-of-band** changes an agent makes without hitting the API —
+  editing files or committing. `internal/api/watch.go` runs one poller per review *while it
   has SSE subscribers* (ref-counted, so tabs share it; stops on the last
   disconnect), ticking every `watchInterval` (~1.5s) over
   `git.WorktreeFingerprint` and publishing on change. The fingerprint is
