@@ -15,10 +15,19 @@ function preserveGitkeep(): Plugin {
   };
 }
 
+// React Compiler auto-memoizes components (see COMPILER.md). Infer mode (default)
+// compiles the whole app and safely bails on functions it can't prove pure (the
+// two render-time-ref hooks). target:'18' emits calls to react-compiler-runtime,
+// since the useMemoCache hook is built into React 19 only.
+const reactCompiler: [string, Record<string, unknown>] = [
+  "babel-plugin-react-compiler",
+  { target: "18" },
+];
+
 // Frontend builds into dist/, which the Go binary embeds.
 // In dev, proxy the API to the Go server so both run side by side.
 export default defineConfig({
-  plugins: [react(), preserveGitkeep()],
+  plugins: [react({ babel: { plugins: [reactCompiler] } }), preserveGitkeep()],
   build: {
     outDir: "dist",
     emptyOutDir: true,

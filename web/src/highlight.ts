@@ -55,7 +55,6 @@ export async function tokenize(code: string, lang: string): Promise<Token[][] | 
       await hl.loadLanguage(bundledLanguages[lang as BundledLanguage]);
       loaded.add(lang);
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return hl.codeToTokens(code, { lang: lang as any, theme: THEME }).tokens;
   } catch {
     return null;

@@ -10,7 +10,6 @@ import { LazyFile } from "./components/LazyFile";
 import { ResetConfirmModal } from "./components/ResetConfirmModal";
 import { TopBar } from "./components/TopBar";
 import { buildReplyPrompt, buildReviewPrompt } from "./prompts";
-import { createActiveFileStore, type ActiveFileStore } from "./activeFileStore";
 import { useActiveFile } from "./useActiveFile";
 import { useCommentActions } from "./useCommentActions";
 import { useJump } from "./useJump";
@@ -66,20 +65,18 @@ export default function App() {
   const [confirmingReset, setConfirmingReset] = useState(false);
   const diffColRef = useRef<HTMLDivElement>(null);
   const explorerSearchRef = useRef<HTMLInputElement>(null);
-  // The active/selected file lives in an external store, not React state, so the
-  // scroll-spy can update it without re-rendering App (and every DiffView); only
-  // the subscribing FileExplorer re-renders.
-  const activeFileRef = useRef<ActiveFileStore | null>(null);
-  if (!activeFileRef.current) activeFileRef.current = createActiveFileStore();
-  const activeFile = activeFileRef.current;
+  // Which file the tree highlights: the scroll-spy sets it as you scroll, clicks/nav
+  // set it too. Plain state — the React Compiler keeps unchanged DiffViews from
+  // re-rendering when this changes, so it needn't live outside React.
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
   const { leftW, rightW, mainRef, startResize, onResizeKey } = usePanelResize();
   // Highlight the file scrolled to the top of the diff, not just the last-clicked
   // one; suppress it during programmatic scrolls so it doesn't flicker en route.
-  const { suppress: suppressActiveFile } = useActiveFile(diffColRef, activeFile.set, review?.id);
+  const { suppress: suppressActiveFile } = useActiveFile(diffColRef, setSelectedFile, review?.id);
   const { activeComment, expandTarget, expandComment, jumpTo, jumpToFile, resetJump } = useJump({
     comments,
-    setSelectedFile: activeFile.set,
+    setSelectedFile,
     onProgrammaticScroll: suppressActiveFile,
   });
   const { commentActions, handleAddComment, handleDelete } = useCommentActions({
@@ -100,10 +97,9 @@ export default function App() {
   // Clear pure view/nav state on a repo switch; useReview resets its own data.
   useEffect(() => {
     if (!repo) return;
-    activeFile.set(null);
+    setSelectedFile(null);
     setOpenedFiles([]);
     resetJump();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repo]);
 
   function requestReset() {
@@ -120,7 +116,7 @@ export default function App() {
   function openFile(path: string) {
     setShowAddFile(false);
     setOpenedFiles((s) => (s.includes(path) ? s : [...s, path]));
-    activeFile.set(path);
+    setSelectedFile(path);
     suppressActiveFile();
     // The card mounts on the next render; defer the scroll until it exists.
     setTimeout(
@@ -182,8 +178,7 @@ export default function App() {
   function moveFile(delta: number) {
     const fileList = orderedDiffFiles.map((f) => f.newPath || f.oldPath);
     if (fileList.length === 0) return;
-    const current = activeFile.get();
-    const cur = current ? fileList.indexOf(current) : -1;
+    const cur = selectedFile ? fileList.indexOf(selectedFile) : -1;
     const next =
       cur === -1 ? (delta > 0 ? 0 : fileList.length - 1) : clamp(cur + delta, 0, fileList.length - 1);
     jumpToFile(fileList[next]);
@@ -296,7 +291,7 @@ export default function App() {
               files={allFiles}
               comments={comments}
               reviewed={reviewedFiles}
-              activeFile={activeFile}
+              selected={selectedFile}
               onSelect={jumpToFile}
               onToggleReviewed={toggleReviewed}
               onToggleFolder={setReviewedPaths}

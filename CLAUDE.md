@@ -29,7 +29,8 @@ go build -o local-review .
 npm --prefix web run dev                 # terminal 2 → :5173
 ```
 
-Checks: `go build ./...`, `go vet ./...`, `npm --prefix web run build` (runs `tsc`).
+Checks: `go build ./...`, `go vet ./...`, `npm --prefix web run build` (runs `tsc`),
+`npm --prefix web run lint` (ESLint: rules-of-hooks + React Compiler rule; see `COMPILER.md`).
 There is no browser automation here — verify backend changes with `curl` against
 a throwaway git repo; verify pure frontend logic with a standalone node script.
 
@@ -260,4 +261,10 @@ web/src/
 - Importing Shiki's `bundledLanguages` pulls in a ~600KB `wasm-*.js` chunk that's
   **dynamically imported but never called** (we use the JS engine) — dead weight
   on disk, not fetched at runtime. Don't chase it.
+- The build runs the **React Compiler** (auto-memoization) unconditionally, and
+  `npm run lint` runs `eslint-plugin-react-hooks@7`'s rules (rules-of-hooks +
+  the compiler diagnostics) — see `COMPILER.md`. `react-compiler-runtime` is a real
+  dependency (the `useMemoCache` polyfill for React 18). The intentional partial-dep
+  effects surface as `exhaustive-deps` warnings, not inline disables (which would
+  make the compiler rules distrust the whole file); `set-state-in-effect` is off.
 ```

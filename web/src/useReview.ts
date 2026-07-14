@@ -150,7 +150,6 @@ export function useReview() {
       .finally(() => {
         if (reqSeq.current === seq) setLoading(false);
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uncommitted]);
 
   async function startReview() {
@@ -195,7 +194,6 @@ export function useReview() {
   // its own effect, so it's not a dep here.
   useEffect(() => {
     if (repo && head) startReview();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repo, head, base]);
 
   async function resetReview() {

@@ -15,7 +15,9 @@ export function useActiveFile(
   ready: unknown
 ) {
   const onActiveRef = useRef(onActive);
-  onActiveRef.current = onActive;
+  useEffect(() => {
+    onActiveRef.current = onActive; // keep latest without re-subscribing the scroll listener
+  });
   const suppressUntil = useRef(0);
   const lastActive = useRef<string | null>(null);
 

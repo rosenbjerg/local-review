@@ -24,7 +24,9 @@ export interface Shortcuts {
 // large dependency array. Bails while typing in a field or a modifier is held.
 export function useKeyboardShortcuts(opts: Shortcuts) {
   const ref = useRef(opts);
-  ref.current = opts;
+  useEffect(() => {
+    ref.current = opts; // keep latest without re-subscribing the keydown listener
+  });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
