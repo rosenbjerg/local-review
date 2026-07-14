@@ -117,8 +117,6 @@ export function Combobox({ value, options, onChange, ariaLabel, disabled, emptyT
           if (!open) openList();
         }}
         onBlur={() => {
-          // Option clicks preventDefault their mousedown, so focus stays and this
-          // doesn't fire for them — it only closes on a click/tab away.
           setOpen(false);
           setQuery("");
         }}
@@ -145,9 +143,14 @@ export function Combobox({ value, options, onChange, ariaLabel, disabled, emptyT
                   aria-selected={o.value === value}
                   data-idx={i}
                   className={`combobox-option${i === active ? " active" : ""}`}
-                  onMouseDown={(e) => e.preventDefault()}
+                  // Select on mousedown (not click): preventDefault keeps focus so
+                  // this doesn't blur-close mid-pick, and it fires even when a
+                  // following click event wouldn't reach us.
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    choose(o);
+                  }}
                   onMouseEnter={() => setActive(i)}
-                  onClick={() => choose(o)}
                   title={o.label}
                 >
                   <span className="combobox-label">{o.label}</span>
