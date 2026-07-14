@@ -14,13 +14,17 @@ interface Props {
   svg: boolean;
   svgAsImage: boolean;
   onSvgAsImage: (asImage: boolean) => void;
+  markdown: boolean;
+  mdRendered: boolean;
+  onMdRendered: (rendered: boolean) => void;
   showModeToggle: boolean;
   mode: "changed" | "full";
   onSwitchMode: (mode: "changed" | "full") => void;
 }
 
 // The file card's header row: collapse toggle, status + path, comment count,
-// reviewed checkbox, and the SVG (Text/Image) and diff (Changed/Full) toggles.
+// reviewed checkbox, and the SVG (Text/Image), markdown (Code/Rendered) and
+// diff (Changed/Full) toggles.
 export function FileHeader({
   status,
   path,
@@ -32,6 +36,9 @@ export function FileHeader({
   svg,
   svgAsImage,
   onSvgAsImage,
+  markdown,
+  mdRendered,
+  onMdRendered,
   showModeToggle,
   mode,
   onSwitchMode,
@@ -64,6 +71,17 @@ export function FileHeader({
           options={[
             { value: "text", label: "Text" },
             { value: "image", label: "Image" },
+          ]}
+        />
+      )}
+      {markdown && (
+        <ViewToggle
+          ariaLabel="Markdown view"
+          value={mdRendered ? "rendered" : "code"}
+          onChange={(v) => onMdRendered(v === "rendered")}
+          options={[
+            { value: "code", label: "Code" },
+            { value: "rendered", label: "Rendered" },
           ]}
         />
       )}

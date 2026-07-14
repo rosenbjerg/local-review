@@ -58,13 +58,17 @@ web/src/
     CommentThread.tsx    a comment thread: root comment (edit/delete) + replies + reply composer
     CommentsPanel.tsx    right pane: cross-file comment overview, jump-to
     CommentComposer.tsx  type select + body textarea (reused for new/edit)
-    ExportModal.tsx      rendered-markdown preview (markdown-it) + Raw toggle + copy/download
+    MarkdownView.tsx     rendered (as-published) view of a .md file + file-level comments
+    ExportModal.tsx      rendered-markdown preview (via Markdown) + Raw toggle + copy/download
     AgentPromptsModal.tsx  copyable agent prompts (Address-the-review / Do-a-review),
                          ViewToggle to switch + Copy the active one
     Modal.tsx            shared dialog shell: backdrop, focus trap, Escape, dialog aria
-    ViewToggle.tsx       data-driven segmented control (Changed/Full, Text/Image, Preview/Raw)
+    ViewToggle.tsx       data-driven segmented control (Changed/Full, Text/Image,
+                         Code/Rendered, Preview/Raw)
     CopyButton.tsx       clipboard button with idle/ok/fail state (lazy text builder)
-    (small shared UI primitives: Chevron, CommentCount, AnchorBadge, MetaTimestamps, Markdown)
+    (small shared UI primitives: Chevron, CommentCount, AnchorBadge, MetaTimestamps,
+     Markdown — markdown-it + async Shiki code-fence highlight; `softBreaks` picks
+     comment (GFM <br>) vs document (CommonMark) newline handling)
 ```
 
 ## Architecture notes
@@ -194,6 +198,12 @@ web/src/
   **file-level comments anchored at line 0** (empty snippet ⇒ always `current`;
   exported and labelled as `file`, not `L0`). `/api/blob` shares `/api/file`'s
   ref/worktree resolution and working-tree fallback.
+- **Markdown files** (`.md`/`.markdown` with a new side) get a per-file
+  **Code/Rendered** toggle, mirroring SVG's Text/Image. Rendered mode swaps the
+  diff table for `MarkdownView` — the new-side content run through the shared
+  `Markdown` component (`softBreaks={false}`, `.markdown-body`) plus file-level
+  (line-0) comments, like the image view. Line-anchored commenting stays in Code
+  view; the Changed/Full toggle is hidden while rendered. Default is Code.
 - **Syntax highlighting** (`highlight.ts`): Shiki with the **JS regex engine**
   (not oniguruma — avoids a browser wasm-load failure) and `github-dark`. All
   ~235 grammars are available, each lazily fetched per file. Extensions resolve

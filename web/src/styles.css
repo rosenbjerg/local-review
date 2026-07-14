@@ -1422,6 +1422,14 @@ kbd {
   font-size: 14px;
   line-height: 1.5;
 }
+/* The same rendered markdown inside a diff file card, not the export modal:
+   flow with the card (which sizes to content) instead of filling a fixed-height
+   modal pane, with padding matched to the media (image) view. */
+.md-file {
+  flex: none;
+  padding: 12px 16px;
+  overflow-x: auto;
+}
 .markdown-body h1,
 .markdown-body h2,
 .markdown-body h3 {
