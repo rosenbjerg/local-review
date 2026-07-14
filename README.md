@@ -58,7 +58,9 @@ Grab the latest from [**Releases**](https://github.com/rosenbjerg/local-review/r
 | Platform | Asset |
 |----------|-------|
 | macOS (Apple Silicon) | `local-review-darwin-arm64` |
+| macOS (Intel) | `local-review-darwin-amd64` |
 | Linux (x86-64) | `local-review-linux-amd64` |
+| Linux (ARM64) | `local-review-linux-arm64` |
 | Windows (x86-64) | `local-review-windows-amd64.exe` |
 
 On macOS/Linux, make it executable — and on macOS clear the download quarantine:

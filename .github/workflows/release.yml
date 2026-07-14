@@ -66,7 +66,9 @@ jobs:
               go build -trimpath -ldflags="-s -w" -o "out/$3" .
           }
           build darwin  arm64 local-review-darwin-arm64
+          build darwin  amd64 local-review-darwin-amd64
           build linux   amd64 local-review-linux-amd64
+          build linux   arm64 local-review-linux-arm64
           build windows amd64 local-review-windows-amd64.exe
 
       # Release notes are the commit titles since the previous release tag.
