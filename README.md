@@ -38,15 +38,14 @@ no runtime dependencies beyond `git`.
   matching otherwise — badging threads that *moved* or went *outdated*.
 - **Reviewed-file tracking** that un-checks a file automatically when its content
   changes after you reviewed it.
-- **Agent handoff, two ways.** Copy a short prompt that points the agent at the
-  review's API so it *pulls* the markdown and replies to comments itself, or
-  export the rendered markdown to paste in directly. Either way the agent can
-  reply to each comment through the API.
+- **Agent handoff, two ways.** Point an agent at the review's API to pull the
+  feedback and reply itself, or export the markdown to paste in directly —
+  [details below](#the-agent-handoff-loop).
 - **Live multi-tab sync** over SSE — comments and reviewed state stay in sync
   across browser tabs.
-- **Handles real repos.** Syntax highlighting for ~235 languages, before/after
-  previews for images, a text/image toggle for SVGs, and lazy rendering so large
-  change-sets stay responsive.
+- **Renders every file, stays fast.** Syntax highlighting for ~235 languages,
+  before/after previews for images, and a text/image toggle for SVGs — with lazy
+  rendering so large change-sets stay responsive.
 
 ## Install
 
