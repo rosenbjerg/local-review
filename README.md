@@ -24,6 +24,8 @@ no runtime dependencies beyond `git`.
 
 <p align="center">
   <img src="docs/screenshot.png" alt="local-review reviewing a branch diff: hierarchical file tree on the left, a syntax-highlighted diff with an inline comment thread in the center, and the cross-file comments panel on the right" width="900">
+  <br>
+  <em>Reviewing a branch diff with inline comments, ready to export to a coding agent.</em>
 </p>
 
 ## Highlights
@@ -166,4 +168,4 @@ conventions.
 
 ## License
 
-[GPL-3.0](LICENSE) © local-review contributors.
+[GPL-3.0](LICENSE) © Malte Rosenbjerg.
