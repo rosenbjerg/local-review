@@ -1,4 +1,4 @@
-import { useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { Comment, FileDiff } from "../types";
 import { Chevron } from "./Chevron";
 
@@ -128,6 +128,14 @@ export function FileExplorer({
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
+  const activeRowRef = useRef<HTMLDivElement>(null);
+
+  // Keep the active file's row in view as the selection follows the diff scroll.
+  // Instant + "nearest" so it only nudges when off-screen and never animates on
+  // every scroll-spy step.
+  useEffect(() => {
+    activeRowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [selected]);
 
   const countByFile = new Map<string, number>();
   for (const c of comments) {
@@ -224,6 +232,7 @@ export function FileExplorer({
         out.push(
           <div
             key={`f:${n.path}`}
+            ref={selected === n.path ? activeRowRef : undefined}
             className={`tree-row explorer-item${selected === n.path ? " active" : ""}${
               isReviewed ? " reviewed" : ""
             }`}

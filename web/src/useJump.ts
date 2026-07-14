@@ -4,13 +4,15 @@ import type { Comment } from "./types";
 interface Params {
   comments: Comment[];
   setSelectedFile: (path: string) => void;
+  // Called before a programmatic scroll so a scroll-spy can pause and not flicker.
+  onProgrammaticScroll?: () => void;
 }
 
 // Owns comment/file navigation: the active comment, the expand signals that mount
 // a lazy file (expandTarget) and open a collapsed thread (expandComment), and the
 // jump handlers. Returns what DiffView/FileExplorer/CommentsPanel and the keyboard
 // shortcuts consume.
-export function useJump({ comments, setSelectedFile }: Params) {
+export function useJump({ comments, setSelectedFile, onProgrammaticScroll }: Params) {
   const [activeComment, setActiveComment] = useState<number | null>(null);
   const [expandTarget, setExpandTarget] = useState<{ path: string; n: number } | null>(null);
   // Nonce so jumping to the same collapsed thread twice re-expands it.
@@ -41,6 +43,7 @@ export function useJump({ comments, setSelectedFile }: Params) {
       clearTimeout(jumpPoll.current);
       jumpPoll.current = null;
     }
+    onProgrammaticScroll?.();
     setActiveComment(id);
     // Expand the thread if it's collapsed (resolved threads start collapsed), so
     // jumping to it reveals the body. Set before the early return below, since a
@@ -65,6 +68,7 @@ export function useJump({ comments, setSelectedFile }: Params) {
   }
 
   function jumpToFile(path: string) {
+    onProgrammaticScroll?.();
     setSelectedFile(path);
     document.getElementById(`file-${path}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }

@@ -685,6 +685,9 @@ textarea:focus-visible {
   padding-top: 2px;
   padding-bottom: 2px;
   padding-right: 10px;
+  /* Clear the sticky header+search block when scrollIntoView aligns a row to the
+     top of the explorer, so the active row isn't tucked behind it. */
+  scroll-margin-top: 76px;
 }
 .tree-dir {
   cursor: pointer;

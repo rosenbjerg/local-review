@@ -10,6 +10,7 @@ import { LazyFile } from "./components/LazyFile";
 import { ResetConfirmModal } from "./components/ResetConfirmModal";
 import { TopBar } from "./components/TopBar";
 import { buildReplyPrompt, buildReviewPrompt } from "./prompts";
+import { useActiveFile } from "./useActiveFile";
 import { useCommentActions } from "./useCommentActions";
 import { useJump } from "./useJump";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
@@ -67,9 +68,13 @@ export default function App() {
   const explorerSearchRef = useRef<HTMLInputElement>(null);
 
   const { leftW, rightW, mainRef, startResize, onResizeKey } = usePanelResize();
+  // Highlight the file scrolled to the top of the diff, not just the last-clicked
+  // one; suppress it during programmatic scrolls so it doesn't flicker en route.
+  const { suppress: suppressActiveFile } = useActiveFile(diffColRef, setSelectedFile, review?.id);
   const { activeComment, expandTarget, expandComment, jumpTo, jumpToFile, resetJump } = useJump({
     comments,
     setSelectedFile,
+    onProgrammaticScroll: suppressActiveFile,
   });
   const { commentActions, handleAddComment, handleDelete } = useCommentActions({
     review,
@@ -110,6 +115,7 @@ export default function App() {
     setShowAddFile(false);
     setOpenedFiles((s) => (s.includes(path) ? s : [...s, path]));
     setSelectedFile(path);
+    suppressActiveFile();
     // The card mounts on the next render; defer the scroll until it exists.
     setTimeout(
       () => document.getElementById(`file-${path}`)?.scrollIntoView({ behavior: "smooth", block: "start" }),
