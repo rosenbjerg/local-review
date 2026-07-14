@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
+import type { ActiveFileStore } from "../activeFileStore";
 import type { Comment, FileDiff } from "../types";
 import { Chevron } from "./Chevron";
 
@@ -6,7 +7,7 @@ interface Props {
   files: FileDiff[];
   comments: Comment[];
   reviewed: Set<string>;
-  selected: string | null;
+  activeFile: ActiveFileStore;
   onSelect: (path: string) => void;
   onToggleReviewed: (path: string, reviewed: boolean) => void;
   onToggleFolder: (paths: string[], reviewed: boolean) => void;
@@ -119,7 +120,7 @@ export function FileExplorer({
   files,
   comments,
   reviewed,
-  selected,
+  activeFile,
   onSelect,
   onToggleReviewed,
   onToggleFolder,
@@ -129,6 +130,9 @@ export function FileExplorer({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const activeRowRef = useRef<HTMLDivElement>(null);
+  // Subscribe to the active file directly, so scroll-spy updates re-render only
+  // this component (not App / the diff cards).
+  const selected = useSyncExternalStore(activeFile.subscribe, activeFile.get);
 
   // Keep the active file's row in view as the selection follows the diff scroll.
   // Instant + "nearest" so it only nudges when off-screen and never animates on
