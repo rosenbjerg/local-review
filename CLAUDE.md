@@ -203,6 +203,9 @@ web/src/
   so it catches commits, new/deleted files, and re-edits without reading file
   content — flat cost even on large diffs. A git error (mid-rebase) is treated as
   no-change; the baseline is seeded on the first tick so connecting never self-fires.
+  The fingerprint's git commands run with `GIT_OPTIONAL_LOCKS=0` (via
+  `git.runEnv`), so this on-a-timer read never refreshes/writes the index and can't
+  make a concurrent agent `commit` fail on `index.lock`.
 - **Image & binary files.** `parseDiff` flags binary files (`Binary` on
   `FileDiff`, from git's "Binary files … differ" line; also set for untracked
   binaries). `DiffView` renders raster images (png/jpg/gif/webp/bmp/ico/avif) as

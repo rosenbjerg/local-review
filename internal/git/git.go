@@ -23,7 +23,22 @@ type Repo struct {
 func New(path string) *Repo { return &Repo{Path: path} }
 
 func (r *Repo) run(args ...string) (string, error) {
+	return r.runEnv(nil, args...)
+}
+
+// Pass to runEnv for read-only commands the poller runs on a timer. Without it,
+// git may refresh — and write — the index as a side effect, taking index.lock;
+// that can make a concurrent write by the user's own git (an agent committing)
+// fail with "unable to lock index". Output stays correct; only the stat-cache
+// write is skipped. Don't remove it from the polling path.
+var optionalLocksOff = []string{"GIT_OPTIONAL_LOCKS=0"}
+
+// runEnv is run with extra KEY=VALUE entries appended to the process environment.
+func (r *Repo) runEnv(env []string, args ...string) (string, error) {
 	cmd := exec.Command("git", append([]string{"-C", r.Path}, args...)...)
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	var out, errb bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errb
@@ -221,15 +236,15 @@ func (r *Repo) WorktreeFile(path string) (string, error) {
 // large files. Any git error is returned so the caller can treat it as "no change"
 // (e.g. a transient failure mid-rebase).
 func (r *Repo) WorktreeFingerprint() (string, error) {
-	head, err := r.run("rev-parse", "HEAD")
+	head, err := r.runEnv(optionalLocksOff, "rev-parse", "HEAD")
 	if err != nil {
 		return "", err
 	}
-	tracked, err := r.run("diff", "--name-only", "-z", "HEAD")
+	tracked, err := r.runEnv(optionalLocksOff, "diff", "--name-only", "-z", "HEAD")
 	if err != nil {
 		return "", err
 	}
-	untracked, err := r.run("ls-files", "--others", "--exclude-standard", "-z")
+	untracked, err := r.runEnv(optionalLocksOff, "ls-files", "--others", "--exclude-standard", "-z")
 	if err != nil {
 		return "", err
 	}
