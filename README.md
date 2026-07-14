@@ -22,10 +22,9 @@ your comments through the API, and its replies show up live in the UI.
 It ships as a **single binary**: a Go backend with the React frontend embedded,
 no runtime dependencies beyond `git`.
 
-<!--
-  📸 Add a screenshot at docs/screenshot.png and uncomment:
-  ![local-review](docs/screenshot.png)
--->
+<p align="center">
+  <img src="docs/screenshot.png" alt="local-review reviewing a branch diff: hierarchical file tree on the left, a syntax-highlighted diff with an inline comment thread in the center, and the cross-file comments panel on the right" width="900">
+</p>
 
 ## Highlights
 
