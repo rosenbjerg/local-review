@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import MarkdownIt from "markdown-it";
+import { useEffect, useState } from "react";
 import { api } from "../api";
-import { highlightBlocks } from "../highlight";
 import { LS, getBool, setBool } from "../storage";
 import { CopyButton } from "./CopyButton";
+import { Markdown } from "./Markdown";
 import { Modal } from "./Modal";
 import { ViewToggle } from "./ViewToggle";
 
@@ -11,9 +10,6 @@ interface Props {
   reviewId: number;
   onClose: () => void;
 }
-
-// html:false escapes any raw HTML in comment bodies — safe to render.
-const md = new MarkdownIt({ html: false, linkify: true, breaks: false });
 
 export function ExportModal({ reviewId, onClose }: Props) {
   const [markdown, setMarkdown] = useState("");
@@ -41,20 +37,6 @@ export function ExportModal({ reviewId, onClose }: Props) {
       ignore = true;
     };
   }, [reviewId, instructions]);
-
-  const base = useMemo(() => md.render(markdown), [markdown]);
-  const [html, setHtml] = useState(base);
-
-  useEffect(() => {
-    setHtml(base);
-    let cancelled = false;
-    highlightBlocks(base).then((enhanced) => {
-      if (!cancelled && enhanced) setHtml(enhanced);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [base]);
 
   function download() {
     const blob = new Blob([markdown], { type: "text/markdown" });
@@ -105,7 +87,7 @@ export function ExportModal({ reviewId, onClose }: Props) {
       {error ? (
         <p className="error">{error}</p>
       ) : view === "preview" ? (
-        <div className="markdown-body" dangerouslySetInnerHTML={{ __html: html }} />
+        <Markdown className="markdown-body" source={markdown} softBreaks={false} />
       ) : (
         <pre className="markdown-preview">{markdown}</pre>
       )}
