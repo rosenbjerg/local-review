@@ -1466,6 +1466,7 @@ kbd {
   font-family: var(--font-mono);
   font-size: 12.5px;
   background: none;
+  border: none;
   padding: 0;
 }
 .markdown-body ul,
