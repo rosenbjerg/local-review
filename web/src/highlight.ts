@@ -31,6 +31,14 @@ export function langForPath(path: string): string | null {
   return ALIAS_TO_ID.get(candidate) ?? null;
 }
 
+// Resolve a fenced-code-block info string (```js, ```python, ```ts) to a Shiki
+// language id via the same alias metadata paths do.
+export function langForInfo(info: string): string | null {
+  const token = info.trim().split(/\s+/)[0].toLowerCase();
+  if (!token) return null;
+  return ALIAS_TO_ID.get(token) ?? ALIAS_TO_ID.get(EXT_EXTRA[token] ?? "") ?? null;
+}
+
 let hlPromise: Promise<HighlighterCore> | null = null;
 function highlighter(): Promise<HighlighterCore> {
   if (!hlPromise) {
