@@ -5,6 +5,8 @@ package git
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -208,6 +210,54 @@ func (r *Repo) WorktreeFile(path string) (string, error) {
 	}
 	b, err := os.ReadFile(resolved)
 	return string(b), err
+}
+
+// WorktreeFingerprint is a cheap, content-free signal of whether anything the
+// review renders could have changed. It hashes three parts: the committed HEAD
+// (catches commits/amends, which don't touch working-tree mtimes), the set of
+// tracked and untracked changes (catches new/deleted/renamed files), and each of
+// those paths' mtime (catches a re-edit that leaves a file's git status unchanged).
+// It reads no file content, so its cost stays flat even when the diff includes
+// large files. Any git error is returned so the caller can treat it as "no change"
+// (e.g. a transient failure mid-rebase).
+func (r *Repo) WorktreeFingerprint() (string, error) {
+	head, err := r.run("rev-parse", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	tracked, err := r.run("diff", "--name-only", "-z", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	untracked, err := r.run("ls-files", "--others", "--exclude-standard", "-z")
+	if err != nil {
+		return "", err
+	}
+	h := sha256.New()
+	h.Write([]byte(head))
+	h.Write([]byte(tracked))
+	h.Write([]byte(untracked))
+	for _, p := range append(splitNUL(tracked), splitNUL(untracked)...) {
+		h.Write([]byte(p))
+		// A deleted path (listed by --name-only) fails to stat; the "absent" marker
+		// is a stable stand-in, and the deletion already shows in the set hash above.
+		if fi, err := os.Stat(filepath.Join(r.Path, p)); err == nil {
+			fmt.Fprintf(h, ":%d", fi.ModTime().UnixNano())
+		} else {
+			h.Write([]byte(":absent"))
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func splitNUL(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, "\x00") {
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // --- Diff parsing ---

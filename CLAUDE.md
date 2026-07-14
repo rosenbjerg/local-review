@@ -38,10 +38,11 @@ a throwaway git repo; verify pure frontend logic with a standalone node script.
 
 ```
 main.go                  server: embeds web/dist, resolves DB path, prunes drafts, opens browser
-internal/git/git.go      git service (shells out to `git`): branches, merge-base, diff parser, file content
+internal/git/git.go      git service (shells out to `git`): branches, merge-base, diff parser, file content, worktree fingerprint
 internal/store/store.go  SQLite (modernc.org/sqlite, WAL): reviews, comments, replies, reviewed_files
 internal/api/api.go      HTTP handlers (net/http, Go 1.22+ method+path routing)
 internal/api/events.go   in-memory SSE hub: per-review subscriber channels, publish/prune
+internal/api/watch.go    per-review filesystem poller: fingerprints the repo while subscribed, pings on out-of-band change
 internal/export/export.go  renders a review → canonical markdown
 web/src/
   App.tsx                top-level state, repo/branch pickers, 3-column resizable layout, all handlers
@@ -172,8 +173,9 @@ web/src/
   so re-adding a deleted-then-reviewed file drops the mark. An empty fingerprint
   is reserved for legacy pre-fingerprint rows and always holds. `SetFilesReviewed`
   upserts (`DO UPDATE`), so re-reviewing a
-  changed file refreshes the fingerprint. (Surfaces on the next review refetch —
-  SSE ping or focus — not instantly on an out-of-band push, same as the diff.)
+  changed file refreshes the fingerprint. (Surfaces on the next review refetch,
+  which the filesystem poller now triggers ~1.5s after an out-of-band push — see
+  Live multi-tab sync — with SSE ping and focus as the other triggers.)
   It writes a whole batch in one transaction with a single change ping, so a
   **folder-level toggle** (mark/unmark every file under a folder) lands atomically.
   The API always takes a `filePaths` array — a single file is just a one-element
@@ -191,6 +193,16 @@ web/src/
   keeps the stream warm and turns a half-open connection into a write error so
   it unsubscribes. The frontend keeps a focus/visibility refetch as a fallback
   for the reconnect gap, gated on the stream not being `OPEN`.
+  Besides the mutation handlers, a **filesystem poller** publishes the same ping
+  for **out-of-band** changes an agent makes without hitting the API — editing
+  files or committing. `internal/api/watch.go` runs one poller per review *while it
+  has SSE subscribers* (ref-counted, so tabs share it; stops on the last
+  disconnect), ticking every `watchInterval` (~1.5s) over
+  `git.WorktreeFingerprint` and publishing on change. The fingerprint is
+  content-free (HEAD sha + the tracked/untracked change set + those paths' mtimes),
+  so it catches commits, new/deleted files, and re-edits without reading file
+  content — flat cost even on large diffs. A git error (mid-rebase) is treated as
+  no-change; the baseline is seeded on the first tick so connecting never self-fires.
 - **Image & binary files.** `parseDiff` flags binary files (`Binary` on
   `FileDiff`, from git's "Binary files … differ" line; also set for untracked
   binaries). `DiffView` renders raster images (png/jpg/gif/webp/bmp/ico/avif) as

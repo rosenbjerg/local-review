@@ -23,10 +23,12 @@ type Server struct {
 	Root  string
 	Store *store.Store
 	hub   *hub
+	watch *watchRegistry
 }
 
 func New(root string, st *store.Store) *Server {
-	return &Server{Root: root, Store: st, hub: newHub()}
+	h := newHub()
+	return &Server{Root: root, Store: st, hub: h, watch: newWatchRegistry(h)}
 }
 
 func isGitRepo(path string) bool {
@@ -369,6 +371,14 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 
 	ch := s.hub.subscribe(id)
 	defer s.hub.unsubscribe(id, ch) // fires on every exit path — no orphaned channel
+
+	// Poll the repo for out-of-band changes while this stream is open, so an agent's
+	// edits/commits ping even when they don't hit a mutation handler. Ref-counted, so
+	// multiple tabs share one poller; best-effort — skip if the repo can't be resolved.
+	if repoPath, _, err := s.Store.ReviewRepoHead(id); err == nil && repoPath != "" {
+		s.watch.start(id, repoPath)
+		defer s.watch.stop(id)
+	}
 
 	if _, err := fmt.Fprint(w, ": connected\n\n"); err != nil {
 		return
