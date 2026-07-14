@@ -70,6 +70,22 @@ chmod +x local-review-darwin-arm64
 xattr -d com.apple.quarantine local-review-darwin-arm64   # macOS only
 ```
 
+### Install with mise
+
+[mise](https://mise.jdx.dev) installs local-review straight from the GitHub
+releases, picking the binary that matches your OS and architecture:
+
+```sh
+mise use -g github:rosenbjerg/local-review
+```
+
+Or pin it in a project's `mise.toml`:
+
+```toml
+[tools]
+"github:rosenbjerg/local-review" = "latest"
+```
+
 ### Build from source
 
 Requires Go (see [`go.mod`](go.mod)) and Node.js 22+. The frontend must be built
