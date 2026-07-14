@@ -174,45 +174,100 @@ func anchorLabel(c store.Comment) string {
 	}
 }
 
+// extToLang maps a lowercased file extension (no dot) to a code-fence language.
+// Each value is both a GitHub-recognized identifier and resolvable by the
+// frontend's Shiki alias map (web/src/highlight.ts langForInfo), so snippet
+// fences highlight in the export preview as well as on GitHub.
+var extToLang = map[string]string{
+	"go":      "go",
+	"rs":      "rust",
+	"c":       "c",
+	"h":       "c",
+	"cpp":     "cpp",
+	"cc":      "cpp",
+	"cxx":     "cpp",
+	"hpp":     "cpp",
+	"hh":      "cpp",
+	"cs":      "csharp",
+	"swift":   "swift",
+	"kt":      "kotlin",
+	"kts":     "kotlin",
+	"java":    "java",
+	"scala":   "scala",
+	"sc":      "scala",
+	"m":       "objective-c",
+	"mm":      "objective-cpp",
+	"dart":    "dart",
+	"zig":     "zig",
+	"nim":     "nim",
+	"cr":      "crystal",
+	"jl":      "julia",
+	"py":      "python",
+	"rb":      "ruby",
+	"php":     "php",
+	"js":      "js",
+	"mjs":     "js",
+	"cjs":     "js",
+	"jsx":     "jsx",
+	"ts":      "ts",
+	"mts":     "ts",
+	"cts":     "ts",
+	"tsx":     "tsx",
+	"lua":     "lua",
+	"pl":      "perl",
+	"pm":      "perl",
+	"r":       "r",
+	"ex":      "elixir",
+	"exs":     "elixir",
+	"erl":     "erlang",
+	"clj":     "clojure",
+	"cljs":    "clojure",
+	"cljc":    "clojure",
+	"hs":      "haskell",
+	"ml":      "ocaml",
+	"mli":     "ocaml",
+	"groovy":  "groovy",
+	"gradle":  "groovy",
+	"fs":      "fsharp",
+	"fsx":     "fsharp",
+	"vb":      "vb",
+	"sh":      "bash",
+	"bash":    "bash",
+	"zsh":     "bash",
+	"fish":    "fish",
+	"ps1":     "powershell",
+	"psm1":    "powershell",
+	"bat":     "bat",
+	"cmd":     "bat",
+	"html":    "html",
+	"htm":     "html",
+	"css":     "css",
+	"scss":    "scss",
+	"less":    "less",
+	"vue":     "vue",
+	"svelte":  "svelte",
+	"xml":     "xml",
+	"svg":     "xml",
+	"md":      "markdown",
+	"tex":     "latex",
+	"json":    "json",
+	"jsonc":   "json",
+	"yaml":    "yaml",
+	"yml":     "yaml",
+	"toml":    "toml",
+	"ini":     "ini",
+	"sql":     "sql",
+	"graphql": "graphql",
+	"gql":     "graphql",
+	"proto":   "proto",
+	"tf":      "terraform",
+	"hcl":     "hcl",
+	"cmake":   "cmake",
+	"diff":    "diff",
+	"patch":   "diff",
+}
+
 func langForExt(path string) string {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".go":
-		return "go"
-	case ".ts":
-		return "ts"
-	case ".tsx":
-		return "tsx"
-	case ".js", ".mjs", ".cjs":
-		return "js"
-	case ".jsx":
-		return "jsx"
-	case ".py":
-		return "python"
-	case ".rs":
-		return "rust"
-	case ".java":
-		return "java"
-	case ".rb":
-		return "ruby"
-	case ".c", ".h":
-		return "c"
-	case ".cpp", ".cc", ".hpp":
-		return "cpp"
-	case ".css":
-		return "css"
-	case ".html":
-		return "html"
-	case ".json":
-		return "json"
-	case ".yaml", ".yml":
-		return "yaml"
-	case ".sh", ".bash":
-		return "bash"
-	case ".sql":
-		return "sql"
-	case ".md":
-		return "markdown"
-	default:
-		return ""
-	}
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(path), "."))
+	return extToLang[ext]
 }
