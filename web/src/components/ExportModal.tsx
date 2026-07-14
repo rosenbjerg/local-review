@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import MarkdownIt from "markdown-it";
 import { api } from "../api";
+import { highlightBlocks } from "../highlight";
 import { LS, getBool, setBool } from "../storage";
 import { CopyButton } from "./CopyButton";
 import { Modal } from "./Modal";
@@ -41,7 +42,19 @@ export function ExportModal({ reviewId, onClose }: Props) {
     };
   }, [reviewId, instructions]);
 
-  const html = useMemo(() => md.render(markdown), [markdown]);
+  const base = useMemo(() => md.render(markdown), [markdown]);
+  const [html, setHtml] = useState(base);
+
+  useEffect(() => {
+    setHtml(base);
+    let cancelled = false;
+    highlightBlocks(base).then((enhanced) => {
+      if (!cancelled && enhanced) setHtml(enhanced);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [base]);
 
   function download() {
     const blob = new Blob([markdown], { type: "text/markdown" });
