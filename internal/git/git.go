@@ -375,14 +375,6 @@ func (r *Repo) Diff(base, head string) ([]FileDiff, error) {
 	return parseDiff(out)
 }
 
-func (r *Repo) DiffFile(from, to, path string) ([]FileDiff, error) {
-	out, err := r.run(diffArgs(from, to, "--", path)...)
-	if err != nil {
-		return nil, err
-	}
-	return parseDiff(out)
-}
-
 // Maps a 1-based old-side line to its new-side line; alive=false means the line
 // was deleted or modified (no new-side counterpart).
 func MapOldLine(hunks []Hunk, old int) (newLine int, alive bool) {

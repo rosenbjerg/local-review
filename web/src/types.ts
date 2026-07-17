@@ -83,6 +83,7 @@ export interface Comment {
   anchorStatus?: AnchorStatus;
   currentStartLine?: number;
   currentEndLine?: number;
+  currentFilePath?: string;
   createdAt: string;
   updatedAt: string;
   replies: Reply[];
@@ -93,6 +94,12 @@ export function effectiveLines(c: Comment): { start: number; end: number } {
     return { start: c.currentStartLine, end: c.currentEndLine ?? c.currentStartLine };
   }
   return { start: c.startLine, end: c.endLine };
+}
+
+// The path a comment currently lives at: its new home when a move followed a
+// rename, else its original (anchored) path. Comments group/render by this.
+export function effectivePath(c: Comment): string {
+  return c.anchorStatus === "moved" && c.currentFilePath ? c.currentFilePath : c.filePath;
 }
 
 export function lineLabel(c: Comment): string {

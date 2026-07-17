@@ -71,10 +71,12 @@ type Comment struct {
 	Replies   []Reply   `json:"replies"`
 
 	// Computed by the API layer, never persisted — all zero on rows read from the
-	// store; Current* carry the relocated range when moved.
+	// store; Current* carry the relocated range when moved, and CurrentFilePath the
+	// new path when the move followed a rename (empty for a same-file move).
 	AnchorStatus     AnchorStatus `json:"anchorStatus,omitempty"`
 	CurrentStartLine int          `json:"currentStartLine,omitempty"`
 	CurrentEndLine   int          `json:"currentEndLine,omitempty"`
+	CurrentFilePath  string       `json:"currentFilePath,omitempty"`
 }
 
 type Reply struct {

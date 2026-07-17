@@ -1,7 +1,10 @@
 import type { Comment } from "../types";
 
 function origLabel(c: Comment): string {
-  return c.endLine > c.startLine ? `L${c.startLine}–${c.endLine}` : `L${c.startLine}`;
+  const lines = c.endLine > c.startLine ? `L${c.startLine}–${c.endLine}` : `L${c.startLine}`;
+  // A move that followed a rename shows the original path too, since the comment
+  // now lives under a different file.
+  return c.currentFilePath ? `${c.filePath}:${lines}` : lines;
 }
 
 export function AnchorBadge({ comment, compact = false }: { comment: Comment; compact?: boolean }) {

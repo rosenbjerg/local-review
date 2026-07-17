@@ -272,10 +272,9 @@ func TestAnnotateByDiffDeletedFileOutdated(t *testing.T) {
 	}
 }
 
-// A renamed file must NOT report a moved range against the old path (the diff path
-// defers to snippet matching, which reads the now-absent old path → outdated). This
-// guards the documented rename trap.
-func TestAnnotateByDiffRenamedFileNotMoved(t *testing.T) {
+// A pure rename (R100, identical content) relocates the comment to the new path at
+// the same lines — git identifies the rename, so we follow it with confidence.
+func TestAnnotateByDiffFollowsPureRename(t *testing.T) {
 	r := newRepo(t)
 	r.write("f.txt", "l1\nl2\nl3\n")
 	sha1 := r.commitAll("c1")
@@ -283,11 +282,49 @@ func TestAnnotateByDiffRenamedFileNotMoved(t *testing.T) {
 	r.commitAll("c2")
 
 	got := annotateOne(r, "main", store.Comment{FilePath: "f.txt", StartLine: 2, EndLine: 2, Snippet: "l2", CommitSHA: sha1})
-	if got.AnchorStatus == store.AnchorMoved {
-		t.Fatalf("renamed file reported moved (%d-%d) against the old path; want outdated", got.CurrentStartLine, got.CurrentEndLine)
+	if got.AnchorStatus != store.AnchorMoved {
+		t.Fatalf("pure rename anchorStatus = %q, want moved", got.AnchorStatus)
 	}
+	if got.CurrentFilePath != "g.txt" {
+		t.Errorf("CurrentFilePath = %q, want g.txt", got.CurrentFilePath)
+	}
+	if got.CurrentStartLine != 2 || got.CurrentEndLine != 2 {
+		t.Errorf("relocated range = %d-%d, want 2-2 (lines unchanged)", got.CurrentStartLine, got.CurrentEndLine)
+	}
+}
+
+// A rename that also shifts the anchored block (content added above it, block
+// intact) relocates to the new path at the shifted lines.
+func TestAnnotateByDiffFollowsRenameWithShift(t *testing.T) {
+	r := newRepo(t)
+	r.write("f.txt", "l1\nl2\nl3\n")
+	sha1 := r.commitAll("c1")
+	r.remove("f.txt")
+	r.write("g.txt", "l0\nl1\nl2\nl3\n") // renamed (>50% similar) + a line inserted above
+	r.commitAll("c2")
+
+	got := annotateOne(r, "main", store.Comment{FilePath: "f.txt", StartLine: 2, EndLine: 2, Snippet: "l2", CommitSHA: sha1})
+	if got.AnchorStatus != store.AnchorMoved || got.CurrentFilePath != "g.txt" || got.CurrentStartLine != 3 {
+		t.Fatalf("rename+shift = %q @ %s:%d, want moved @ g.txt:3", got.AnchorStatus, got.CurrentFilePath, got.CurrentStartLine)
+	}
+}
+
+// A rename whose anchored block was itself edited is outdated — the contiguity
+// check rejects it even though the file was relocated.
+func TestAnnotateByDiffRenameWithInteriorEditOutdated(t *testing.T) {
+	r := newRepo(t)
+	r.write("f.txt", "l1\nl2\nl3\nl4\nl5\n")
+	sha1 := r.commitAll("c1")
+	r.remove("f.txt")
+	r.write("g.txt", "l1\nl2\nl3-edited\nl4\nl5\n") // renamed + interior line of the anchor changed
+	r.commitAll("c2")
+
+	got := annotateOne(r, "main", store.Comment{FilePath: "f.txt", StartLine: 2, EndLine: 4, Snippet: "l2\nl3\nl4", CommitSHA: sha1})
 	if got.AnchorStatus != store.AnchorOutdated {
-		t.Fatalf("renamed-file anchor = %q, want outdated", got.AnchorStatus)
+		t.Fatalf("rename with interior edit = %q, want outdated", got.AnchorStatus)
+	}
+	if got.CurrentFilePath != "" {
+		t.Errorf("outdated comment must not carry a relocated path, got %q", got.CurrentFilePath)
 	}
 }
 

@@ -103,25 +103,32 @@ web/src/
   review read (`handleGetReview`, `handleCreateReview`, `handleExport`, and the
   add-comment response). **Primary method: precise line tracking via git.** For a
   committed comment with a `commit_sha`, `annotateByDiff` runs
-  `git diff <commit_sha> head -- path` and maps the original range through the
-  hunks (`git.MapOldLine`): every line surviving contiguously → `current` (same
-  position) or `moved` (shifted, with derived `currentStartLine`/`currentEndLine`);
-  any line deleted/modified → `outdated`. This beats snippet matching, which can't
-  tell a real move from a coincidental reappearance of the same lines. Diff-tracking
-  is head-anchored only — `worktree`/`indexed` comments always snippet-match, since
-  their side has no commit to diff against.
+  `git diff <commit_sha> head` (the **whole** diff, no pathspec — so git can pair a
+  rename; restricting to the old path would report a bare deletion) and maps the
+  original range through the matched file's hunks (`git.MapOldLine`): every line
+  surviving contiguously → `current` (same position) or `moved` (shifted, with
+  derived `currentStartLine`/`currentEndLine`); any line deleted/modified →
+  `outdated`. **Renames are followed:** when the matched file is a rename, the move
+  relocates to the new path — `moved` with `currentFilePath` set (a pure R100 rename
+  carries no hunks, so lines map 1:1) — while a rename whose anchored block was also
+  edited still falls to `outdated` via the same contiguity check. This beats snippet
+  matching, which can't tell a real move from a coincidental reappearance of the same
+  lines. Diff-tracking is head-anchored only — `worktree`/`indexed` comments always
+  snippet-match, since their side has no commit to diff against.
   **Fallback: snippet matching** — used for worktree/index comments, comments
-  without a `commit_sha`, and binary/renamed files — compares the captured `snippet`
+  without a `commit_sha`, and binary files — compares the captured `snippet`
   against the current file (the git index for `indexed` comments via `repo.IndexFile`
   / `git show :path`, the working tree for `worktree` comments via
   `repo.WorktreeFile`, else `head_ref` via `git show head:path`): match at the stored
   range → `current`; a unique match elsewhere → `moved`; gone/ambiguous/unreadable →
   `outdated`.
-  The frontend renders the effective (relocated) line and badges moved/outdated
-  threads; the export reflects it too. `anchorStatus`/`currentStartLine`/
-  `currentEndLine` are computed on `store.Comment` in the API layer with
-  `omitempty` — the store never reads or writes them. Diffs/file reads are cached
-  per distinct commit_sha+path (or path) per review read.
+  The frontend renders the effective (relocated) line **and path** — a rename-moved
+  comment groups/renders under its `currentFilePath` (see `effectivePath` in
+  `types.ts` and `export.go`) and badges "moved from `<old>`"; the export files it
+  under the new path too. `anchorStatus`/`currentStartLine`/`currentEndLine`/
+  `currentFilePath` are computed on `store.Comment` in the API layer with
+  `omitempty` — the store never reads or writes them. Diffs are cached per distinct
+  commit_sha (the whole diff), file reads per path, per review read.
 - **Threads are two levels.** A comment is a thread root; the `replies` table
   holds follow-ups (body + timestamps only — anchor and `type` stay on the root).
   A reply's `comment_id` FK cascade-deletes it with its comment (and the comment

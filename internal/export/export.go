@@ -144,10 +144,20 @@ func fenceFor(s string) string {
 	return strings.Repeat("`", n)
 }
 
+// effectivePath is where the comment now lives — the rename target when a move
+// followed a rename, else its original (anchored) path.
+func effectivePath(c store.Comment) string {
+	if c.AnchorStatus == store.AnchorMoved && c.CurrentFilePath != "" {
+		return c.CurrentFilePath
+	}
+	return c.FilePath
+}
+
 func groupByFile(comments []store.Comment) map[string][]store.Comment {
 	m := make(map[string][]store.Comment)
 	for _, c := range comments {
-		m[c.FilePath] = append(m[c.FilePath], c)
+		p := effectivePath(c)
+		m[p] = append(m[p], c)
 	}
 	return m
 }
@@ -165,8 +175,11 @@ func anchorLabel(c store.Comment) string {
 	}
 	switch c.AnchorStatus {
 	case store.AnchorMoved:
-		return fmt.Sprintf("%s (moved from %s)",
-			lineLabel(c.CurrentStartLine, c.CurrentEndLine), lineLabel(c.StartLine, c.EndLine))
+		from := lineLabel(c.StartLine, c.EndLine)
+		if c.CurrentFilePath != "" {
+			from = c.FilePath + ":" + from // move followed a rename — show the origin path
+		}
+		return fmt.Sprintf("%s (moved from %s)", lineLabel(c.CurrentStartLine, c.CurrentEndLine), from)
 	case store.AnchorOutdated:
 		return fmt.Sprintf("%s (outdated)", lineLabel(c.StartLine, c.EndLine))
 	default:

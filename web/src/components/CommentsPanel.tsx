@@ -1,5 +1,5 @@
 import type { Comment } from "../types";
-import { lineLabel } from "../types";
+import { effectivePath, lineLabel } from "../types";
 import { AnchorBadge } from "./AnchorBadge";
 import { CommentCount } from "./CommentCount";
 import { Markdown } from "./Markdown";
@@ -14,9 +14,10 @@ interface Props {
 export function CommentsPanel({ comments, fileOrder, onJump, onDelete }: Props) {
   const byFile = new Map<string, Comment[]>();
   for (const c of comments) {
-    const arr = byFile.get(c.filePath) ?? [];
+    const p = effectivePath(c);
+    const arr = byFile.get(p) ?? [];
     arr.push(c);
-    byFile.set(c.filePath, arr);
+    byFile.set(p, arr);
   }
   for (const arr of byFile.values()) {
     arr.sort((a, b) => {

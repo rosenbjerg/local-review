@@ -17,7 +17,7 @@ import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 import { usePanelResize } from "./usePanelResize";
 import { useReview } from "./useReview";
 import type { FileDiff } from "./types";
-import { effectiveLines } from "./types";
+import { effectiveLines, effectivePath } from "./types";
 import { LS, setString, writeBasePref } from "./storage";
 import { clamp } from "./util";
 
@@ -149,7 +149,10 @@ export default function App() {
     const inDiff = new Set(files.map((f) => f.newPath || f.oldPath));
     const extras = new Set<string>();
     for (const p of openedFiles) if (p && !inDiff.has(p)) extras.add(p);
-    for (const c of comments) if (c.filePath && !inDiff.has(c.filePath)) extras.add(c.filePath);
+    for (const c of comments) {
+      const p = effectivePath(c);
+      if (p && !inDiff.has(p)) extras.add(p);
+    }
     const synthetic: FileDiff[] = [...extras].map((p) => ({
       oldPath: p,
       newPath: p,
@@ -171,7 +174,7 @@ export default function App() {
     for (const f of orderedDiffFiles) {
       const p = f.newPath || f.oldPath;
       const inFile = comments
-        .filter((c) => c.filePath === p)
+        .filter((c) => effectivePath(c) === p)
         .sort((a, b) => effectiveLines(a).start - effectiveLines(b).start);
       for (const c of inFile) {
         ids.push(c.id);
@@ -350,7 +353,7 @@ export default function App() {
                     baseRef={baseSha}
                     worktree={worktreeSide}
                     indexed={indexedSide}
-                    comments={comments.filter((c) => c.filePath === path)}
+                    comments={comments.filter((c) => effectivePath(c) === path)}
                     onAddComment={handleAddComment}
                     actions={commentActions}
                     reviewed={reviewedFiles.has(path)}

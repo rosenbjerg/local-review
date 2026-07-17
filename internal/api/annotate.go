@@ -50,32 +50,35 @@ type fileDiffResult struct {
 	err   error
 }
 
-// Route every anchor decision through these so AnchorStatus and the Current*
-// lines are always assigned together.
+// Route every anchor decision through these so AnchorStatus and the Current* fields
+// are always assigned together (and CurrentFilePath cleared unless a rename set it).
 func markCurrent(c *store.Comment) {
-	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorCurrent, 0, 0
+	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine, c.CurrentFilePath = store.AnchorCurrent, 0, 0, ""
 }
 func markOutdated(c *store.Comment) {
-	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorOutdated, 0, 0
+	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine, c.CurrentFilePath = store.AnchorOutdated, 0, 0, ""
 }
 
-func markMoved(c *store.Comment, start, end int) {
-	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine = store.AnchorMoved, start, end
+// markMoved records a shift; path is the new file when the move followed a rename,
+// "" for a same-file move.
+func markMoved(c *store.Comment, path string, start, end int) {
+	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine, c.CurrentFilePath = store.AnchorMoved, start, end, path
 }
 
-// Returns false to fall back to snippet matching (unresolvable commit,
-// binary/renamed file, etc.).
+// Returns false to fall back to snippet matching (unresolvable commit, binary file,
+// modification with no textual hunks). The diff is queried whole (no pathspec) so
+// git can pair a rename — restricting to the old path would report a bare deletion.
 func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, cache map[string]*fileDiffResult) bool {
-	key := c.CommitSHA + "\x00" + c.FilePath
-	res := cache[key]
+	res := cache[c.CommitSHA]
 	if res == nil {
-		files, err := repo.DiffFile(c.CommitSHA, headRef, c.FilePath)
+		files, err := repo.Diff(c.CommitSHA, headRef)
 		res = &fileDiffResult{files: files, err: err}
-		cache[key] = res
+		cache[c.CommitSHA] = res
 	}
 	if res.err != nil {
 		return false
 	}
+	// The comment is keyed to its original (old-side) path.
 	var fd *git.FileDiff
 	for i := range res.files {
 		if res.files[i].OldPath == c.FilePath || res.files[i].NewPath == c.FilePath {
@@ -84,7 +87,7 @@ func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, cache map[
 		}
 	}
 	if fd == nil {
-		// File unchanged between commit_sha and head → still where it was.
+		// File untouched between commit_sha and head → still where it was.
 		markCurrent(c)
 		return true
 	}
@@ -92,17 +95,22 @@ func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, cache map[
 		markOutdated(c)
 		return true
 	}
-	if fd.Status == git.FileRenamed {
-		// Mapped lines would land in the renamed file, but the comment is still
-		// keyed to its old FilePath — defer to snippet matching so we don't
-		// report a moved range against a path that no longer exists.
+	if fd.Binary {
+		return false // no textual side to map — let the snippet path decide
+	}
+	// A rename may carry no hunks (a pure move, R100): the lines map 1:1, only the
+	// path changes. A modification with no hunks (mode-only, etc.) has nothing to
+	// map, so defer to snippet matching.
+	renamed := fd.Status == git.FileRenamed
+	if len(fd.Hunks) == 0 && !renamed {
 		return false
 	}
-	if fd.Binary || len(fd.Hunks) == 0 {
-		return false // no textual hunks to map — let the snippet path decide
+	newPath := ""
+	if renamed {
+		newPath = fd.NewPath
 	}
-	// Every line in the range must survive and stay contiguous, else the block
-	// was edited (outdated) rather than merely shifted (moved).
+	// Every line in the range must survive and stay contiguous, else the block was
+	// edited (outdated) rather than merely shifted/moved.
 	ns, alive := git.MapOldLine(fd.Hunks, c.StartLine)
 	if !alive {
 		markOutdated(c)
@@ -117,10 +125,10 @@ func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, cache map[
 		}
 		prev = nl
 	}
-	if ns == c.StartLine {
+	if newPath == "" && ns == c.StartLine {
 		markCurrent(c)
 	} else {
-		markMoved(c, ns, prev)
+		markMoved(c, newPath, ns, prev)
 	}
 	return true
 }
@@ -164,7 +172,7 @@ func annotateComment(c *store.Comment, read func(string) ([]string, bool)) {
 	// rather than guessing.
 	starts := findMatches(lines, snip)
 	if len(starts) == 1 {
-		markMoved(c, starts[0]+1, starts[0]+len(snip))
+		markMoved(c, "", starts[0]+1, starts[0]+len(snip)) // same-file relocation
 		return
 	}
 	markOutdated(c)

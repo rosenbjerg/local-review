@@ -168,6 +168,28 @@ func TestRenderIncludesReplies(t *testing.T) {
 	}
 }
 
+// A comment whose move followed a rename is filed under its NEW path (never the
+// vanished old one), and its label names the origin path so the agent can trace it.
+func TestRenderFollowsRenamedComment(t *testing.T) {
+	r := &store.Review{
+		HeadRef: "feature", BaseRef: "main", HeadSHA: "abc1234",
+		Comments: []store.Comment{{
+			ID: 5, FilePath: "old.go", StartLine: 2, EndLine: 2, Type: "bug", Body: "x",
+			AnchorStatus: store.AnchorMoved, CurrentStartLine: 4, CurrentEndLine: 4, CurrentFilePath: "new.go",
+		}},
+	}
+	out := Render(r, false, "")
+	if !strings.Contains(out, "## new.go") {
+		t.Fatalf("renamed comment should be filed under the new path:\n%s", out)
+	}
+	if strings.Contains(out, "## old.go") {
+		t.Fatalf("renamed comment should not appear under the old path:\n%s", out)
+	}
+	if !strings.Contains(out, "L4 (moved from old.go:L2)") {
+		t.Fatalf("anchor label should name the origin path:\n%s", out)
+	}
+}
+
 func TestRenderFenceNotClosedBySnippet(t *testing.T) {
 	snippet := "# Heading\n```js\nconsole.log(1)\n```\n"
 	r := &store.Review{
