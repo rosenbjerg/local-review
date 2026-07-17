@@ -107,6 +107,67 @@ func TestRenderSanitizesHeadingFields(t *testing.T) {
 // A snippet containing a triple-backtick fence must not prematurely close the
 // surrounding code block: the opening and closing fences the exporter emits
 // must be longer than any backtick run in the snippet.
+// A reply renders as a blockquote with an id/author header and each body line
+// prefixed — so multi-line replies stay inside one quote and adjacent replies
+// don't merge.
+func TestRenderReply(t *testing.T) {
+	var b strings.Builder
+	renderReply(&b, store.Reply{ID: 7, Author: "agent", Body: "line one\nline two"})
+	out := b.String()
+
+	if !strings.Contains(out, "**↳ reply #7 · agent**") {
+		t.Fatalf("missing reply header:\n%s", out)
+	}
+	if !strings.Contains(out, "> line one\n") || !strings.Contains(out, "> line two\n") {
+		t.Fatalf("body lines not each quoted:\n%s", out)
+	}
+	// The blank ">" separator sits between the header and the body.
+	if !strings.Contains(out, ">\n> line one") {
+		t.Fatalf("missing blank-quote separator before body:\n%s", out)
+	}
+}
+
+// An empty reply body renders only the header — no dangling blank blockquote.
+func TestRenderReplyEmptyBody(t *testing.T) {
+	var b strings.Builder
+	renderReply(&b, store.Reply{ID: 8, Author: "reviewer", Body: "   "})
+	out := b.String()
+
+	if !strings.Contains(out, "**↳ reply #8 · reviewer**") {
+		t.Fatalf("missing reply header:\n%s", out)
+	}
+	if strings.Contains(out, ">\n") {
+		t.Fatalf("empty body should not emit a quoted body block:\n%s", out)
+	}
+}
+
+// A reply author must not be able to inject a fake markdown heading via control
+// characters — inlineField collapses them, mirroring the comment-heading guard.
+func TestRenderReplyAuthorCannotInjectHeading(t *testing.T) {
+	var b strings.Builder
+	renderReply(&b, store.Reply{ID: 9, Author: "evil\n## Fake Heading", Body: "x"})
+	out := b.String()
+
+	if strings.Contains(out, "\n## Fake Heading") {
+		t.Fatalf("author newline was not neutralized, heading injected:\n%s", out)
+	}
+}
+
+// End-to-end: a comment's replies appear under it in the rendered artifact.
+func TestRenderIncludesReplies(t *testing.T) {
+	r := &store.Review{
+		HeadRef: "feature", BaseRef: "main", HeadSHA: "abc1234",
+		Comments: []store.Comment{{
+			ID: 1, FilePath: "main.go", StartLine: 3, EndLine: 3, Type: "bug", Body: "fix this",
+			Replies: []store.Reply{{ID: 2, Author: "agent", Body: "done in a1b2c3d"}},
+		}},
+	}
+	out := Render(r, false, "")
+	if !strings.Contains(out, "**↳ reply #2 · agent**") || !strings.Contains(out, "> done in a1b2c3d") {
+		t.Fatalf("reply not rendered under its comment:\n%s", out)
+	}
+}
+
 func TestRenderFenceNotClosedBySnippet(t *testing.T) {
 	snippet := "# Heading\n```js\nconsole.log(1)\n```\n"
 	r := &store.Review{
