@@ -83,6 +83,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/branches", s.handleBranches)
 	mux.HandleFunc("GET /api/diff", s.handleDiff)
 	mux.HandleFunc("GET /api/files", s.handleFiles)
+	mux.HandleFunc("GET /api/commits", s.handleCommits)
 	mux.HandleFunc("GET /api/file", s.handleFile)
 	mux.HandleFunc("GET /api/blob", s.handleBlob)
 
@@ -133,51 +134,94 @@ func (s *Server) handleBranches(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleDiff computes the diff as two orthogonal axes (a transient view toggle).
+// `from` sets the before side; the working-tree flags set the after side:
+//
+//	from=all|""   — merge-base(base,head) (whole branch); a commit sha → that
+//	                commit, exclusive
+//	uncommitted   — false: after = head (committed range, from..head); true: the
+//	                working tree or the git index
+//	unstaged      — when uncommitted, true (default) → working tree (from + all
+//	                uncommitted, incl. untracked); false → index (staged only)
+//
+// The returned "base" is the resolved `from` ref (the merge-base, or the picked
+// commit's sha) — the before side for the image before/after blobs.
 func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 	repo, ok := s.repoParam(w, r)
 	if !ok {
 		return
 	}
-	base := r.URL.Query().Get("base")
 	head := r.URL.Query().Get("head")
 	if err := validRef(head); err != nil {
 		httpError(w, http.StatusBadRequest, err)
 		return
 	}
-	if base != "" {
-		if err := validRef(base); err != nil {
+	// The diff is two orthogonal axes: `from` sets the before-side (the whole
+	// branch's merge-base, or a picked commit), and the working-tree flags set the
+	// after-side (head commit, working tree, or the git index).
+	//
+	//   uncommitted=false            → from .. head        (committed range)
+	//   uncommitted=true  unstaged   → from .. working tree (staged + unstaged)
+	//   uncommitted=true  !unstaged  → from .. index        (staged only)
+	//
+	// unstaged defaults to true, so a bare uncommitted flag includes everything.
+	from := r.URL.Query().Get("from")
+	uncommitted := r.URL.Query().Get("uncommitted") == "true"
+	unstaged := r.URL.Query().Get("unstaged") != "false"
+
+	var fromRef string
+	if from == "" || from == "all" {
+		// Whole branch: resolve base to its merge-base with head so the review shows
+		// only what head introduces; default to the main branch when none is given.
+		baseRef := r.URL.Query().Get("base")
+		if baseRef != "" {
+			if err := validRef(baseRef); err != nil {
+				httpError(w, http.StatusBadRequest, err)
+				return
+			}
+		} else {
+			baseRef = repo.MainBranch()
+		}
+		if baseRef == "" {
+			httpError(w, http.StatusBadRequest, errString("no main or master branch found; select a base branch"))
+			return
+		}
+		mb, mbErr := repo.MergeBase(baseRef, head)
+		if mbErr != nil {
+			httpError(w, http.StatusInternalServerError, mbErr)
+			return
+		}
+		fromRef = mb
+	} else {
+		if err := validRef(from); err != nil {
 			httpError(w, http.StatusBadRequest, err)
 			return
 		}
+		sha, shaErr := repo.ResolveSHA(from)
+		if shaErr != nil {
+			httpError(w, http.StatusBadRequest, errString("unknown commit: "+from))
+			return
+		}
+		fromRef = sha
 	}
-	// Resolve base to its merge-base with head so the review shows only what head
-	// introduces; default to the main branch when none is given.
-	baseRef := base
-	if baseRef == "" {
-		baseRef = repo.MainBranch()
-	}
-	if baseRef == "" {
-		httpError(w, http.StatusBadRequest, errString("no main or master branch found; select a base branch"))
-		return
-	}
-	mb, err := repo.MergeBase(baseRef, head)
-	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
-		return
-	}
-	base = mb
-	uncommitted := r.URL.Query().Get("uncommitted") == "true"
-	var diff []git.FileDiff
-	if uncommitted {
-		diff, err = repo.DiffWorktree(base)
-	} else {
-		diff, err = repo.Diff(base, head)
+
+	var (
+		diff []git.FileDiff
+		err  error
+	)
+	switch {
+	case !uncommitted:
+		diff, err = repo.Diff(fromRef, head)
+	case unstaged:
+		diff, err = repo.DiffWorktree(fromRef)
+	default:
+		diff, err = repo.DiffStaged(fromRef)
 	}
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, map[string]any{"base": base, "head": head, "files": diff})
+	writeJSON(w, map[string]any{"base": fromRef, "head": head, "files": diff})
 }
 
 // handleFiles lists the tracked files at ref, feeding the picker that lets a
@@ -200,6 +244,42 @@ func (s *Server) handleFiles(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"files": files})
 }
 
+// handleCommits lists the commits the diff "from" picker can start at: those `ref`
+// (head) introduces over `base` (base..ref), so the picker offers only the branch's
+// own commits — never base-branch history behind the merge point. base defaults to
+// the main branch; if none resolves it lists ref's full ancestry. limit defaults to
+// 50 and is clamped to [1,200].
+func (s *Server) handleCommits(w http.ResponseWriter, r *http.Request) {
+	repo, ok := s.repoParam(w, r)
+	if !ok {
+		return
+	}
+	ref := r.URL.Query().Get("ref")
+	if err := validRef(ref); err != nil {
+		httpError(w, http.StatusBadRequest, err)
+		return
+	}
+	base := r.URL.Query().Get("base")
+	if base != "" {
+		if err := validRef(base); err != nil {
+			httpError(w, http.StatusBadRequest, err)
+			return
+		}
+	} else {
+		base = repo.MainBranch() // may stay "" → full ancestry fallback
+	}
+	limit := 50
+	if n, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && n > 0 {
+		limit = min(n, 200)
+	}
+	commits, err := repo.RecentCommits(base, ref, limit)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, map[string]any{"commits": commits})
+}
+
 func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (content, path string, ok bool) {
 	repo, ok := s.repoParam(w, r)
 	if !ok {
@@ -211,7 +291,10 @@ func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (conten
 		return "", "", false
 	}
 	var err error
-	if r.URL.Query().Get("worktree") == "true" {
+	if r.URL.Query().Get("indexed") == "true" {
+		// The staged (index) new side: git show :path.
+		content, err = repo.IndexFile(path)
+	} else if r.URL.Query().Get("worktree") == "true" {
 		// worktree reads the on-disk new side, which git show can't reach.
 		content, err = repo.WorktreeFile(path)
 	} else {
@@ -467,6 +550,7 @@ type setReviewedReq struct {
 	FilePaths []string `json:"filePaths"` // one file, or every file under a folder
 	Reviewed  bool     `json:"reviewed"`
 	Worktree  bool     `json:"worktree"`
+	Indexed   bool     `json:"indexed"` // staged (index) side; mutually exclusive with Worktree
 }
 
 func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
@@ -494,7 +578,7 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
 		}
 		hash := ""
 		if req.Reviewed && repo != nil {
-			hash = fileContentHash(repo, headRef, p, req.Worktree)
+			hash = fileContentHash(repo, headRef, p, req.Worktree, req.Indexed)
 		}
 		marks = append(marks, store.FileReviewMark{Path: p, ContentHash: hash})
 	}
@@ -502,7 +586,7 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, errString("filePaths is required"))
 		return
 	}
-	if err := s.Store.SetFilesReviewed(id, marks, req.Reviewed, req.Worktree); err != nil {
+	if err := s.Store.SetFilesReviewed(id, marks, req.Reviewed, req.Worktree, req.Indexed); err != nil {
 		httpError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -520,6 +604,7 @@ type addCommentReq struct {
 	Body      string            `json:"body"`
 	Author    string            `json:"author"`
 	Worktree  bool              `json:"worktree"`
+	Indexed   bool              `json:"indexed"` // staged (index) side; mutually exclusive with Worktree
 }
 
 func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
@@ -561,7 +646,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 	// the stored text always matches the file. Line-0 file comments stay empty.
 	snippet := ""
 	if req.StartLine > 0 {
-		snippet = captureSnippet(repo, headRef, req.FilePath, req.StartLine, req.EndLine, req.Worktree)
+		snippet = captureSnippet(repo, headRef, req.FilePath, req.StartLine, req.EndLine, req.Worktree, req.Indexed)
 	}
 	c, err := s.Store.AddComment(store.Comment{
 		ReviewID:  id,
@@ -574,6 +659,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		Author:    req.Author,
 		CommitSHA: sha,
 		Worktree:  req.Worktree,
+		Indexed:   req.Indexed,
 	})
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, err)

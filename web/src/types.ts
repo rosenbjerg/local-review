@@ -5,6 +5,27 @@ export interface Branch {
   isRemote: boolean;
 }
 
+export interface Commit {
+  sha: string;
+  shortSha: string;
+  subject: string;
+  relDate: string;
+}
+
+// The diff view is two orthogonal axes, both transient (not part of a review's
+// identity). `from` sets the before side; the working-tree flags set the after side:
+//   from        — "all" (merge-base(base,head), the whole branch) or a commit sha
+//                 (that commit, exclusive)
+//   uncommitted — false: after = head commit; true: after = working tree / index
+//   unstaged    — when uncommitted: true (default) after = working tree
+//                 (staged + unstaged); false after = index (staged only)
+export type DiffOpts = {
+  from: string;
+  base?: string;
+  uncommitted: boolean;
+  unstaged: boolean;
+};
+
 export type LineKind = "context" | "add" | "del";
 
 // "unchanged" is a synthetic status for a file the diff didn't touch, opened so

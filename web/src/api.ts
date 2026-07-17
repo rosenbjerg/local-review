@@ -1,4 +1,13 @@
-import type { Branch, Comment, CommentType, DiffResponse, Reply, Review } from "./types";
+import type {
+  Branch,
+  Commit,
+  Comment,
+  CommentType,
+  DiffOpts,
+  DiffResponse,
+  Reply,
+  Review,
+} from "./types";
 
 // The API defaults author to "agent", so the browser tags its own writes explicitly.
 const REVIEWER = "reviewer";
@@ -30,10 +39,14 @@ export const api = {
     return req<{ branches: Branch[]; main: string }>(`/api/branches?${p.toString()}`);
   },
 
-  diff: (repo: string, head: string, base?: string, uncommitted?: boolean) => {
+  diff: (repo: string, head: string, opts: DiffOpts) => {
     const p = new URLSearchParams({ repo, head });
-    if (base) p.set("base", base);
-    if (uncommitted) p.set("uncommitted", "true");
+    if (opts.from && opts.from !== "all") p.set("from", opts.from);
+    if (opts.base) p.set("base", opts.base);
+    if (opts.uncommitted) {
+      p.set("uncommitted", "true");
+      p.set("unstaged", opts.unstaged ? "true" : "false");
+    }
     return req<DiffResponse>(`/api/diff?${p.toString()}`);
   },
 
@@ -42,15 +55,23 @@ export const api = {
     return req<{ files: string[] }>(`/api/files?${p.toString()}`);
   },
 
-  file: (repo: string, path: string, ref: string, worktree?: boolean) => {
+  commits: (repo: string, ref: string, base = "", limit = 50) => {
+    const p = new URLSearchParams({ repo, ref, limit: String(limit) });
+    if (base) p.set("base", base);
+    return req<{ commits: Commit[] }>(`/api/commits?${p.toString()}`);
+  },
+
+  file: (repo: string, path: string, ref: string, worktree?: boolean, indexed?: boolean) => {
     const p = new URLSearchParams({ repo, path, ref });
-    if (worktree) p.set("worktree", "true");
+    if (indexed) p.set("indexed", "true");
+    else if (worktree) p.set("worktree", "true");
     return req<{ path: string; ref: string; content: string }>(`/api/file?${p.toString()}`);
   },
 
-  blobURL: (repo: string, path: string, ref: string, worktree?: boolean) => {
+  blobURL: (repo: string, path: string, ref: string, worktree?: boolean, indexed?: boolean) => {
     const p = new URLSearchParams({ repo, path, ref });
-    if (worktree) p.set("worktree", "true");
+    if (indexed) p.set("indexed", "true");
+    else if (worktree) p.set("worktree", "true");
     return `/api/blob?${p.toString()}`;
   },
 
@@ -73,6 +94,7 @@ export const api = {
       type: CommentType;
       body: string;
       worktree: boolean;
+      indexed: boolean;
     }
   ) =>
     req<Comment>(`/api/reviews/${reviewId}/comments`, {
@@ -111,10 +133,16 @@ export const api = {
 
   deleteReply: (id: number) => req<void>(`/api/replies/${id}`, { method: "DELETE" }),
 
-  setReviewed: (reviewId: number, filePaths: string[], reviewed: boolean, worktree: boolean) =>
+  setReviewed: (
+    reviewId: number,
+    filePaths: string[],
+    reviewed: boolean,
+    worktree: boolean,
+    indexed: boolean
+  ) =>
     req<void>(`/api/reviews/${reviewId}/reviewed`, {
       method: "POST",
-      body: JSON.stringify({ filePaths, reviewed, worktree }),
+      body: JSON.stringify({ filePaths, reviewed, worktree, indexed }),
     }),
 
   export: (reviewId: number, instructions?: boolean) => {

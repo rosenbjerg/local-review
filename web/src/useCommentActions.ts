@@ -8,17 +8,18 @@ interface Params {
   comments: Comment[];
   setComments: Dispatch<SetStateAction<Comment[]>>;
   setError: (msg: string | null) => void;
-  // effectiveUncommitted: anchor comments to the working tree for uncommitted
-  // reviews, so the server captures the snippet from the side the staleness check
-  // reads (head would read outdated).
+  // The anchor side for new comments, from the active diff scope: the working tree
+  // or the git index (staged), else head_ref. The server captures the snippet from
+  // that side so the stored text matches what the staleness check reads.
   worktree: boolean;
+  indexed: boolean;
 }
 
 // The comment/reply CRUD handlers, as optimistic mutations over the comments
 // state. Returns the CommentActions bag (for CommentThread) plus the add/delete
 // handlers used directly by DiffView and CommentsPanel. Not memoized — the
 // handlers must close over live `comments` each render.
-export function useCommentActions({ review, comments, setComments, setError, worktree }: Params) {
+export function useCommentActions({ review, comments, setComments, setError, worktree, indexed }: Params) {
   async function handleAddComment(args: {
     filePath: string;
     startLine: number;
@@ -29,7 +30,7 @@ export function useCommentActions({ review, comments, setComments, setError, wor
     if (!review) return false;
     setError(null);
     try {
-      const c = await api.addComment(review.id, { ...args, worktree });
+      const c = await api.addComment(review.id, { ...args, worktree, indexed });
       setComments((cs) => [...cs, c]);
       return true;
     } catch (e) {

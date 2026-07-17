@@ -38,7 +38,7 @@ a throwaway git repo; verify pure frontend logic with a standalone node script.
 
 ```
 main.go                  server: embeds web/dist, resolves DB path, prunes drafts, opens browser
-internal/git/git.go      git service (shells out to `git`): branches, merge-base, diff parser, file content, worktree fingerprint
+internal/git/git.go      git service (shells out to `git`): branches, merge-base, recent commits, diff parser (committed-range / working-tree / index variants), file content (ref/worktree/index), worktree fingerprint
 internal/store/store.go  SQLite (modernc.org/sqlite, WAL): reviews, comments, replies, reviewed_files
 internal/api/api.go      HTTP handlers (net/http, Go 1.22+ method+path routing)
 internal/api/events.go   in-memory SSE hub: per-review subscriber channels, publish/prune
@@ -85,15 +85,18 @@ web/src/
 - **Comments anchor to the new side** (HEAD path + line) and store a captured
   `snippet` so feedback survives line drift. The **server** captures that snippet
   from the anchored range at add time (`captureSnippet` in `annotate.go`, reading
-  the same side the staleness check will — working tree for a `worktree` anchor,
-  else `head_ref`), so every client — the browser and API agents alike — sends
-  only the line range; a bogus client-supplied snippet can't drift the record and
-  the stored text always matches the file. Line-0 file comments keep an empty
-  snippet. Each comment also records the
+  the same side the staleness check will — the git index for an `indexed` anchor,
+  the working tree for a `worktree` anchor, else `head_ref`), so every client — the
+  browser and API agents alike — sends only the line range; a bogus client-supplied
+  snippet can't drift the record and the stored text always matches the file. Line-0
+  file comments keep an empty snippet. Each comment also records the
   `commit_sha` it was anchored against (resolved live at add time; best-effort,
   may be empty) — an immutable record of the original position and when it held.
-  A `worktree` flag records whether it was anchored against an uncommitted
-  (working-tree) diff, which drives the staleness comparison side (see below).
+  **The anchor side is three-valued**, carried by two mutually-exclusive flags:
+  `worktree` (anchored against the on-disk working tree) and `indexed` (against the
+  git index / staged content); neither set ⇒ `head_ref`. They come from the active
+  diff view's `uncommitted`/`unstaged` axes (see below) and drive the snippet-capture
+  and staleness sides.
 - **Comment staleness is derived, never persisted.** The stored line numbers are
   the *original* anchor; the branch keeps moving, so `internal/api/annotate.go`
   recomputes a live `anchorStatus` (`current` | `moved` | `outdated`) on every
@@ -104,12 +107,16 @@ web/src/
   hunks (`git.MapOldLine`): every line surviving contiguously → `current` (same
   position) or `moved` (shifted, with derived `currentStartLine`/`currentEndLine`);
   any line deleted/modified → `outdated`. This beats snippet matching, which can't
-  tell a real move from a coincidental reappearance of the same lines.
-  **Fallback: snippet matching** — used for worktree comments, comments without a
-  `commit_sha`, and binary/renamed files — compares the captured `snippet` against
-  the current file (working tree for `worktree` comments via `repo.WorktreeFile`,
-  else `head_ref` via `git show head:path`): match at the stored range → `current`;
-  a unique match elsewhere → `moved`; gone/ambiguous/unreadable → `outdated`.
+  tell a real move from a coincidental reappearance of the same lines. Diff-tracking
+  is head-anchored only — `worktree`/`indexed` comments always snippet-match, since
+  their side has no commit to diff against.
+  **Fallback: snippet matching** — used for worktree/index comments, comments
+  without a `commit_sha`, and binary/renamed files — compares the captured `snippet`
+  against the current file (the git index for `indexed` comments via `repo.IndexFile`
+  / `git show :path`, the working tree for `worktree` comments via
+  `repo.WorktreeFile`, else `head_ref` via `git show head:path`): match at the stored
+  range → `current`; a unique match elsewhere → `moved`; gone/ambiguous/unreadable →
+  `outdated`.
   The frontend renders the effective (relocated) line and badges moved/outdated
   threads; the export reflects it too. `anchorStatus`/`currentStartLine`/
   `currentEndLine` are computed on `store.Comment` in the API layer with
@@ -154,6 +161,30 @@ web/src/
   (`origin/HEAD`) / `origin/main` / `origin/master` — so a branch worked off
   `origin/main` with no local trunk still gets an auto base. If nothing
   resolves it returns `""` and create-review/diff ask for an explicit base.
+- **The diff view is two orthogonal transient axes**, *not* part of review identity —
+  the review still resumes by `(repo, base_ref, head_ref)` and comments still anchor
+  to whichever side they were added on, regardless of the view on screen. `/api/diff`
+  takes `from` + `uncommitted` + `unstaged` and maps them to a `(from → to)` git range:
+  - **`from`** sets the *before* side: `all` (or empty) → `merge-base(base, head)`,
+    the whole branch (base defaults to the main branch); a commit sha → that commit,
+    **exclusive** — `from = ResolveSHA(picked)`, so the picked commit is the baseline
+    and is *not* shown. The commit list is `GET /api/commits` — `git log base..head`,
+    scoped to the branch's own commits (never base-branch history behind the merge
+    point) — surfaced in the UI as an always-present "from" picker with `All` on top.
+  - **`uncommitted`** (bool) sets the *after* side: `false` → `head` (committed
+    range, `git diff <from> head`); `true` → the working tree or the git index.
+  - **`unstaged`** (bool, default true; only meaningful when `uncommitted`) picks
+    which: `true` → working tree (`git diff <from>` + untracked, staged **and**
+    unstaged); `false` → git index (`git diff --cached <from>`, no untracked —
+    **staged only**). New side = working tree when `unstaged`, else the index.
+  The response `base` is the resolved `from` ref (the merge-base, or the picked
+  commit's sha) — what `/api/blob`'s "before" image uses.
+  The `uncommitted` axis is only meaningful when head is the checked-out branch, so
+  it's gated on that (the UI disables the checkbox otherwise). `useReview` holds the
+  `from`/`uncommitted`/`unstaged` state, derives `effectiveUncommitted` (`uncommitted
+  && headIsCurrent`) plus `worktreeSide` (`effectiveUncommitted && unstaged`) and
+  `indexedSide` (`effectiveUncommitted && !unstaged`), which pick the anchor side
+  threaded into add-comment / set-reviewed / file / blob calls.
 - **DB lives in `~/.local-review/`** by default; override the directory with the
   `-data-dir` flag (a leading `~` is expanded, relative paths are made absolute).
   One DB serves many repos, keyed by abs path.
@@ -161,8 +192,9 @@ web/src/
   exporting (which sets status `exported`) never orphans an in-progress review.
 - `reviewed_files` persists per-file "reviewed" state, keyed by path within a
   review. Each mark also captures a **content fingerprint** (SHA-256 of the
-  file's new-side content) and the side it was seen on (`worktree` flag: on-disk
-  working tree vs `head_ref`), mirroring how comments record their anchor side.
+  file's new-side content) and the side it was seen on (`worktree`/`indexed` flags:
+  on-disk working tree, git index, or `head_ref`), mirroring how comments record
+  their three-valued anchor side.
   Like comment staleness, "still reviewed" is **derived, never trusted from the
   flag alone**: on every review read `internal/api/reviewed.go` re-hashes the
   current content of that side and drops any file whose fingerprint no longer
@@ -191,8 +223,9 @@ web/src/
   `diff` is a superset that **upgrades** a pending `meta`: a per-subscriber
   `atomic.Bool diffPending` rides alongside the coalescing wakeup channel and the
   handler clears it with `Swap`, so a dropped (coalesced) wakeup never loses the
-  fact that the diff moved. The diff params (repo + the uncommitted toggle) come
-  from a ref in `useReview`, since the SSE effect is keyed only on `review.id`. The
+  fact that the diff moved. The diff params (repo + head + the resolved diff-view
+  opts) come from a ref in `useReview`, since the SSE effect is keyed only on
+  `review.id`. The
   hub (`internal/api/events.go`) is in-memory with non-blocking coalescing sends, so
   a stalled tab never blocks a handler; empty review entries are pruned on the last
   unsubscribe. A 25s keepalive comment keeps the stream warm and turns a half-open
@@ -222,7 +255,8 @@ web/src/
   with a per-file Text/Image toggle. These media files have no lines, so they take
   **file-level comments anchored at line 0** (empty snippet ⇒ always `current`;
   exported and labelled as `file`, not `L0`). `/api/blob` shares `/api/file`'s
-  ref/worktree resolution and working-tree fallback.
+  ref/worktree/index resolution (a `indexed=true` param reads `git show :path`) and
+  working-tree fallback.
 - **Markdown files** (`.md`/`.markdown` with a new side) get a per-file
   **Code/Rendered** toggle, mirroring SVG's Text/Image. Rendered mode swaps the
   diff table for `MarkdownView` — the new-side content run through the shared

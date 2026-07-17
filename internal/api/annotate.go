@@ -14,26 +14,31 @@ func (s *Server) annotateReview(review *store.Review) {
 	s.annotateReviewedFiles(review)
 }
 
-// Worktree comments compare against on-disk content, the rest against headRef —
-// a worktree snippet checked against head would never match and read as outdated.
+// A comment's staleness is checked against the side it was anchored to: the index
+// (staged), the on-disk working tree, or else headRef — checking a snippet against
+// the wrong side would never match and read as outdated.
 func annotateComments(repo *git.Repo, headRef string, comments []store.Comment) {
 	readHead := fileReader(func(path string) (string, error) {
 		return repo.FileContent(headRef, path)
 	})
 	readWorktree := fileReader(repo.WorktreeFile)
+	readIndex := fileReader(repo.IndexFile)
 	headSHA, _ := repo.ResolveSHA(headRef)
 	diffCache := map[string]*fileDiffResult{}
 	for i := range comments {
 		c := &comments[i]
 		// Prefer diff-based tracking (commit_sha → head): snippet matching can't
 		// tell a genuine move from a coincidental reappearance of the same lines.
-		if !c.Worktree && c.StartLine > 0 && c.CommitSHA != "" && c.CommitSHA != headSHA {
+		// Only for head-anchored comments — working-tree/index sides snippet-match.
+		if !c.Worktree && !c.Indexed && c.StartLine > 0 && c.CommitSHA != "" && c.CommitSHA != headSHA {
 			if annotateByDiff(repo, c, headRef, diffCache) {
 				continue
 			}
 		}
 		read := readHead
-		if c.Worktree {
+		if c.Indexed {
+			read = readIndex
+		} else if c.Worktree {
 			read = readWorktree
 		}
 		annotateComment(c, read)
@@ -194,17 +199,21 @@ func splitLines(content string) []string {
 }
 
 // Reads the range from the same side annotateComment later compares against — the
-// working tree for an uncommitted anchor, else headRef — so the stored snippet
-// matches. Best-effort: an unreadable file or out-of-range start yields "".
-func captureSnippet(repo *git.Repo, headRef, path string, start, end int, worktree bool) string {
+// index for a staged anchor, the working tree for an uncommitted anchor, else
+// headRef — so the stored snippet matches. Best-effort: an unreadable file or
+// out-of-range start yields "".
+func captureSnippet(repo *git.Repo, headRef, path string, start, end int, worktree, indexed bool) string {
 	if repo == nil || start <= 0 {
 		return ""
 	}
 	var content string
 	var err error
-	if worktree {
+	switch {
+	case indexed:
+		content, err = repo.IndexFile(path)
+	case worktree:
 		content, err = repo.WorktreeFile(path)
-	} else {
+	default:
 		content, err = repo.FileContent(headRef, path)
 	}
 	if err != nil {

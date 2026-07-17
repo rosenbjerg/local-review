@@ -8,7 +8,8 @@ interface Props {
   repo: string;
   headRef: string;
   baseRef: string;
-  uncommitted: boolean;
+  worktree: boolean;
+  indexed: boolean;
   asImage: boolean;
   comments: Comment[];
   renderThread: (c: Comment) => ReactNode;
@@ -24,7 +25,8 @@ export function MediaView({
   repo,
   headRef,
   baseRef,
-  uncommitted,
+  worktree,
+  indexed,
   asImage,
   comments,
   renderThread,
@@ -47,7 +49,7 @@ export function MediaView({
           {showAfter && (
             <figure className="image-side">
               <figcaption>after</figcaption>
-              <img src={api.blobURL(repo, file.newPath, headRef, uncommitted)} alt={`${file.newPath} (after)`} />
+              <img src={api.blobURL(repo, file.newPath, headRef, worktree, indexed)} alt={`${file.newPath} (after)`} />
             </figure>
           )}
         </div>

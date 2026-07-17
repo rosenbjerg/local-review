@@ -63,9 +63,12 @@ type Comment struct {
 	Resolved  bool        `json:"resolved"`
 	CommitSHA string      `json:"commitSha"`
 	Worktree  bool        `json:"worktree"`
-	CreatedAt time.Time   `json:"createdAt"`
-	UpdatedAt time.Time   `json:"updatedAt"`
-	Replies   []Reply     `json:"replies"`
+	// Indexed marks the anchor side as the git index (staged view). Mutually
+	// exclusive with Worktree: index / working tree / head_ref.
+	Indexed   bool      `json:"indexed"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	Replies   []Reply   `json:"replies"`
 
 	// Computed by the API layer, never persisted — all zero on rows read from the
 	// store; Current* carry the relocated range when moved.
@@ -133,6 +136,7 @@ CREATE TABLE IF NOT EXISTS comments (
   resolved   INTEGER NOT NULL DEFAULT 0,
   commit_sha TEXT NOT NULL DEFAULT '',
   worktree   INTEGER NOT NULL DEFAULT 0,
+  indexed    INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -152,6 +156,7 @@ CREATE TABLE IF NOT EXISTS reviewed_files (
   reviewed_at  TEXT NOT NULL,
   content_hash TEXT NOT NULL DEFAULT '',
   worktree     INTEGER NOT NULL DEFAULT 0,
+  indexed      INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (review_id, file_path)
 );
 `)
@@ -172,10 +177,16 @@ CREATE TABLE IF NOT EXISTS reviewed_files (
 	if err := s.ensureColumn("comments", "commit_sha", "commit_sha TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
+	if err := s.ensureColumn("comments", "indexed", "indexed INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
 	if err := s.ensureColumn("reviewed_files", "content_hash", "content_hash TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
 	if err := s.ensureColumn("reviewed_files", "worktree", "worktree INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("reviewed_files", "indexed", "indexed INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
 	return s.ensureColumn("replies", "author", "author TEXT NOT NULL DEFAULT 'reviewer'")
@@ -222,7 +233,7 @@ type rowScanner interface {
 // adjacent is the whole point of single-sourcing them.
 const (
 	reviewCols  = `id, repo_path, base_ref, head_ref, head_sha, status, created_at, updated_at`
-	commentCols = `id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved, author, commit_sha, worktree`
+	commentCols = `id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved, author, commit_sha, worktree, indexed`
 	replyCols   = `id, comment_id, body, created_at, updated_at, author`
 )
 
@@ -241,7 +252,7 @@ func scanComment(sc rowScanner) (Comment, error) {
 	var c Comment
 	var created, updated string
 	if err := sc.Scan(&c.ID, &c.ReviewID, &c.FilePath, &c.StartLine, &c.EndLine,
-		&c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved, &c.Author, &c.CommitSHA, &c.Worktree); err != nil {
+		&c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved, &c.Author, &c.CommitSHA, &c.Worktree, &c.Indexed); err != nil {
 		return Comment{}, err
 	}
 	c.CreatedAt, _ = time.Parse(timeFmt, created)
@@ -359,11 +370,12 @@ type ReviewedFile struct {
 	Path        string
 	ContentHash string
 	Worktree    bool
+	Indexed     bool
 }
 
 func (s *Store) ListReviewedFilesFull(reviewID int64) ([]ReviewedFile, error) {
 	rows, err := s.db.Query(
-		`SELECT file_path, content_hash, worktree FROM reviewed_files WHERE review_id=? ORDER BY file_path`, reviewID)
+		`SELECT file_path, content_hash, worktree, indexed FROM reviewed_files WHERE review_id=? ORDER BY file_path`, reviewID)
 	if err != nil {
 		return nil, err
 	}
@@ -371,7 +383,7 @@ func (s *Store) ListReviewedFilesFull(reviewID int64) ([]ReviewedFile, error) {
 	out := []ReviewedFile{}
 	for rows.Next() {
 		var f ReviewedFile
-		if err := rows.Scan(&f.Path, &f.ContentHash, &f.Worktree); err != nil {
+		if err := rows.Scan(&f.Path, &f.ContentHash, &f.Worktree, &f.Indexed); err != nil {
 			return nil, err
 		}
 		out = append(out, f)
@@ -380,7 +392,7 @@ func (s *Store) ListReviewedFilesFull(reviewID int64) ([]ReviewedFile, error) {
 }
 
 // FileReviewMark pairs a path with the content fingerprint captured for it (empty
-// when unmarking). One batch shares a single reviewed flag and worktree side.
+// when unmarking). One batch shares a single reviewed flag and anchor side.
 type FileReviewMark struct {
 	Path        string
 	ContentHash string
@@ -389,7 +401,7 @@ type FileReviewMark struct {
 // SetFilesReviewed marks (or unmarks) a set of files in one transaction, so a
 // folder-level toggle lands atomically and fires a single change notification.
 // The upsert refreshes the fingerprint, so re-reviewing a changed file re-pins it.
-func (s *Store) SetFilesReviewed(reviewID int64, marks []FileReviewMark, reviewed, worktree bool) error {
+func (s *Store) SetFilesReviewed(reviewID int64, marks []FileReviewMark, reviewed, worktree, indexed bool) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -399,10 +411,10 @@ func (s *Store) SetFilesReviewed(reviewID int64, marks []FileReviewMark, reviewe
 	for _, m := range marks {
 		if reviewed {
 			_, err = tx.Exec(
-				`INSERT INTO reviewed_files (review_id, file_path, reviewed_at, content_hash, worktree) VALUES (?,?,?,?,?)
+				`INSERT INTO reviewed_files (review_id, file_path, reviewed_at, content_hash, worktree, indexed) VALUES (?,?,?,?,?,?)
 				 ON CONFLICT(review_id, file_path) DO UPDATE SET
-				   reviewed_at=excluded.reviewed_at, content_hash=excluded.content_hash, worktree=excluded.worktree`,
-				reviewID, m.Path, now, m.ContentHash, worktree)
+				   reviewed_at=excluded.reviewed_at, content_hash=excluded.content_hash, worktree=excluded.worktree, indexed=excluded.indexed`,
+				reviewID, m.Path, now, m.ContentHash, worktree, indexed)
 		} else {
 			_, err = tx.Exec(`DELETE FROM reviewed_files WHERE review_id=? AND file_path=?`, reviewID, m.Path)
 		}
@@ -479,9 +491,9 @@ func (s *Store) listComments(reviewID int64) ([]Comment, error) {
 func (s *Store) AddComment(c Comment) (*Comment, error) {
 	now := nowStr()
 	res, err := s.db.Exec(
-		`INSERT INTO comments (review_id, file_path, start_line, end_line, snippet, type, body, author, commit_sha, worktree, created_at, updated_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-		c.ReviewID, c.FilePath, c.StartLine, c.EndLine, c.Snippet, c.Type, c.Body, c.Author, c.CommitSHA, c.Worktree, now, now)
+		`INSERT INTO comments (review_id, file_path, start_line, end_line, snippet, type, body, author, commit_sha, worktree, indexed, created_at, updated_at)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		c.ReviewID, c.FilePath, c.StartLine, c.EndLine, c.Snippet, c.Type, c.Body, c.Author, c.CommitSHA, c.Worktree, c.Indexed, now, now)
 	if err != nil {
 		return nil, err
 	}

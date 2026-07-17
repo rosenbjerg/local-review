@@ -1,7 +1,7 @@
 import { Combobox, type ComboOption } from "./Combobox";
 import type { Review } from "../types";
 
-// Repo/head/base pickers + the uncommitted toggle + reload.
+// Repo/head/base pickers + the diff-view controls + reload.
 export interface Selection {
   repo: string;
   repoOptions: ComboOption[];
@@ -12,9 +12,15 @@ export interface Selection {
   base: string;
   baseOptions: ComboOption[];
   onBaseChange: (v: string) => void;
+  baseRelevant: boolean;
+  from: string;
+  fromOptions: ComboOption[];
+  onFromChange: (v: string) => void;
   headIsCurrent: boolean;
   uncommitted: boolean;
   onUncommittedChange: (v: boolean) => void;
+  unstaged: boolean;
+  onUnstagedChange: (v: boolean) => void;
   loading: boolean;
   onReload: () => void;
 }
@@ -31,7 +37,6 @@ export interface TopBarActions {
 export interface TopBarStatus {
   review: Review | null;
   shortSha?: string;
-  effectiveUncommitted: boolean;
   openCommentCount: number;
   canReset: boolean;
 }
@@ -42,7 +47,16 @@ interface Props {
   status: TopBarStatus;
 }
 
-// The top toolbar: repo/head/base pickers, the uncommitted toggle, reload, and the
+// A compact indicator of a non-default view, shown next to the sha. Keep it terse —
+// just the short sha for a picked "from", not the full "sha  subject" option label.
+function viewLabel(s: Selection): string {
+  const parts: string[] = [];
+  if (s.from !== "all") parts.push(`since ${s.from.slice(0, 7)}`);
+  if (s.uncommitted && s.headIsCurrent) parts.push(s.unstaged ? "uncommitted" : "staged");
+  return parts.join(" · ");
+}
+
+// The top toolbar: repo/head/base pickers, the diff-view controls, reload, and the
 // review-scoped actions (agent prompts / export / reset) plus help & repo links.
 export function TopBar({ selection: s, actions, status }: Props) {
   return (
@@ -77,18 +91,44 @@ export function TopBar({ selection: s, actions, status }: Props) {
           value={s.base}
           options={s.baseOptions}
           onChange={s.onBaseChange}
+          disabled={s.loading || !s.baseRelevant}
+        />
+      </label>
+      <label>
+        from
+        <Combobox
+          ariaLabel="diff from"
+          value={s.from}
+          options={s.fromOptions}
+          onChange={s.onFromChange}
           disabled={s.loading}
         />
       </label>
-      {s.headIsCurrent && (
-        <label className="checkbox" title="Diff against the working tree instead of the head commit (staged + unstaged tracked changes; excludes untracked files)">
+      <label
+        className="checkbox"
+        title={
+          s.headIsCurrent
+            ? "Include uncommitted changes (working tree / index) on top of the selected range"
+            : "Only available when reviewing the branch you have checked out"
+        }
+      >
+        <input
+          type="checkbox"
+          checked={s.uncommitted && s.headIsCurrent}
+          onChange={(e) => s.onUncommittedChange(e.target.checked)}
+          disabled={s.loading || !s.headIsCurrent}
+        />
+        uncommitted
+      </label>
+      {s.uncommitted && s.headIsCurrent && (
+        <label className="checkbox" title="Include unstaged edits; uncheck to show only staged changes">
           <input
             type="checkbox"
-            checked={s.uncommitted}
-            onChange={(e) => s.onUncommittedChange(e.target.checked)}
+            checked={s.unstaged}
+            onChange={(e) => s.onUnstagedChange(e.target.checked)}
             disabled={s.loading}
           />
-          uncommitted
+          unstaged
         </label>
       )}
       <button
@@ -104,7 +144,7 @@ export function TopBar({ selection: s, actions, status }: Props) {
         <>
           <span className="muted">
             {status.shortSha}
-            {status.effectiveUncommitted && " + uncommitted"}
+            {viewLabel(s) && ` · ${viewLabel(s)}`}
           </span>
           <button
             className="btn"

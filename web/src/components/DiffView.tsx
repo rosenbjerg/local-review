@@ -32,7 +32,8 @@ interface Props {
   repo: string;
   headRef: string;
   baseRef: string;
-  uncommitted: boolean;
+  worktree: boolean;
+  indexed: boolean;
   comments: Comment[];
   onAddComment: (args: {
     filePath: string;
@@ -57,7 +58,8 @@ export function DiffView({
   repo,
   headRef,
   baseRef,
-  uncommitted,
+  worktree,
+  indexed,
   comments,
   onAddComment,
   actions,
@@ -112,8 +114,8 @@ export function DiffView({
   // isn't remounted, so stale text/tokens would persist. Hunks stand in for the
   // new-side content in the key, so an unchanged file keeps its source.
   const contentKey = useMemo(
-    () => `${uncommitted} ${file.status} ${file.newPath} ${JSON.stringify(file.hunks)}`,
-    [uncommitted, file]
+    () => `${worktree} ${indexed} ${file.status} ${file.newPath} ${JSON.stringify(file.hunks)}`,
+    [worktree, indexed, file]
   );
   useEffect(() => {
     setSource(null);
@@ -123,7 +125,7 @@ export function DiffView({
     if (collapsed || source || file.status === "deleted" || !file.newPath || mediaView) return;
     let cancelled = false;
     api
-      .file(repo, file.newPath, headRef, uncommitted)
+      .file(repo, file.newPath, headRef, worktree, indexed)
       .then((res) => {
         if (!cancelled) setSource(res.content.replace(/\n$/, "").split("\n"));
       })
@@ -131,7 +133,7 @@ export function DiffView({
     return () => {
       cancelled = true;
     };
-  }, [collapsed, source, file, headRef, repo, uncommitted, mediaView]);
+  }, [collapsed, source, file, headRef, repo, worktree, indexed, mediaView]);
 
   useEffect(() => {
     if (!source || !lang || source.length > HIGHLIGHT_MAX_LINES) {
@@ -253,7 +255,7 @@ export function DiffView({
   async function switchMode(next: "changed" | "full") {
     if (next === "full" && !source) {
       try {
-        const res = await api.file(repo, file.newPath, headRef, uncommitted);
+        const res = await api.file(repo, file.newPath, headRef, worktree, indexed);
         setSource(res.content.replace(/\n$/, "").split("\n"));
       } catch (e) {
         setLoadError(`Could not load full file: ${(e as Error).message}`);
@@ -448,7 +450,8 @@ export function DiffView({
               repo={repo}
               headRef={headRef}
               baseRef={baseRef}
-              uncommitted={uncommitted}
+              worktree={worktree}
+              indexed={indexed}
               asImage={asImage}
               comments={comments}
               renderThread={renderThread}

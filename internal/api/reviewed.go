@@ -39,15 +39,18 @@ func reviewedMarkHolds(repo *git.Repo, headRef string, f store.ReviewedFile) boo
 	if f.ContentHash == "" {
 		return true
 	}
-	return fileContentHash(repo, headRef, f.Path, f.Worktree) == f.ContentHash
+	return fileContentHash(repo, headRef, f.Path, f.Worktree, f.Indexed) == f.ContentHash
 }
 
-func fileContentHash(repo *git.Repo, headRef, path string, worktree bool) string {
+func fileContentHash(repo *git.Repo, headRef, path string, worktree, indexed bool) string {
 	var content string
 	var err error
-	if worktree {
+	switch {
+	case indexed:
+		content, err = repo.IndexFile(path)
+	case worktree:
 		content, err = repo.WorktreeFile(path)
-	} else {
+	default:
 		content, err = repo.FileContent(headRef, path)
 	}
 	if err != nil {

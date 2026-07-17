@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { type ComboOption } from "./components/Combobox";
-import type { Branch, Comment, FileDiff, Review } from "./types";
+import type { Branch, Comment, Commit, DiffOpts, FileDiff, Review } from "./types";
 import { LS, getString, readBasePref } from "./storage";
 
-// The review data layer: repo/branch selection and the review lifecycle (create,
-// SSE refetch, diff refetch, reviewed-file marks). Owns the reqSeq stale-response
-// guard and the coordinated repo-change reset of its own state. Pure view state
-// (selectedFile/openedFiles) and jump state live in App, which resets them on
-// repo change alongside this.
+// The review data layer: repo/branch selection, the diff-scope view toggle, and
+// the review lifecycle (create, SSE refetch, diff refetch, reviewed-file marks).
+// Owns the reqSeq stale-response guard and the coordinated repo-change reset of
+// its own state. Pure view state (selectedFile/openedFiles) and jump state live
+// in App, which resets them on repo change alongside this.
 export function useReview() {
   const [repos, setRepos] = useState<string[]>([]);
   const [reposLoaded, setReposLoaded] = useState(false);
@@ -21,19 +21,38 @@ export function useReview() {
   const [baseSha, setBaseSha] = useState("");
   const [comments, setComments] = useState<Comment[]>([]);
   const [reviewedFiles, setReviewedFiles] = useState<Set<string>>(new Set());
+  // The diff view — two orthogonal transient axes. `from` is the before side:
+  // "all" (the whole branch) or a picked commit sha. `uncommitted` moves the after
+  // side to the working tree/index; `unstaged` (default) keeps unstaged edits in.
+  const [from, setFrom] = useState("all");
   const [uncommitted, setUncommitted] = useState(false);
+  const [unstaged, setUnstaged] = useState(true);
+  const [commits, setCommits] = useState<Commit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Bumped on each load; in-flight responses check it before applying state, so
   // a stale repo's review/diff can't repopulate the UI for the new selection.
   const reqSeq = useRef(0);
 
-  // The working tree reflects the checked-out branch, so the uncommitted toggle
-  // only makes sense when head is current. Kept separate from the raw checkbox so
-  // a head change doesn't mutate `uncommitted` and refire the diff-refetch effect.
+  // The working tree/index only make sense when head is the checked-out branch, so
+  // the uncommitted axis is gated on that (and disabled in the UI otherwise).
   const currentBranch = branches.find((b) => b.isCurrent)?.name;
   const headIsCurrent = !!head && head === currentBranch;
   const effectiveUncommitted = uncommitted && headIsCurrent;
+  // The new side comments/reviewed anchor to: the working tree (uncommitted incl.
+  // unstaged) or the git index (uncommitted, staged only). Mutually exclusive;
+  // neither ⇒ head_ref.
+  const worktreeSide = effectiveUncommitted && unstaged;
+  const indexedSide = effectiveUncommitted && !unstaged;
+
+  function diffOpts(baseRef: string): DiffOpts {
+    return {
+      from,
+      base: from === "all" ? baseRef || undefined : undefined,
+      uncommitted: effectiveUncommitted,
+      unstaged,
+    };
+  }
 
   useEffect(() => {
     api
@@ -59,7 +78,10 @@ export function useReview() {
     setComments([]);
     setReviewedFiles(new Set());
     setBase("");
+    setFrom("all");
     setUncommitted(false);
+    setUnstaged(true);
+    setCommits([]);
     api
       .branches(repo)
       .then((r) => {
@@ -79,17 +101,51 @@ export function useReview() {
       });
   }, [repo]);
 
+  // The uncommitted axis is meaningless when head isn't the checked-out branch; if
+  // head moves away while it's on, turn it off.
+  useEffect(() => {
+    if (!headIsCurrent && uncommitted) setUncommitted(false);
+  }, [headIsCurrent, uncommitted]);
+
+  // Re-enabling uncommitted should start from the default (both staged + unstaged),
+  // so reset `unstaged` whenever the uncommitted axis is off.
+  useEffect(() => {
+    if (!uncommitted) setUnstaged(true);
+  }, [uncommitted]);
+
+  // Change head via `changeHead` (below), which resets `from` in the same update —
+  // a picked sha belongs to the old head's history. This effect (re)loads the "from"
+  // picker's commit list whenever repo/head/base changes; passing base scopes it to
+  // base..head, so it offers only the branch's own commits (the base picker is
+  // disabled while a commit is picked, so this can't strand a selection).
+  useEffect(() => {
+    if (!repo || !head) return;
+    let cancelled = false;
+    api
+      .commits(repo, head, base)
+      .then((r) => {
+        if (!cancelled) setCommits(r.commits ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [repo, head, base]);
+
   // The SSE effect below is keyed only on review.id, so it can't close over the
-  // live diff params — repo and the uncommitted toggle change without the id moving.
-  // Mirror them into a ref the ping refetch reads, so a diff refresh uses the
-  // current selection rather than a stale one.
-  const diffParams = useRef({ repo, headRef: "", baseRef: "", uncommitted: effectiveUncommitted });
+  // live diff params — repo and the scope change without the id moving. Mirror
+  // them into a ref the ping refetch reads, so a diff refresh uses the current
+  // selection rather than a stale one.
+  const diffParams = useRef<{ repo: string; headRef: string; opts: DiffOpts }>({
+    repo,
+    headRef: "",
+    opts: { from: "all", uncommitted: false, unstaged: true },
+  });
   useEffect(() => {
     diffParams.current = {
       repo,
       headRef: review?.headRef ?? "",
-      baseRef: review?.baseRef ?? "",
-      uncommitted: effectiveUncommitted,
+      opts: diffOpts(review?.baseRef ?? ""),
     };
   });
 
@@ -120,7 +176,7 @@ export function useReview() {
         const [rev, d] = await Promise.all([
           api.getReview(id),
           withDiff && p.repo && p.headRef
-            ? api.diff(p.repo, p.headRef, p.baseRef, p.uncommitted)
+            ? api.diff(p.repo, p.headRef, p.opts)
             : Promise.resolve(null),
         ]);
         if (!cancelled) {
@@ -145,8 +201,6 @@ export function useReview() {
       }
     }
     const es = new EventSource(`/api/reviews/${id}/events`);
-    // `diff` (a commit / on-disk edit) refetches the diff too; `meta` (comment,
-    // reply, reviewed-file) refetches only the review.
     es.onmessage = (e) => refresh(e.data === "diff");
     // No onerror — EventSource auto-reconnects; the focus fallback covers the gap.
     function onFocus() {
@@ -164,14 +218,18 @@ export function useReview() {
     };
   }, [review?.id]);
 
-  // Refetch the diff when the uncommitted toggle flips — keyed on `uncommitted`
-  // alone so it fires only on a later toggle, not on load.
+  // Refetch the diff when a view axis changes — keyed on the axis inputs alone so it
+  // fires only on a later change, not on load (the !review guard no-ops the initial
+  // run; startReview does the first diff). Bail while the review is stale relative to
+  // the head picker (a head change resets `from`, which fires this effect before
+  // startReview has recreated the review): startReview owns that fetch, and running
+  // here would diff the old head and bump reqSeq out from under it.
   useEffect(() => {
-    if (!review) return;
+    if (!review || review.headRef !== head) return;
     const seq = ++reqSeq.current;
     setLoading(true);
     api
-      .diff(repo, review.headRef, review.baseRef, effectiveUncommitted)
+      .diff(repo, review.headRef, diffOpts(review.baseRef))
       .then((d) => {
         if (reqSeq.current !== seq) return;
         setFiles(d.files ?? []);
@@ -183,7 +241,17 @@ export function useReview() {
       .finally(() => {
         if (reqSeq.current === seq) setLoading(false);
       });
-  }, [uncommitted]);
+    // Intentionally keyed on the view axes only — repo/head/review changes go
+    // through startReview, which fetches the first diff itself.
+  }, [from, uncommitted, unstaged]);
+
+  // Switch head, resetting `from` to "all" in the same update. Reset must be
+  // synchronous with the head change so the startReview that auto-start fires reads
+  // the fresh `from` (a state reset inside an effect wouldn't reach that closure).
+  function changeHead(name: string) {
+    setHead(name);
+    setFrom("all");
+  }
 
   async function startReview() {
     if (!repo || !head) return;
@@ -196,7 +264,7 @@ export function useReview() {
       setReview(rev);
       setComments(rev.comments ?? []);
       setReviewedFiles(new Set(rev.reviewedFiles ?? []));
-      const diff = await api.diff(repo, rev.headRef, rev.baseRef, effectiveUncommitted);
+      const diff = await api.diff(repo, rev.headRef, diffOpts(rev.baseRef));
       if (reqSeq.current !== seq) return;
       setFiles(diff.files ?? []);
       setBaseSha(diff.base ?? "");
@@ -211,7 +279,7 @@ export function useReview() {
           setBranches(r.branches);
           const current = r.branches.find((b) => b.isCurrent);
           const firstLocal = r.branches.find((b) => !b.isRemote);
-          setHead(current?.name ?? firstLocal?.name ?? "");
+          changeHead(current?.name ?? firstLocal?.name ?? "");
           recovered = true;
         }
       } catch {
@@ -223,8 +291,8 @@ export function useReview() {
     }
   }
 
-  // Auto-start on a complete repo/head/base selection; the uncommitted toggle has
-  // its own effect, so it's not a dep here.
+  // Auto-start on a complete repo/head/base selection; the view axes have their
+  // own refetch effect, so they're not deps here.
   useEffect(() => {
     if (repo && head) startReview();
   }, [repo, head, base]);
@@ -256,8 +324,8 @@ export function useReview() {
       });
     apply(reviewed); // optimistic
     try {
-      // Fingerprint the side on screen (uncommitted ⇒ working tree), like addComment.
-      await api.setReviewed(review.id, paths, reviewed, effectiveUncommitted);
+      // Fingerprint the side on screen (working tree / index), like addComment.
+      await api.setReviewed(review.id, paths, reviewed, worktreeSide, indexedSide);
     } catch (e) {
       apply(!reviewed); // rollback the whole batch
       setError((e as Error).message);
@@ -284,6 +352,14 @@ export function useReview() {
     }
     return opts;
   }, [branches, localBranches, mainBranch]);
+  // The "from" picker: "All" (whole branch) plus head's recent commits.
+  const fromOptions = useMemo<ComboOption[]>(
+    () => [
+      { value: "all", label: "All (whole branch)" },
+      ...commits.map((c) => ({ value: c.sha, label: `${c.shortSha}  ${c.subject}`, hint: c.relDate })),
+    ],
+    [commits]
+  );
 
   return {
     repos,
@@ -292,7 +368,7 @@ export function useReview() {
     setRepo,
     branches,
     head,
-    setHead,
+    changeHead,
     base,
     setBase,
     review,
@@ -301,17 +377,23 @@ export function useReview() {
     comments,
     setComments,
     reviewedFiles,
+    from,
+    setFrom,
     uncommitted,
     setUncommitted,
+    unstaged,
+    setUnstaged,
     loading,
     error,
     setError,
     headIsCurrent,
-    effectiveUncommitted,
+    worktreeSide,
+    indexedSide,
     shortSha,
     repoOptions,
     headOptions,
     baseOptions,
+    fromOptions,
     startReview,
     resetReview,
     setReviewedPaths,

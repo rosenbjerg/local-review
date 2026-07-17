@@ -179,6 +179,12 @@ func (r *Repo) FileContent(ref, path string) (string, error) {
 	return r.run("show", ref+":"+path)
 }
 
+// IndexFile reads a path's staged content — the stage-0 index blob (`git show
+// :path`) — which is the new side of the "staged" diff (index vs HEAD).
+func (r *Repo) IndexFile(path string) (string, error) {
+	return r.run("show", ":"+path)
+}
+
 // ListFiles returns the tracked file paths at ref, for the "comment on a
 // non-changed file" picker. quotePath=false keeps non-ASCII paths verbatim, to
 // match the diff parser (see diffArgs).
@@ -196,6 +202,45 @@ func (r *Repo) ListFiles(ref string) ([]string, error) {
 		}
 	}
 	return files, sc.Err()
+}
+
+type Commit struct {
+	SHA      string `json:"sha"`
+	ShortSHA string `json:"shortSha"`
+	Subject  string `json:"subject"`
+	RelDate  string `json:"relDate"`
+}
+
+// RecentCommits lists up to limit commits that ref introduces over base
+// (`git log base..ref`), newest first, for the diff "from" picker — so it offers
+// only the branch's own commits, not base-branch history behind the merge point.
+// An empty base falls back to ref's full ancestry (`git log ref`). Fields are
+// unit-separated (0x1f) so a subject can't split them; records are newline-separated
+// (subjects are one line).
+func (r *Repo) RecentCommits(base, ref string, limit int) ([]Commit, error) {
+	rangeArg := ref
+	if base != "" {
+		rangeArg = base + ".." + ref
+	}
+	out, err := r.run("log", rangeArg, "-n", strconv.Itoa(limit), "--format=%H%x1f%h%x1f%s%x1f%cr")
+	if err != nil {
+		return nil, err
+	}
+	var commits []Commit
+	sc := bufio.NewScanner(strings.NewReader(out))
+	sc.Buffer(make([]byte, 1024*1024), 16*1024*1024)
+	for sc.Scan() {
+		line := sc.Text()
+		if line == "" {
+			continue
+		}
+		f := strings.Split(line, "\x1f")
+		if len(f) != 4 {
+			continue
+		}
+		commits = append(commits, Commit{SHA: f[0], ShortSHA: f[1], Subject: f[2], RelDate: f[3]})
+	}
+	return commits, sc.Err()
 }
 
 // Reads the working-tree (on-disk) side, which git show can't. The path is
@@ -371,7 +416,8 @@ func MapOldLine(hunks []Hunk, old int) (newLine int, alive bool) {
 }
 
 // Only meaningful when the checked-out branch is base's other side; untracked
-// non-ignored files are added as new (see below).
+// non-ignored files are added as new (see below). base "HEAD" gives the whole
+// uncommitted delta (staged + unstaged).
 func (r *Repo) DiffWorktree(base string) ([]FileDiff, error) {
 	out, err := r.run(diffArgs(base)...)
 	if err != nil {
@@ -381,8 +427,25 @@ func (r *Repo) DiffWorktree(base string) ([]FileDiff, error) {
 	if err != nil {
 		return nil, err
 	}
-	// git diff omits untracked files, so add them explicitly — else a brand new
-	// file wouldn't appear until `git add`ed.
+	return r.appendUntracked(files)
+}
+
+// DiffStaged is the index vs `from` (`git diff --cached <from>`) — the staged
+// changes (plus any commits between from and HEAD, which the index reflects), with
+// the index as the new side. from "HEAD" gives just the staged changes; a
+// merge-base or older commit widens the before side. No untracked files (those are
+// never staged).
+func (r *Repo) DiffStaged(from string) ([]FileDiff, error) {
+	out, err := r.run(diffArgs("--cached", from)...)
+	if err != nil {
+		return nil, err
+	}
+	return parseDiff(out)
+}
+
+// git diff omits untracked files, so add them explicitly — else a brand new file
+// wouldn't appear until `git add`ed. (Untracked files are unstaged.)
+func (r *Repo) appendUntracked(files []FileDiff) ([]FileDiff, error) {
 	untracked, err := r.untrackedFiles()
 	if err != nil {
 		return nil, err

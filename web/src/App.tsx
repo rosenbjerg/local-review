@@ -28,7 +28,7 @@ export default function App() {
     repo,
     setRepo,
     head,
-    setHead,
+    changeHead,
     base,
     setBase,
     review,
@@ -37,17 +37,23 @@ export default function App() {
     comments,
     setComments,
     reviewedFiles,
+    from,
+    setFrom,
     uncommitted,
     setUncommitted,
+    unstaged,
+    setUnstaged,
+    headIsCurrent,
     loading,
     error,
     setError,
-    headIsCurrent,
-    effectiveUncommitted,
+    worktreeSide,
+    indexedSide,
     shortSha,
     repoOptions,
     headOptions,
     baseOptions,
+    fromOptions,
     startReview,
     resetReview,
     setReviewedPaths,
@@ -84,7 +90,8 @@ export default function App() {
     comments,
     setComments,
     setError,
-    worktree: effectiveUncommitted,
+    worktree: worktreeSide,
+    indexed: indexedSide,
   });
 
 
@@ -223,16 +230,22 @@ export default function App() {
           },
           head,
           headOptions,
-          onHeadChange: setHead,
+          onHeadChange: changeHead,
           base,
           baseOptions,
           onBaseChange: (v) => {
             setBase(v);
             writeBasePref(repo, v);
           },
+          baseRelevant: from === "all",
+          from,
+          fromOptions,
+          onFromChange: setFrom,
           headIsCurrent,
           uncommitted,
           onUncommittedChange: setUncommitted,
+          unstaged,
+          onUnstagedChange: setUnstaged,
           loading,
           onReload: startReview,
         }}
@@ -245,7 +258,6 @@ export default function App() {
         status={{
           review,
           shortSha,
-          effectiveUncommitted,
           openCommentCount: comments.filter((c) => !c.resolved).length,
           canReset: comments.length > 0 || reviewedFiles.size > 0,
         }}
@@ -336,7 +348,8 @@ export default function App() {
                     repo={repo}
                     headRef={review.headRef}
                     baseRef={baseSha}
-                    uncommitted={effectiveUncommitted}
+                    worktree={worktreeSide}
+                    indexed={indexedSide}
                     comments={comments.filter((c) => c.filePath === path)}
                     onAddComment={handleAddComment}
                     actions={commentActions}
