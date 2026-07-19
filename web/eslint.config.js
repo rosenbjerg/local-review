@@ -6,6 +6,9 @@ import tseslint from "typescript-eslint";
 // (globals/refs/set-state-in-render/…) that flag code the compiler can't optimize.
 // tseslint.parser lets it read TS/TSX. Run: `npm run lint`.
 export default [
+  // Test files call hooks via renderHook (a callback), which trips rules-of-hooks;
+  // they're behavior tests run by vitest, not app code, so lint doesn't apply.
+  { ignores: ["src/**/*.test.ts", "src/**/*.test.tsx"] },
   {
     files: ["src/**/*.{ts,tsx}"],
     languageOptions: {

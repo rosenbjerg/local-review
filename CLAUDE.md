@@ -30,9 +30,12 @@ npm --prefix web run dev                 # terminal 2 → :5173
 ```
 
 Checks: `go build ./...`, `go vet ./...`, `npm --prefix web run build` (runs `tsc`),
-`npm --prefix web run lint` (ESLint: rules-of-hooks + React Compiler rule; see `COMPILER.md`).
-There is no browser automation here — verify backend changes with `curl` against
-a throwaway git repo; verify pure frontend logic with a standalone node script.
+`npm --prefix web run lint` (ESLint: rules-of-hooks + React Compiler rule; see `COMPILER.md`),
+`npm --prefix web run test` (vitest; jsdom + Testing Library — `web/vitest.config.ts`,
+`web/vitest.setup.ts`). Frontend hook logic (the `useReview` selection/refetch races)
+is tested via `renderHook` with a mocked `api`; test files are excluded from the build
+tsconfig and lint. There is no browser automation here — verify backend changes with
+`curl` against a throwaway git repo; verify pure UI/DOM behavior manually.
 
 ## Layout
 
