@@ -907,7 +907,13 @@ textarea:focus-visible {
 }
 /* One-line body preview shown while a thread is collapsed. */
 .thread-collapsed {
-  display: block;
+  /* Wrap + clamp to 2 lines rather than a single nowrap line: nowrap makes this
+     the only non-wrapping cell in the auto-layout diff table, forcing the table
+     past width:100% (and the ellipsis never fires). line-clamp keeps it a compact
+     teaser while staying contained. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   width: 100%;
   padding: 0;
   background: none;
@@ -916,9 +922,8 @@ textarea:focus-visible {
   font-family: inherit;
   font-size: 13px;
   text-align: left;
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 .thread-collapsed:hover {
