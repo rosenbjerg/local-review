@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"local-review/internal/git"
@@ -259,5 +260,61 @@ func TestHandleCommitsBadParams(t *testing.T) {
 	}
 	if code, _ := getCommits(t, s, "repo="+r.name); code != http.StatusBadRequest {
 		t.Errorf("missing ref: status %d, want 400", code)
+	}
+}
+
+// A repo whose branch was worked off origin/main with no local main: a stale
+// base=main (which no longer resolves) must fall back to the main branch rather
+// than 500 with "ambiguous argument 'main..<branch>'". Covers /api/commits,
+// /api/diff, and /api/reviews, which all share the base resolution.
+func staleBaseFixture(t *testing.T) (*testRepo, *Server) {
+	r := newRepo(t) // on main
+	r.write("f.txt", "l1\n")
+	r.commitAll("c1")
+	r.git("update-ref", "refs/remotes/origin/main", "HEAD") // origin/main = main's commit
+	r.git("checkout", "-q", "-b", "bh/consign4")
+	r.write("f.txt", "l1\nl2\n")
+	r.commitAll("work")
+	r.git("branch", "-D", "main") // now only origin/main exists, no local main
+	return r, r.server()
+}
+
+func TestHandleCommitsStaleBaseFallsBack(t *testing.T) {
+	r, s := staleBaseFixture(t)
+	code, c := getCommits(t, s, "repo="+r.name+"&ref=bh/consign4&base=main")
+	if code != http.StatusOK {
+		t.Fatalf("stale base=main: status %d, want 200 (fall back to origin/main)", code)
+	}
+	if got := subjects(c); !eqStrings(got, []string{"work"}) {
+		t.Errorf("subjects = %v, want [work] (origin/main..bh/consign4)", got)
+	}
+}
+
+func TestHandleDiffStaleBaseFallsBack(t *testing.T) {
+	r, s := staleBaseFixture(t)
+	code, d := getDiff(t, s, "repo="+r.name+"&head=bh/consign4&base=main")
+	if code != http.StatusOK {
+		t.Fatalf("stale base=main: status %d, want 200", code)
+	}
+	if got := newPaths(d); !eqStrings(got, []string{"f.txt"}) {
+		t.Errorf("files = %v, want [f.txt]", got)
+	}
+}
+
+func TestCreateReviewStaleBaseStoresResolvable(t *testing.T) {
+	r, s := staleBaseFixture(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/reviews", strings.NewReader(
+		`{"repo":"`+r.name+`","head":"bh/consign4","base":"main"}`))
+	rec := httptest.NewRecorder()
+	s.handleCreateReview(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create with stale base: status %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	var rev store.Review
+	if err := json.Unmarshal(rec.Body.Bytes(), &rev); err != nil {
+		t.Fatal(err)
+	}
+	if rev.BaseRef != "origin/main" {
+		t.Errorf("stored baseRef = %q, want origin/main (stale main resolved away)", rev.BaseRef)
 	}
 }

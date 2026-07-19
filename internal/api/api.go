@@ -179,9 +179,10 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 				httpError(w, http.StatusBadRequest, err)
 				return
 			}
-		} else {
-			baseRef = repo.MainBranch()
 		}
+		// Fall back to the main branch when no base is given or the given one no
+		// longer resolves (a stale local "main", etc.).
+		baseRef = resolveBase(repo, baseRef)
 		if baseRef == "" {
 			httpError(w, http.StatusBadRequest, errString("no main or master branch found; select a base branch"))
 			return
@@ -265,9 +266,10 @@ func (s *Server) handleCommits(w http.ResponseWriter, r *http.Request) {
 			httpError(w, http.StatusBadRequest, err)
 			return
 		}
-	} else {
-		base = repo.MainBranch() // may stay "" → full ancestry fallback
 	}
+	// Fall back to the main branch when no base is given or the given one no longer
+	// resolves; may still be "" (no trunk) → RecentCommits lists ref's full ancestry.
+	base = resolveBase(repo, base)
 	limit := 50
 	if n, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && n > 0 {
 		limit = min(n, 200)
@@ -390,12 +392,10 @@ func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	base := req.Base
-	if base == "" {
-		// Store the main branch name (readable in the export); the diff endpoint
-		// resolves it to the merge-base with head at query time.
-		base = repo.MainBranch()
-	}
+	// Store the main branch name (readable in the export); the diff endpoint resolves
+	// it to the merge-base with head at query time. Fall back to the main branch when
+	// none is given or the given one no longer resolves, so a stale base isn't stored.
+	base := resolveBase(repo, req.Base)
 	if base == "" {
 		httpError(w, http.StatusBadRequest, errString("no main or master branch found; select a base branch"))
 		return
@@ -881,6 +881,20 @@ func storeError(w http.ResponseWriter, err error) {
 type errString string
 
 func (e errString) Error() string { return string(e) }
+
+// resolveBase returns a base ref that actually resolves in repo: the given base if
+// it does, else the repo's main branch (else ""). This tolerates a stale base —
+// e.g. a local "main" that no longer exists (only origin/main) after checking out a
+// remote branch — falling back to the auto default rather than failing the request
+// with a raw "ambiguous argument 'main..head'" git error.
+func resolveBase(repo *git.Repo, base string) string {
+	if base != "" {
+		if _, err := repo.ResolveSHA(base); err == nil {
+			return base
+		}
+	}
+	return repo.MainBranch()
+}
 
 // validRef rejects empty refs and refs starting with "-" (which git would treat
 // as a flag, e.g. "--output=/path"); legitimate ref names never start with "-".
