@@ -1,11 +1,31 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Comment, CommentType, Reply } from "../types";
 import { lineLabel } from "../types";
+import { langForPath } from "../highlight";
 import { Chevron } from "./Chevron";
 import { CommentComposer } from "./CommentComposer";
 import { AnchorBadge } from "./AnchorBadge";
 import { Markdown } from "./Markdown";
 import { MetaTimestamps } from "./MetaTimestamps";
+
+// Wrap the captured snippet in a fenced code block for <Markdown>, tagged with the
+// file's language and using a fence longer than any backtick run inside it so the
+// snippet can't close the block early (mirrors the export's fenceFor).
+function snippetSource(snippet: string, path: string): string {
+  const lang = langForPath(path) ?? "";
+  let maxRun = 0;
+  let run = 0;
+  for (const ch of snippet) {
+    if (ch === "`") {
+      run++;
+      if (run > maxRun) maxRun = run;
+    } else {
+      run = 0;
+    }
+  }
+  const fence = "`".repeat(Math.max(3, maxRun + 1));
+  return `${fence}${lang}\n${snippet}\n${fence}`;
+}
 
 export interface CommentActions {
   onUpdate: (id: number, body: string, type: CommentType) => Promise<boolean>;
@@ -85,6 +105,15 @@ export function CommentThread({ comment, actions, expandSignal }: Props) {
   }, [expandSignal, comment.id]);
 
   const outdated = comment.anchorStatus === "outdated";
+  // For an outdated comment the anchored code is gone from head, so the captured
+  // snippet ("original code") can be revealed by clicking the outdated badge —
+  // hidden by default.
+  const hasSnippet = outdated && comment.snippet.trim() !== "";
+  const [snippetOpen, setSnippetOpen] = useState(false);
+  const snippetMd = useMemo(
+    () => snippetSource(comment.snippet, comment.filePath),
+    [comment.snippet, comment.filePath]
+  );
 
   function toggle() {
     setCollapsed((c) => {
@@ -129,7 +158,11 @@ export function CommentThread({ comment, actions, expandSignal }: Props) {
         <span className="muted meta-id">#{comment.id}</span>
         <span className={`badge badge-${comment.type}`}>{comment.type}</span>
         <span className="muted">{lineLabel(comment)}</span>
-        <AnchorBadge comment={comment} />
+        <AnchorBadge
+          comment={comment}
+          onToggle={hasSnippet ? () => setSnippetOpen((o) => !o) : undefined}
+          expanded={snippetOpen}
+        />
         <MetaTimestamps
           author={comment.author}
           createdAt={comment.createdAt}
@@ -154,6 +187,13 @@ export function CommentThread({ comment, actions, expandSignal }: Props) {
           delete
         </button>
       </div>
+
+      {hasSnippet && snippetOpen && (
+        <div className="thread-snippet">
+          <div className="thread-snippet-label">original code</div>
+          <Markdown className="md-body" source={snippetMd} softBreaks={false} />
+        </div>
+      )}
 
       {collapsed ? (
         <button className="thread-collapsed" onClick={toggle} title="Expand thread">

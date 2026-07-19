@@ -1227,6 +1227,34 @@ textarea:focus-visible {
   border-color: var(--warn-border);
   text-transform: none;
 }
+/* The outdated badge doubles as a toggle for the original-code snippet: reset the
+   button chrome so it reads as the badge, with a chevron affordance. */
+.badge-toggle {
+  font-family: inherit;
+  background: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* An outdated thread surfaces the code as it was when the comment was written
+   (the captured snippet), since head no longer holds it. */
+.thread-snippet {
+  margin-bottom: 8px;
+}
+.thread-snippet-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 3px;
+}
+.thread-snippet .md-body pre {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+}
 
 /* A resolved or outdated thread / nav item is dimmed but still visible and
    actionable; hover restores it. */
