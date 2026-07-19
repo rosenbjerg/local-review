@@ -132,19 +132,32 @@ export function useReview() {
     };
   }, [repo, head, base]);
 
-  // The SSE effect below is keyed only on review.id, so it can't close over the
-  // live diff params — repo and the scope change without the id moving. Mirror
-  // them into a ref the ping refetch reads, so a diff refresh uses the current
-  // selection rather than a stale one.
-  const diffParams = useRef<{ repo: string; headRef: string; opts: DiffOpts }>({
+  // The SSE effect below is keyed only on review.id, so it can't close over the live
+  // selection — repo/head/scope change without the id moving. Mirror what the ping
+  // refetch needs into a ref: the diff params, plus head/base/from so a `diff` ping
+  // can also refresh the branch list (out-of-band checkout) and the commit picker.
+  const diffParams = useRef<{
+    repo: string;
+    headRef: string;
+    head: string;
+    base: string;
+    from: string;
+    opts: DiffOpts;
+  }>({
     repo,
     headRef: "",
+    head: "",
+    base: "",
+    from: "all",
     opts: { from: "all", uncommitted: false, unstaged: true },
   });
   useEffect(() => {
     diffParams.current = {
       repo,
       headRef: review?.headRef ?? "",
+      head,
+      base,
+      from,
       opts: diffOpts(review?.baseRef ?? ""),
     };
   });
@@ -173,10 +186,18 @@ export function useReview() {
       inFlight = true;
       try {
         const p = diffParams.current;
-        const [rev, d] = await Promise.all([
+        // A `diff` ping means the repo's git state moved (commit, checkout, edit), so
+        // also refresh the branch list (keeps headIsCurrent honest after an out-of-band
+        // checkout) and the commit picker. Branch/commit failures are swallowed so a
+        // transient error never drops the whole refresh.
+        const [rev, d, br, cm] = await Promise.all([
           api.getReview(id),
           withDiff && p.repo && p.headRef
             ? api.diff(p.repo, p.headRef, p.opts)
+            : Promise.resolve(null),
+          withDiff && p.repo ? api.branches(p.repo).catch(() => null) : Promise.resolve(null),
+          withDiff && p.repo && p.head
+            ? api.commits(p.repo, p.head, p.base).catch(() => null)
             : Promise.resolve(null),
         ]);
         if (!cancelled) {
@@ -186,6 +207,13 @@ export function useReview() {
           if (d) {
             setFiles(d.files ?? []);
             setBaseSha(d.base ?? "");
+          }
+          if (br) setBranches(br.branches);
+          if (cm) {
+            const list = cm.commits ?? [];
+            setCommits(list);
+            // A rebased/amended-away picked `from` would 400 the next diff — fall back.
+            if (p.from !== "all" && !list.some((x) => x.sha === p.from)) setFrom("all");
           }
         }
       } catch {

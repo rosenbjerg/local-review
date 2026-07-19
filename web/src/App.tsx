@@ -171,9 +171,15 @@ export default function App() {
     () => orderedDiffFiles.map((f) => f.newPath || f.oldPath),
     [orderedDiffFiles]
   );
-  // The set of existing comment ids, so `#<id>` references only linkify real
-  // comments. A stable ref keeps the Markdown render memo from busting each render.
-  const commentIds = useMemo(() => new Set(comments.map((c) => c.id)), [comments]);
+  // The set of existing comment ids, so `#<id>` references only linkify real comments.
+  // Keyed on the id list (not the array identity) so an SSE refetch returning the same
+  // ids keeps a stable Set identity — otherwise every thread/reply <Markdown> re-runs
+  // markdown-it + Shiki highlighting on each refetch.
+  const commentIdKey = comments.map((c) => c.id).join(",");
+  const commentIds = useMemo(
+    () => new Set(commentIdKey ? commentIdKey.split(",").map(Number) : []),
+    [commentIdKey]
+  );
 
   const orderedCommentIds = useMemo(() => {
     const ids: number[] = [];

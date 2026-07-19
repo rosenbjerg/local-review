@@ -226,13 +226,17 @@ web/src/
   move file content send `diff`. The client refetches the whole review on either,
   but the **diff only on a `diff` ping** (ping-and-refetch — backend stays source of
   truth, no per-event payloads), so comment churn doesn't re-pull the whole diff
-  while an agent's edits or a fresh commit still surface without a manual reload.
+  while an agent's edits or a fresh commit still surface without a manual reload. A
+  `diff` ping also refetches the **branch list and commit picker** (the git state
+  moved, so an out-of-band checkout must update `headIsCurrent` and new/rebased
+  commits must reach the `from` picker; a picked `from` sha that was rebased away
+  resets to `all`).
   `diff` is a superset that **upgrades** a pending `meta`: a per-subscriber
   `atomic.Bool diffPending` rides alongside the coalescing wakeup channel and the
   handler clears it with `Swap`, so a dropped (coalesced) wakeup never loses the
-  fact that the diff moved. The diff params (repo + head + the resolved diff-view
-  opts) come from a ref in `useReview`, since the SSE effect is keyed only on
-  `review.id`. The
+  fact that the diff moved. The refetch params (repo + head/base/from + the resolved
+  diff-view opts) come from a ref in `useReview`, since the SSE effect is keyed only
+  on `review.id`. The
   hub (`internal/api/events.go`) is in-memory with non-blocking coalescing sends, so
   a stalled tab never blocks a handler; empty review entries are pruned on the last
   unsubscribe. A 25s keepalive comment keeps the stream warm and turns a half-open

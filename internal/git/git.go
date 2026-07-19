@@ -375,6 +375,18 @@ func (r *Repo) Diff(base, head string) ([]FileDiff, error) {
 	return parseDiff(out)
 }
 
+// DiffFile is Diff restricted to one path — cheap when only one file's status is
+// needed. Restricting to the path prevents rename pairing (the new side is out of
+// scope), so a renamed file shows here as a plain deletion; callers needing the
+// rename target fall back to the whole-tree Diff.
+func (r *Repo) DiffFile(from, to, path string) ([]FileDiff, error) {
+	out, err := r.run(diffArgs(from, to, "--", path)...)
+	if err != nil {
+		return nil, err
+	}
+	return parseDiff(out)
+}
+
 // Maps a 1-based old-side line to its new-side line; alive=false means the line
 // was deleted or modified (no new-side counterpart).
 func MapOldLine(hunks []Hunk, old int) (newLine int, alive bool) {
