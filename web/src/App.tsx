@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AddFileModal } from "./components/AddFileModal";
 import { AgentPromptsModal } from "./components/AgentPromptsModal";
+import { CommentRefPopover } from "./components/CommentRefPopover";
 import { CommentsPanel } from "./components/CommentsPanel";
 import { DiffView, LARGE_FILE_LINES } from "./components/DiffView";
 import { ExportModal } from "./components/ExportModal";
@@ -12,6 +13,7 @@ import { TopBar } from "./components/TopBar";
 import { buildReplyPrompt, buildReviewPrompt } from "./prompts";
 import { useActiveFile } from "./useActiveFile";
 import { useCommentActions } from "./useCommentActions";
+import { useCommentRefs } from "./useCommentRefs";
 import { useJump } from "./useJump";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 import { usePanelResize } from "./usePanelResize";
@@ -85,6 +87,8 @@ export default function App() {
     setSelectedFile,
     onProgrammaticScroll: suppressActiveFile,
   });
+  // `#<id>` references in comment bodies: click jumps, hover/focus previews.
+  const refHover = useCommentRefs(jumpTo);
   const { commentActions, handleAddComment, handleDelete } = useCommentActions({
     review,
     comments,
@@ -167,6 +171,9 @@ export default function App() {
     () => orderedDiffFiles.map((f) => f.newPath || f.oldPath),
     [orderedDiffFiles]
   );
+  // The set of existing comment ids, so `#<id>` references only linkify real
+  // comments. A stable ref keeps the Markdown render memo from busting each render.
+  const commentIds = useMemo(() => new Set(comments.map((c) => c.id)), [comments]);
 
   const orderedCommentIds = useMemo(() => {
     const ids: number[] = [];
@@ -361,6 +368,7 @@ export default function App() {
                     expandTarget={expandTarget}
                     expandComment={expandComment}
                     activeComment={activeComment}
+                    commentIds={commentIds}
                   />
                 </LazyFile>
               );
@@ -431,6 +439,8 @@ export default function App() {
           onConfirm={performReset}
         />
       )}
+
+      <CommentRefPopover hovered={refHover} comments={comments} />
     </div>
   );
 }

@@ -41,16 +41,20 @@ interface Props {
   actions: CommentActions;
   // Bumped by a jump-to; expands this thread when it targets this comment.
   expandSignal?: { id: number; n: number } | null;
+  // The review's comment ids, so `#<id>` references in bodies/replies linkify.
+  commentIds: Set<number>;
 }
 
 function ReplyItem({
   reply,
   onUpdate,
   onDelete,
+  commentIds,
 }: {
   reply: Reply;
   onUpdate: (body: string) => Promise<boolean>;
   onDelete: () => void;
+  commentIds: Set<number>;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -83,13 +87,13 @@ function ReplyItem({
           }}
         />
       ) : (
-        <Markdown className="reply-body md-body" source={reply.body} />
+        <Markdown className="reply-body md-body" source={reply.body} commentIds={commentIds} />
       )}
     </div>
   );
 }
 
-export function CommentThread({ comment, actions, expandSignal }: Props) {
+export function CommentThread({ comment, actions, expandSignal, commentIds }: Props) {
   const { onUpdate, onDelete, onAddReply, onUpdateReply, onDeleteReply, onResolve } = actions;
   const [editing, setEditing] = useState(false);
   const [replying, setReplying] = useState(false);
@@ -212,7 +216,7 @@ export function CommentThread({ comment, actions, expandSignal }: Props) {
               }}
             />
           ) : (
-            <Markdown className="thread-body md-body" source={comment.body} />
+            <Markdown className="thread-body md-body" source={comment.body} commentIds={commentIds} />
           )}
 
           {replies.length > 0 && (
@@ -223,6 +227,7 @@ export function CommentThread({ comment, actions, expandSignal }: Props) {
                   reply={r}
                   onUpdate={(body) => onUpdateReply(comment.id, r.id, body)}
                   onDelete={() => onDeleteReply(comment.id, r.id)}
+                  commentIds={commentIds}
                 />
               ))}
             </div>

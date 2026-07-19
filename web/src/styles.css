@@ -1243,6 +1243,39 @@ textarea:focus-visible {
   gap: 3px;
 }
 
+/* A `#<id>` reference to another comment: a subtle inline link (click to jump,
+   hover/focus for the preview popover). */
+.comment-ref {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--accent);
+  cursor: pointer;
+}
+.comment-ref:hover,
+.comment-ref:focus-visible {
+  border-bottom-style: solid;
+}
+/* The hover/focus preview of a referenced comment: floating, non-interactive
+   (clicks/hover pass through to the ref underneath), clipped to a preview height. */
+.comment-ref-popover {
+  position: fixed;
+  z-index: 100;
+  max-width: 360px;
+  max-height: 220px;
+  overflow: hidden;
+  padding: 8px 10px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 6px 20px var(--backdrop);
+  pointer-events: none;
+}
+.comment-ref-popover .comment-preview {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
 /* An outdated thread surfaces the code as it was when the comment was written
    (the captured snippet), since head no longer holds it. */
 .thread-snippet {

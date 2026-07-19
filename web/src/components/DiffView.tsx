@@ -48,6 +48,7 @@ interface Props {
   expandTarget: { path: string; n: number } | null;
   expandComment: { id: number; n: number } | null;
   activeComment: number | null;
+  commentIds: Set<number>;
 }
 
 export const LARGE_FILE_LINES = 500;
@@ -68,6 +69,7 @@ export function DiffView({
   expandTarget,
   expandComment,
   activeComment,
+  commentIds,
 }: Props) {
   const changedLines = useMemo(
     () => file.hunks.reduce((n, h) => n + h.lines.length, 0),
@@ -331,7 +333,13 @@ export function DiffView({
   }
 
   const renderThread = (c: Comment) => (
-    <CommentThread key={c.id} comment={c} actions={actions} expandSignal={expandComment} />
+    <CommentThread
+      key={c.id}
+      comment={c}
+      actions={actions}
+      expandSignal={expandComment}
+      commentIds={commentIds}
+    />
   );
 
   // Comments whose anchor line isn't rendered in this view fall back to the end

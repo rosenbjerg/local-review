@@ -1,8 +1,6 @@
 import type { Comment } from "../types";
-import { effectivePath, lineLabel } from "../types";
-import { AnchorBadge } from "./AnchorBadge";
-import { CommentCount } from "./CommentCount";
-import { Markdown } from "./Markdown";
+import { effectivePath } from "../types";
+import { CommentPreview } from "./CommentPreview";
 
 interface Props {
   comments: Comment[];
@@ -52,23 +50,7 @@ export function CommentsPanel({ comments, fileOrder, onJump, onDelete }: Props) 
                 }`}
                 onClick={() => onJump(c.id)}
               >
-                <div className="comment-meta">
-                  <span className="muted meta-id">#{c.id}</span>
-                  <span className={`badge badge-${c.type}`}>{c.type}</span>
-                  <span className="muted">{lineLabel(c)}</span>
-                  <AnchorBadge comment={c} compact />
-                  {c.resolved && <span className="muted">✓</span>}
-                  {(c.replies?.length ?? 0) > 0 && (
-                    <CommentCount n={c.replies.length} label="reply" />
-                  )}
-                </div>
-                {c.body ? (
-                  <Markdown className="comment-preview md-body" source={c.body} inline />
-                ) : (
-                  <div className="comment-preview">
-                    <em className="muted">(empty)</em>
-                  </div>
-                )}
+                <CommentPreview comment={c} inline />
               </button>
               <button
                 className="comment-nav-delete"
