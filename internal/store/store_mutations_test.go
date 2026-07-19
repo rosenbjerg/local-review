@@ -73,12 +73,15 @@ func TestUpdateCommentBumpsUpdatedAtAndFields(t *testing.T) {
 	c := addComment(t, s, rev.ID)
 	setUpdatedAt(t, s, "comments", c.ID, oldTS)
 
-	got, err := s.UpdateComment(c.ID, "new body", CommentBug, 5, 7)
+	got, err := s.UpdateComment(c.ID, "new body", CommentBug, 5, 7, "new\nsnippet", "deadbeef")
 	if err != nil {
 		t.Fatalf("UpdateComment: %v", err)
 	}
 	if got.Body != "new body" || got.Type != CommentBug || got.StartLine != 5 || got.EndLine != 7 {
 		t.Errorf("update not persisted: %+v", got)
+	}
+	if got.Snippet != "new\nsnippet" || got.CommitSHA != "deadbeef" {
+		t.Errorf("re-captured anchor not persisted: snippet=%q sha=%q", got.Snippet, got.CommitSHA)
 	}
 
 	var updated string

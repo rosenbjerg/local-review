@@ -503,14 +503,23 @@ func (s *Store) AddComment(c Comment) (*Comment, error) {
 	return s.getComment(id)
 }
 
-func (s *Store) UpdateComment(id int64, body string, ctype CommentType, start, end int) (*Comment, error) {
+// UpdateComment rewrites the editable fields plus the anchor basis (snippet +
+// commit_sha): when the range moves, the caller re-captures both against the new
+// range so staleness isn't judged against the old anchor.
+func (s *Store) UpdateComment(id int64, body string, ctype CommentType, start, end int, snippet, commitSHA string) (*Comment, error) {
 	now := nowStr()
 	_, err := s.db.Exec(
-		`UPDATE comments SET body=?, type=?, start_line=?, end_line=?, updated_at=? WHERE id=?`,
-		body, ctype, start, end, now, id)
+		`UPDATE comments SET body=?, type=?, start_line=?, end_line=?, snippet=?, commit_sha=?, updated_at=? WHERE id=?`,
+		body, ctype, start, end, snippet, commitSHA, now, id)
 	if err != nil {
 		return nil, err
 	}
+	return s.getComment(id)
+}
+
+// GetComment reads a single comment (with its replies). Used before an update to
+// recover the anchor side/path needed to re-capture the snippet.
+func (s *Store) GetComment(id int64) (*Comment, error) {
 	return s.getComment(id)
 }
 

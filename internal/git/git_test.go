@@ -52,6 +52,22 @@ func TestWorktreeFileSymlinkEscape(t *testing.T) {
 	if got, err := r.WorktreeFile("inlink.txt"); err != nil || got != "inside\n" {
 		t.Errorf("WorktreeFile(inlink.txt) = (%q, %v), want (\"inside\\n\", nil)", got, err)
 	}
+
+	// A symlink pointing at .git resolves back *inside* the root, so the outward-escape
+	// check passes — it must still be rejected, else it leaks .git internals (config,
+	// hooks). This exercises the .git re-check on the symlink-resolved path.
+	if err := os.MkdirAll(filepath.Join(dir, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".git", "config"), []byte("[core]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(dir, ".git"), filepath.Join(dir, "gitlink")); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+	if _, err := r.WorktreeFile("gitlink/config"); err == nil {
+		t.Error("WorktreeFile should reject a symlink that resolves into .git")
+	}
 }
 
 // newFileDiff synthesizes an added diff for an untracked file: a text file gets

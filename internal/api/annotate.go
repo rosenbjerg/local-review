@@ -167,8 +167,17 @@ func mapContiguous(c *store.Comment, hunks []git.Hunk, newPath string) bool {
 		markOutdated(c)
 		return true
 	}
+	// Only lines within the hunks' old-side extent can break contiguity; every line
+	// beyond it maps 1:1 by a constant offset, so the tail is contiguous by
+	// construction and we stop there. Without this bound an unbounded EndLine (an API
+	// client can send any value) would spin MapOldLine billions of times on every
+	// review read.
+	limit := c.EndLine
+	if ext := git.HunksOldExtent(hunks); ext < limit {
+		limit = ext
+	}
 	prev := ns
-	for l := c.StartLine + 1; l <= c.EndLine; l++ {
+	for l := c.StartLine + 1; l <= limit; l++ {
 		nl, ok := git.MapOldLine(hunks, l)
 		if !ok || nl != prev+1 {
 			markOutdated(c)
@@ -176,10 +185,13 @@ func mapContiguous(c *store.Comment, hunks []git.Hunk, newPath string) bool {
 		}
 		prev = nl
 	}
+	// Contiguous throughout, so the end tracks the start by the range's own span
+	// (== prev when the loop ran to EndLine).
+	end := ns + (c.EndLine - c.StartLine)
 	if newPath == "" && ns == c.StartLine {
 		markCurrent(c)
 	} else {
-		markMoved(c, newPath, ns, prev)
+		markMoved(c, newPath, ns, end)
 	}
 	return true
 }

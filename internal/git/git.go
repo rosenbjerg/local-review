@@ -5,6 +5,7 @@ package git
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -14,7 +15,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// Every git invocation is bounded: a hung smudge/textconv filter or an unexpected
+// credential prompt must not wedge a serving handler or the 1.5s watch poller.
+const gitTimeout = 30 * time.Second
 
 type Repo struct {
 	Path string
@@ -35,10 +41,13 @@ var optionalLocksOff = []string{"GIT_OPTIONAL_LOCKS=0"}
 
 // runEnv is run with extra KEY=VALUE entries appended to the process environment.
 func (r *Repo) runEnv(env []string, args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"-C", r.Path}, args...)...)
-	if len(env) > 0 {
-		cmd.Env = append(os.Environ(), env...)
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", r.Path}, args...)...)
+	// GIT_TERMINAL_PROMPT=0: never block waiting for credentials on stdin (a hang
+	// the timeout would otherwise have to reap). Caller-supplied vars layer on top.
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = append(cmd.Env, env...)
 	var out, errb bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errb
@@ -268,6 +277,12 @@ func (r *Repo) WorktreeFile(path string) (string, error) {
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+sep) {
 		return "", fmt.Errorf("invalid path %q", path)
 	}
+	// Re-run the .git check on the *resolved* path: the textual check above sees the
+	// pre-symlink input, so an in-repo symlink (link -> .git) would slip through and
+	// serve .git internals (config, hooks) that resolve back inside the root.
+	if lower := strings.ToLower(rel); lower == ".git" || strings.HasPrefix(lower, ".git"+sep) {
+		return "", fmt.Errorf("invalid path %q", path)
+	}
 	b, err := os.ReadFile(resolved)
 	return string(b), err
 }
@@ -363,7 +378,10 @@ type FileDiff struct {
 // which the parsers can't unwrap); the forced a//b/ prefixes let parseDiff strip
 // them regardless of the user's diff.*prefix config. The -c flags must precede diff.
 func diffArgs(rest ...string) []string {
-	base := []string{"-c", "core.quotePath=false", "diff", "--no-color", "--find-renames", "--src-prefix=a/", "--dst-prefix=b/"}
+	// --no-ext-diff / --no-textconv: ignore any diff.external, GIT_EXTERNAL_DIFF, or
+	// *.x diff=… textconv the user/repo configured — those emit free-form output the
+	// parser can't read (and would make binaries parse as transformed "text").
+	base := []string{"-c", "core.quotePath=false", "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--find-renames", "--src-prefix=a/", "--dst-prefix=b/"}
 	return append(base, rest...)
 }
 
@@ -417,6 +435,27 @@ func MapOldLine(hunks []Hunk, old int) (newLine int, alive bool) {
 		offset = newLn - oldLn
 	}
 	return old + offset, true // unchanged region after the last hunk
+}
+
+// HunksOldExtent returns the highest old-side (pre-image) line number these hunks
+// touch. Every old line beyond it lies in an unchanged trailing region that
+// MapOldLine maps 1:1 by a constant offset, so a caller walking a range to check
+// contiguity can stop here instead of iterating to an arbitrary end line.
+func HunksOldExtent(hunks []Hunk) int {
+	max := 0
+	for _, h := range hunks {
+		oldStart, _ := parseHunkHeader(h.Header)
+		old := oldStart
+		for _, l := range h.Lines {
+			if l.Kind == LineContext || l.Kind == LineDel {
+				old++
+			}
+		}
+		if last := old - 1; last > max { // old is one past the last covered line
+			max = last
+		}
+	}
+	return max
 }
 
 // Only meaningful when the checked-out branch is base's other side; untracked

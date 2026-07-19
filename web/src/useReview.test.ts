@@ -117,6 +117,13 @@ test("an SSE diff ping resets a 'from' whose commit was rebased away", async () 
       { sha: "c1", shortSha: "c1", subject: "a", relDate: "" },
     ],
   });
+  // Reproduce the backend: /api/diff 400s for a sha that was rebased away. The
+  // refetch must swallow that rejection and still run the `from`-reset — otherwise
+  // the whole Promise.all rejects and `from` stays stuck at the dead sha.
+  vi.mocked(api.diff).mockImplementation(async (_repo, _head, opts) => {
+    if (opts.from === "c2") throw new Error("unknown commit: c2");
+    return { base: "base", head: "head", files: [] };
+  });
   const { result } = renderHook(() => useReview());
   await waitFor(() => expect(result.current.review).not.toBeNull()); // SSE now subscribed
 

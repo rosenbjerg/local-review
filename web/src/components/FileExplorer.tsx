@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import type { Comment, FileDiff } from "../types";
+import { type Comment, type FileDiff, effectivePath } from "../types";
 import { Chevron } from "./Chevron";
 
 interface Props {
@@ -140,7 +140,10 @@ export function FileExplorer({
   const countByFile = new Map<string, number>();
   for (const c of comments) {
     if (c.resolved) continue;
-    countByFile.set(c.filePath, (countByFile.get(c.filePath) ?? 0) + 1);
+    // Group by the effective (relocated) path so a rename-moved comment counts
+    // under the file it now renders in — the same key every other view uses.
+    const p = effectivePath(c);
+    countByFile.set(p, (countByFile.get(p) ?? 0) + 1);
   }
 
   // Filtering just reruns buildTree on the matching files — it only ever creates
