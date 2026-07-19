@@ -253,6 +253,17 @@ export function useReview() {
     setFrom("all");
   }
 
+  // Switch repo, clearing `head` in the same update. The reset must be synchronous:
+  // the repo-change effect that reloads branches resets `head` too, but only after
+  // this render — leaving the auto-start effect to fire startReview() with the *old*
+  // repo's head, which bumps the shared reqSeq and discards the in-flight branch
+  // fetch (leaving the head picker empty until reload). Clearing head here makes
+  // auto-start's `if (repo && head)` guard false during the switch.
+  function changeRepo(name: string) {
+    setRepo(name);
+    setHead("");
+  }
+
   async function startReview() {
     if (!repo || !head) return;
     const seq = ++reqSeq.current;
@@ -365,7 +376,7 @@ export function useReview() {
     repos,
     reposLoaded,
     repo,
-    setRepo,
+    changeRepo,
     branches,
     head,
     changeHead,

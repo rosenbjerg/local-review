@@ -26,7 +26,7 @@ export default function App() {
     repos,
     reposLoaded,
     repo,
-    setRepo,
+    changeRepo,
     head,
     changeHead,
     base,
@@ -228,7 +228,7 @@ export default function App() {
           repo,
           repoOptions,
           onRepoChange: (v) => {
-            setRepo(v);
+            changeRepo(v);
             setString(LS.repo, v);
           },
           head,
