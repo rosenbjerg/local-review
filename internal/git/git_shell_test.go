@@ -1,6 +1,7 @@
 package git
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -91,6 +92,44 @@ func TestMainBranch(t *testing.T) {
 			t.Errorf("MainBranch = %q, want empty", got)
 		}
 	})
+}
+
+// A comment outlives the file it anchors to, so reads of a vanished path must be
+// distinguishable from a real git/IO failure — the caller turns one into a 404 and
+// the other into a 500.
+func TestFileReadsReportAbsenceAsNotFound(t *testing.T) {
+	dir, r := initRepoOn(t, "main")
+	firstCommit(t, dir)
+	gitCmd(t, dir, "mv", "f.txt", "moved.txt")
+	gitCmd(t, dir, "commit", "-q", "-m", "rename")
+
+	notFound := map[string]func() (string, error){
+		"path gone from ref":   func() (string, error) { return r.FileContent("main", "f.txt") },
+		"ref does not exist":   func() (string, error) { return r.FileContent("nope", "moved.txt") },
+		"path gone from index": func() (string, error) { return r.IndexFile("f.txt") },
+		"path gone from disk":  func() (string, error) { return r.WorktreeFile("f.txt") },
+	}
+	for name, read := range notFound {
+		if _, err := read(); !errors.Is(err, ErrNotFound) {
+			t.Errorf("%s: err = %v, want ErrNotFound", name, err)
+		}
+	}
+
+	present := map[string]func() (string, error){
+		"ref":      func() (string, error) { return r.FileContent("main", "moved.txt") },
+		"index":    func() (string, error) { return r.IndexFile("moved.txt") },
+		"worktree": func() (string, error) { return r.WorktreeFile("moved.txt") },
+	}
+	for name, read := range present {
+		if got, err := read(); err != nil || got != "l1\n" {
+			t.Errorf("%s: = (%q, %v), want (\"l1\\n\", nil)", name, got, err)
+		}
+	}
+
+	// A rejected path is a bad request, not an absent file.
+	if _, err := r.WorktreeFile(".git/config"); err == nil || errors.Is(err, ErrNotFound) {
+		t.Errorf("WorktreeFile(.git/config) = %v, want a non-ErrNotFound rejection", err)
+	}
 }
 
 // The fingerprint must change for every kind of real change the poller cares about

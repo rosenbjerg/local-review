@@ -264,6 +264,24 @@ web/src/
   exported and labelled as `file`, not `L0`). `/api/blob` shares `/api/file`'s
   ref/worktree/index resolution (a `indexed=true` param reads `git show :path`) and
   working-tree fallback.
+- **A path can outlive its file**, so absence is a **404, never a 500**. A comment
+  anchored before a rename or delete keeps asking for the old path (and the frontend
+  synthesizes a file card for it), so `/api/file` and `/api/blob` answer 404 —
+  `"<path> does not exist in <side>"` — when the path, or the ref itself, is gone
+  from the side asked for; only a genuine git/IO failure is a 500. `git.ErrNotFound`
+  marks the case, wrapped by `FileContent`/`IndexFile`/`WorktreeFile`; the git reads
+  confirm absence with `git cat-file -e` instead of matching stderr, whose wording
+  varies by git version and locale. A path that can't name a repo file at all —
+  absolute, `..`-escaping, or `.git` in any case variant — is instead a **400** from
+  `validPath` (next to `validRef`), which runs before any side is read so the answer
+  doesn't depend on which side happened to reject it; `git.WorktreeFile` keeps its
+  own equivalent guard for paths reaching it from elsewhere. The frontend's `req`
+  throws an `ApiError` carrying the status, and `DiffView` turns a 404 into a
+  "No longer in `<side>`" note on the card (falling back out of Rendered view) so
+  the stranded comments render against an explanation, not a blank card. `MediaView`'s
+  before/after sides can't read that status (they're `<img src>`), so each falls
+  back to the same note via `onError`, keyed on src + `file.status` so a view-axis
+  toggle or the file reappearing retries the load.
 - **Markdown files** (`.md`/`.markdown` with a new side) get a per-file
   **Code/Rendered** toggle, mirroring SVG's Text/Image. Rendered mode swaps the
   diff table for `MarkdownView` — the new-side content run through the shared

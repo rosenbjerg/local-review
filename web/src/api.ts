@@ -12,6 +12,17 @@ import type {
 // The API defaults author to "agent", so the browser tags its own writes explicitly.
 const REVIEWER = "reviewer";
 
+// Carries the HTTP status so a caller can tell apart the expected failures — a 404
+// for a path that no longer exists — from a real error worth shouting about.
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+  }
+}
+
 async function req<T>(url: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     headers: { "Content-Type": "application/json" },
@@ -25,7 +36,7 @@ async function req<T>(url: string, opts?: RequestInit): Promise<T> {
     } catch {
       /* ignore */
     }
-    throw new Error(msg);
+    throw new ApiError(msg, res.status);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;

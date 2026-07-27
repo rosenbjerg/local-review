@@ -286,17 +286,20 @@ func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (conten
 		return "", "", false
 	}
 	path = r.URL.Query().Get("path")
-	if path == "" {
-		httpError(w, http.StatusBadRequest, errString("path is required"))
+	if err := validPath(path); err != nil {
+		httpError(w, http.StatusBadRequest, err)
 		return "", "", false
 	}
 	var err error
+	var side string
 	if r.URL.Query().Get("indexed") == "true" {
 		// The staged (index) new side: git show :path.
 		content, err = repo.IndexFile(path)
+		side = "the git index"
 	} else if r.URL.Query().Get("worktree") == "true" {
 		// worktree reads the on-disk new side, which git show can't reach.
 		content, err = repo.WorktreeFile(path)
+		side = "the working tree"
 	} else {
 		ref := r.URL.Query().Get("ref")
 		if err = validRef(ref); err != nil {
@@ -311,8 +314,16 @@ func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (conten
 				content, err = wt, nil
 			}
 		}
+		side = ref
 	}
 	if err != nil {
+		// A path can outlive the file it names — a comment anchored before a rename
+		// or delete still asks for it — so absence is a 404 about the file, not a
+		// server fault dressed up as a raw git error.
+		if errors.Is(err, git.ErrNotFound) {
+			httpError(w, http.StatusNotFound, fmt.Errorf("%s does not exist in %s", path, side))
+			return "", "", false
+		}
 		httpError(w, http.StatusInternalServerError, err)
 		return "", "", false
 	}
@@ -890,6 +901,29 @@ func validRef(ref string) error {
 	}
 	if strings.HasPrefix(ref, "-") {
 		return errString("invalid ref")
+	}
+	return nil
+}
+
+// validPath rejects what can't name a file inside the repo: an absolute path, a
+// ".." escape, or .git itself (in any case variant — a case-insensitive filesystem
+// resolves ".GIT" to the real one). Malformed input is the caller's mistake, so it
+// answers 400 on every side rather than reaching a read and surfacing as whatever
+// that side's failure happens to be. git.WorktreeFile guards the same ground for
+// paths that reach it from elsewhere.
+func validPath(p string) error {
+	if p == "" {
+		return errString("path is required")
+	}
+	sep := string(filepath.Separator)
+	clean := filepath.Clean(p)
+	bad := filepath.IsAbs(clean) ||
+		clean == ".." || strings.HasPrefix(clean, ".."+sep)
+	if lower := strings.ToLower(clean); lower == ".git" || strings.HasPrefix(lower, ".git"+sep) {
+		bad = true
+	}
+	if bad {
+		return fmt.Errorf("invalid path %q", p)
 	}
 	return nil
 }

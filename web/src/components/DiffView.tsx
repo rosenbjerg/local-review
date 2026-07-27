@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { api } from "../api";
+import { ApiError, api } from "../api";
 import { langForPath, tokenize, type Token } from "../highlight";
 import type { Comment, CommentType, FileDiff, LineKind } from "../types";
 import { effectiveLines } from "../types";
@@ -89,6 +89,7 @@ export function DiffView({
   const [mdRendered, setMdRendered] = useState(false);
   const [fileComposer, setFileComposer] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [missing, setMissing] = useState(false);
 
   const path = file.newPath || file.oldPath;
   const lang = langForPath(path);
@@ -99,7 +100,10 @@ export function DiffView({
   const mediaView = asImage || (!!file.binary && !svg);
   // A markdown file with a new side can be viewed rendered instead of as a diff.
   const markdown = isMarkdown(path) && file.status !== "deleted" && file.newPath !== "";
-  const docView = markdown && mdRendered;
+  // A gone file has nothing to render, so it falls back to the diff table, whose
+  // leftover-thread row still shows the comments stranded there.
+  const docView = markdown && mdRendered && !missing;
+  const sideLabel = indexed ? "the index" : worktree ? "the working tree" : headRef;
 
   useEffect(() => {
     setCollapsed(reviewed || isLarge);
@@ -119,6 +123,7 @@ export function DiffView({
   );
   useEffect(() => {
     setSource(null);
+    setMissing(false);
   }, [contentKey]);
 
   useEffect(() => {
@@ -127,9 +132,15 @@ export function DiffView({
     api
       .file(repo, file.newPath, headRef, worktree, indexed)
       .then((res) => {
-        if (!cancelled) setSource(res.content.replace(/\n$/, "").split("\n"));
+        if (cancelled) return;
+        setMissing(false);
+        setSource(res.content.replace(/\n$/, "").split("\n"));
       })
-      .catch(() => {});
+      .catch((e) => {
+        // A comment can outlive its file, so the card for a renamed-away path
+        // stays — say why it's empty instead of leaving a blank card.
+        if (!cancelled) setMissing(e instanceof ApiError && e.status === 404);
+      });
     return () => {
       cancelled = true;
     };
@@ -444,6 +455,12 @@ export function DiffView({
       {!collapsed && (
         <div className="file-body">
           {loadError && <div className="error file-error">{loadError}</div>}
+          {missing && (
+            <div className="binary-note media-body">
+              No longer in {sideLabel} — renamed or deleted.
+              {comments.length > 0 && " The comments below are anchored to where it was."}
+            </div>
+          )}
           {mediaView ? (
             <MediaView
               file={file}
