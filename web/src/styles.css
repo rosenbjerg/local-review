@@ -1039,6 +1039,16 @@ textarea:focus-visible {
   border: none;
   padding: 0;
 }
+/* A rendered ```mermaid fence, in either markdown scope. Diagrams draw at their
+   natural size (mermaid.ts turns useMaxWidth off), so a wide one has to scroll
+   here rather than shrink its labels to fit the column. */
+.mermaid-diagram {
+  margin: 0.6em 0;
+  overflow-x: auto;
+}
+.mermaid-diagram svg {
+  display: block;
+}
 .md-body blockquote {
   margin: 0.4em 0;
   padding-left: 10px;

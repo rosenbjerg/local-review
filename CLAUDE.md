@@ -48,6 +48,7 @@ web/src/
   App.tsx                top-level state, repo/branch pickers, 3-column resizable layout, all handlers
   api.ts                 fetch wrappers    types.ts  shared types
   highlight.ts           Shiki wrapper: all languages, lazy-loaded, JS regex engine
+  mermaid.ts             ```mermaid fences → SVG; lazy-loaded, runs after highlighting
   time.ts                relative/absolute timestamp + edited-marker helpers
   commentSort.ts         the comments-pane sort orders (file / started / activity)
   useFocusTrap.ts        modal focus hook: focus-in, Tab trap, restore on close
@@ -69,8 +70,9 @@ web/src/
                          Code/Rendered, Preview/Raw)
     CopyButton.tsx       clipboard button with idle/ok/fail state (lazy text builder)
     (small shared UI primitives: Chevron, CommentCount, AnchorBadge, MetaTimestamps,
-     Markdown — markdown-it + async Shiki code-fence highlight; `softBreaks` picks
-     comment (GFM <br>) vs document (CommonMark) newline handling)
+     Markdown — markdown-it + async Shiki code-fence highlight, then async mermaid
+     render; `softBreaks` picks comment (GFM <br>) vs document (CommonMark)
+     newline handling)
 ```
 
 ## Architecture notes
@@ -295,6 +297,26 @@ web/src/
   to language ids via Shiki's own alias metadata (+ a tiny extras map). `DiffView`
   tokenizes the whole file once and renders tokens per line (avoids per-line
   breakage on multi-line constructs); deleted lines are highlighted per-line.
+- **Mermaid diagrams** (`mermaid.ts`): a second enhancement pass over rendered
+  markdown, same `(html) => Promise<string | null>` shape as `highlightBlocks`
+  and chained after it in `Markdown`, so it applies **everywhere** `Markdown`
+  renders non-inline (markdown files, comment/reply bodies, the export preview);
+  the comments-pane inline preview bails before either pass. Only the
+  `language-mermaid` fence tag is matched (Shiki registers no aliases for it),
+  and `import("mermaid")` sits behind that check, so a review with no diagrams
+  never fetches the ~635KB chunk. Running *after* highlighting is what makes the
+  failure path free — a fence mermaid can't parse is left as the colored source
+  Shiki produced, so the `catch` needs no fallback of its own. Three settings are
+  load-bearing: **`htmlLabels: false`** (the HTML-label path keeps `<img>` through
+  sanitization and then *awaits its load* — an outbound fetch from a
+  localhost-only tool, on diagram source an API agent can author),
+  **`securityLevel: 'strict'`** (same untrusted-source reason; strips
+  `javascript:` click URLs), and **`suppressErrorRendering: true`** (else a bad
+  diagram injects mermaid's error graphic into `document.body`, outside the
+  container we render into). Diagrams draw at natural size (`useMaxWidth: false`,
+  which has to be set per diagram type — there's no root-level equivalent) and
+  scroll inside `.mermaid-diagram`. Renders are cached by source; ids come from a
+  counter because each SVG's internal `<style>` selects on its own id.
 - **Large change-sets stay responsive** via: `LazyFile` viewport-mounting (only
   near-viewport files fetch/tokenize/render), files > `LARGE_FILE_LINES` (500)
   auto-collapse, files > 2000 lines skip highlighting, and panel resize writes
