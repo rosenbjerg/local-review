@@ -1167,9 +1167,20 @@ textarea:focus-visible {
 .comments-panel {
   padding: 16px;
 }
+.comments-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.comments-panel-header select {
+  font-size: 12px;
+  padding: 2px 4px;
+}
 .comments-panel h2 {
   font-size: 14px;
-  margin: 0 0 12px;
+  margin: 0;
 }
 .comment-file-group {
   margin-bottom: 16px;
@@ -1184,9 +1195,14 @@ textarea:focus-visible {
 }
 .comment-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
   margin-bottom: 6px;
+}
+.comment-nav-time {
+  margin-left: auto;
+  font-size: 11px;
 }
 .badge {
   font-size: 11px;

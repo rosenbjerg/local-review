@@ -16,9 +16,11 @@ import { useJump } from "./useJump";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 import { usePanelResize } from "./usePanelResize";
 import { useReview } from "./useReview";
+import type { CommentSort } from "./commentSort";
+import { isCommentSort, sortComments } from "./commentSort";
 import type { FileDiff } from "./types";
-import { effectiveLines, effectivePath } from "./types";
-import { LS, setString, writeBasePref } from "./storage";
+import { effectivePath } from "./types";
+import { LS, getString, setString, writeBasePref } from "./storage";
 import { clamp } from "./util";
 
 export default function App() {
@@ -69,6 +71,10 @@ export default function App() {
   const [showPrompts, setShowPrompts] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const [commentSort, setCommentSort] = useState<CommentSort>(() => {
+    const stored = getString(LS.commentSort);
+    return isCommentSort(stored) ? stored : "file";
+  });
   const diffColRef = useRef<HTMLDivElement>(null);
   const explorerSearchRef = useRef<HTMLInputElement>(null);
   // Which file the tree highlights: the scroll-spy sets it as you scroll, clicks/nav
@@ -168,22 +174,13 @@ export default function App() {
     [orderedDiffFiles]
   );
 
-  const orderedCommentIds = useMemo(() => {
-    const ids: number[] = [];
-    const seen = new Set<number>();
-    for (const f of orderedDiffFiles) {
-      const p = f.newPath || f.oldPath;
-      const inFile = comments
-        .filter((c) => effectivePath(c) === p)
-        .sort((a, b) => effectiveLines(a).start - effectiveLines(b).start);
-      for (const c of inFile) {
-        ids.push(c.id);
-        seen.add(c.id);
-      }
-    }
-    for (const c of comments) if (!seen.has(c.id)) ids.push(c.id);
-    return ids;
-  }, [orderedDiffFiles, comments]);
+  // The comments panel and the n/p keyboard nav share one ordering, so stepping
+  // through comments always follows what the pane shows.
+  const sortedComments = useMemo(
+    () => sortComments(comments, commentSort, orderedFilePaths),
+    [comments, commentSort, orderedFilePaths]
+  );
+  const orderedCommentIds = useMemo(() => sortedComments.map((c) => c.id), [sortedComments]);
 
   function moveFile(delta: number) {
     const fileList = orderedDiffFiles.map((f) => f.newPath || f.oldPath);
@@ -380,8 +377,12 @@ export default function App() {
           />
           <aside className="side-column">
             <CommentsPanel
-              comments={comments}
-              fileOrder={orderedFilePaths}
+              comments={sortedComments}
+              sort={commentSort}
+              onSortChange={(v) => {
+                setCommentSort(v);
+                setString(LS.commentSort, v);
+              }}
               onJump={jumpTo}
               onDelete={handleDelete}
             />

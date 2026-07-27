@@ -49,6 +49,7 @@ web/src/
   api.ts                 fetch wrappers    types.ts  shared types
   highlight.ts           Shiki wrapper: all languages, lazy-loaded, JS regex engine
   time.ts                relative/absolute timestamp + edited-marker helpers
+  commentSort.ts         the comments-pane sort orders (file / started / activity)
   useFocusTrap.ts        modal focus hook: focus-in, Tab trap, restore on close
   storage.ts             typed, error-swallowing localStorage helpers + the lr.* keys
   components/
@@ -57,7 +58,7 @@ web/src/
                          drag-select ranges, Changed/Full toggle, auto-collapse large files
     LazyFile.tsx         viewport lazy-mount wrapper (IntersectionObserver) + scroll anchor
     CommentThread.tsx    a comment thread: root comment (edit/delete) + replies + reply composer
-    CommentsPanel.tsx    right pane: cross-file comment overview, jump-to
+    CommentsPanel.tsx    right pane: cross-file comment overview, sort select, jump-to
     CommentComposer.tsx  type select + body textarea (reused for new/edit)
     MarkdownView.tsx     rendered (as-published) view of a .md file + file-level comments
     ExportModal.tsx      rendered-markdown preview (via Markdown) + Raw toggle + copy/download
@@ -300,8 +301,25 @@ web/src/
   `grid-template-columns` to the DOM via ref (no per-mousemove re-render). Export
   markdown preview is rendered with `markdown-it` (`html:false`, so safe);
   Copy/Download always emit the raw markdown.
+- **The comments pane is sortable** — `web/src/commentSort.ts` is the single
+  ordering authority, and `App.tsx` feeds its output to *both* the pane and
+  `orderedCommentIds`, so `n`/`p` always steps in the order on screen. Comments
+  **group by file in every sort**; only the keys change: `file` (default) — file-tree
+  index then line, `started` — `createdAt` ascending, `activity` — the thread's last
+  change (comment `createdAt`/`updatedAt` and every reply's) descending. Two rules
+  hold across all three: **resolved sinks within its file** (never out of its group,
+  so group order ignores `resolved` — an all-resolved file keeps its natural slot),
+  and **a file sits where its first-listed comment would sit in a flat sort**, so the
+  grouped list reads as that flat order with each file hoisted to its first
+  appearance. The group key is therefore read *after* the within-file sort — else a
+  bumped resolved thread would hoist its file while sitting at the bottom of it.
+  Timestamps are second-granular (`store.go` writes RFC3339), so batch-created
+  comments tie constantly and `id` is the mandatory tie-break. Resolving doesn't
+  count as activity, since `SetCommentResolved` deliberately doesn't bump
+  `updated_at`. The time sorts show the sorted-on timestamp on each item so the
+  order explains itself. Purely client-side over data the pane already has.
 - **Keyboard shortcuts** live in one window `keydown` effect in `App.tsx`:
-  `j`/`k` next/prev file, `n`/`p` next/prev comment (reading order via
+  `j`/`k` next/prev file, `n`/`p` next/prev comment (pane order via
   `orderedCommentIds`, stepping from `activeComment`), `e` export, `r` reload,
   `?` help overlay. The handler bails when the target is an input/textarea/select
   or a modifier is held, and while a modal is open, so it never fights the
@@ -327,7 +345,9 @@ web/src/
   chips — status labels, code, kbd, thumbnails), `--radius-md` (controls & cards
   — buttons, inputs, threads, code blocks), `--radius-lg` (large surfaces — file
   cards, modals), `--radius-pill` (count/type badges).
-- Persisted UI prefs (panel widths) go in `localStorage` under `lr.*` keys.
+- Persisted UI prefs (panel widths, comment sort) go in `localStorage` under
+  `lr.*` keys. Validate a stored union on read (`isCommentSort`) so a stale value
+  falls back to the default rather than reaching the app.
 - Modals (`.modal` inside a `.modal-backdrop`) close on Escape and backdrop
   click, and use `useFocusTrap` for focus-in / Tab-trap / restore-on-close —
   give a new modal the same treatment (mark its safe default control

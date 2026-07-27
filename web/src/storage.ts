@@ -6,6 +6,7 @@ export const LS = {
   baseByRepo: "lr.baseByRepo",
   repo: "lr.repo",
   exportInstructions: "lr.exportInstructions",
+  commentSort: "lr.commentSort",
 } as const;
 
 export function getString(key: string, def = ""): string {
