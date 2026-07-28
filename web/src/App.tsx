@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AddFileModal } from "./components/AddFileModal";
 import { AgentPromptsModal } from "./components/AgentPromptsModal";
+import { CommentRefPopover } from "./components/CommentRefPopover";
 import { CommentsPanel } from "./components/CommentsPanel";
 import { DiffView, LARGE_FILE_LINES } from "./components/DiffView";
 import { ExportModal } from "./components/ExportModal";
@@ -13,6 +14,7 @@ import { TopBar } from "./components/TopBar";
 import { buildReplyPrompt, buildReviewPrompt } from "./prompts";
 import { useActiveFile } from "./useActiveFile";
 import { useCommentActions } from "./useCommentActions";
+import { useCommentRefs } from "./useCommentRefs";
 import { useJump } from "./useJump";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 import { useOccurrenceHighlight } from "./useOccurrenceHighlight";
@@ -30,7 +32,7 @@ export default function App() {
     repos,
     reposLoaded,
     repo,
-    setRepo,
+    changeRepo,
     head,
     changeHead,
     base,
@@ -95,6 +97,8 @@ export default function App() {
   });
   const [showFullSignal, setShowFullSignal] = useState<{ path: string; n: number } | null>(null);
   const highlight = useOccurrenceHighlight(!!review, diffColRef);
+  // `#<id>` references in comment bodies: click jumps, hover/focus previews.
+  const refHover = useCommentRefs(jumpTo);
   const { commentActions, handleAddComment, handleDelete } = useCommentActions({
     review,
     comments,
@@ -182,6 +186,15 @@ export default function App() {
     () => orderedDiffFiles.map((f) => f.newPath || f.oldPath),
     [orderedDiffFiles]
   );
+  // The set of existing comment ids, so `#<id>` references only linkify real comments.
+  // Keyed on the id list (not the array identity) so an SSE refetch returning the same
+  // ids keeps a stable Set identity — otherwise every thread/reply <Markdown> re-runs
+  // markdown-it + Shiki highlighting on each refetch.
+  const commentIdKey = comments.map((c) => c.id).join(",");
+  const commentIds = useMemo(
+    () => new Set(commentIdKey ? commentIdKey.split(",").map(Number) : []),
+    [commentIdKey]
+  );
 
   // The comments panel and the n/p keyboard nav share one ordering, so stepping
   // through comments always follows what the pane shows.
@@ -238,7 +251,7 @@ export default function App() {
           repo,
           repoOptions,
           onRepoChange: (v) => {
-            setRepo(v);
+            changeRepo(v);
             setString(LS.repo, v);
           },
           head,
@@ -373,6 +386,7 @@ export default function App() {
                       expandComment={expandComment}
                       showFullSignal={showFullSignal}
                       activeComment={activeComment}
+                      commentIds={commentIds}
                     />
                   </LazyFile>
                 );
@@ -460,6 +474,8 @@ export default function App() {
           onConfirm={performReset}
         />
       )}
+
+      <CommentRefPopover hovered={refHover} comments={comments} />
     </div>
   );
 }

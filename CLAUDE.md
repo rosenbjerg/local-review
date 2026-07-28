@@ -30,9 +30,12 @@ npm --prefix web run dev                 # terminal 2 → :5173
 ```
 
 Checks: `go build ./...`, `go vet ./...`, `npm --prefix web run build` (runs `tsc`),
-`npm --prefix web run lint` (ESLint: rules-of-hooks + React Compiler rule; see `COMPILER.md`).
-There is no browser automation here — verify backend changes with `curl` against
-a throwaway git repo; verify pure frontend logic with a standalone node script.
+`npm --prefix web run lint` (ESLint: rules-of-hooks + React Compiler rule; see `COMPILER.md`),
+`npm --prefix web run test` (vitest; jsdom + Testing Library — `web/vitest.config.ts`,
+`web/vitest.setup.ts`). Frontend hook logic (the `useReview` selection/refetch races)
+is tested via `renderHook` with a mocked `api`; test files are excluded from the build
+tsconfig and lint. There is no browser automation here — verify backend changes with
+`curl` against a throwaway git repo; verify pure UI/DOM behavior manually.
 
 ## Layout
 
@@ -232,13 +235,17 @@ web/src/
   move file content send `diff`. The client refetches the whole review on either,
   but the **diff only on a `diff` ping** (ping-and-refetch — backend stays source of
   truth, no per-event payloads), so comment churn doesn't re-pull the whole diff
-  while an agent's edits or a fresh commit still surface without a manual reload.
+  while an agent's edits or a fresh commit still surface without a manual reload. A
+  `diff` ping also refetches the **branch list and commit picker** (the git state
+  moved, so an out-of-band checkout must update `headIsCurrent` and new/rebased
+  commits must reach the `from` picker; a picked `from` sha that was rebased away
+  resets to `all`).
   `diff` is a superset that **upgrades** a pending `meta`: a per-subscriber
   `atomic.Bool diffPending` rides alongside the coalescing wakeup channel and the
   handler clears it with `Swap`, so a dropped (coalesced) wakeup never loses the
-  fact that the diff moved. The diff params (repo + head + the resolved diff-view
-  opts) come from a ref in `useReview`, since the SSE effect is keyed only on
-  `review.id`. The
+  fact that the diff moved. The refetch params (repo + head/base/from + the resolved
+  diff-view opts) come from a ref in `useReview`, since the SSE effect is keyed only
+  on `review.id`. The
   hub (`internal/api/events.go`) is in-memory with non-blocking coalescing sends, so
   a stalled tab never blocks a handler; empty review entries are pruned on the last
   unsubscribe. A 25s keepalive comment keeps the stream warm and turns a half-open
@@ -326,8 +333,8 @@ web/src/
   existing text nodes registered as `CSS.highlights.set("occ", …)` and styled by
   `::highlight(occ)` — so it creates no DOM and can't disturb the per-token spans
   `highlight.ts` renders. That also makes it **uncapped**: no elements per match, so a
-  common word costs nothing to mark. The matching rules are pure (`occurrences.ts`, so
-  a standalone node script can test them): case-sensitive, **whole-word only when the
+  common word costs nothing to mark. The matching rules are pure (`occurrences.ts`,
+  covered by `occurrences.test.ts`): case-sensitive, **whole-word only when the
   term is identifier-shaped** (an arbitrary selection like `foo.bar` or `x + 1` has no
   boundary to respect), plus a span→text-node mapping, since tokenizing splits one
   line's text across many nodes. A selection counts only when it starts **and ends**

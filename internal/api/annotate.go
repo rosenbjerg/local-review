@@ -24,14 +24,14 @@ func annotateComments(repo *git.Repo, headRef string, comments []store.Comment) 
 	readWorktree := fileReader(repo.WorktreeFile)
 	readIndex := fileReader(repo.IndexFile)
 	headSHA, _ := repo.ResolveSHA(headRef)
-	diffCache := map[string]*fileDiffResult{}
+	caches := &diffCaches{scoped: map[string]*fileDiffResult{}, whole: map[string]*fileDiffResult{}}
 	for i := range comments {
 		c := &comments[i]
 		// Prefer diff-based tracking (commit_sha → head): snippet matching can't
 		// tell a genuine move from a coincidental reappearance of the same lines.
 		// Only for head-anchored comments — working-tree/index sides snippet-match.
 		if !c.Worktree && !c.Indexed && c.StartLine > 0 && c.CommitSHA != "" && c.CommitSHA != headSHA {
-			if annotateByDiff(repo, c, headRef, diffCache) {
+			if annotateByDiff(repo, c, headRef, caches) {
 				continue
 			}
 		}
@@ -50,6 +50,59 @@ type fileDiffResult struct {
 	err   error
 }
 
+// diffCaches memoizes, per review read: the path-scoped diff per (commit_sha, path)
+// used for the common (unchanged/modified) case, and the whole-tree find-renames diff
+// per commit_sha used only to resolve a rename hiding behind a deletion.
+type diffCaches struct {
+	scoped map[string]*fileDiffResult // key: commit_sha + "\x00" + path
+	whole  map[string]*fileDiffResult // key: commit_sha
+}
+
+// scopedEntry returns path's entry in `git diff <sha> head -- path` (nil if the file
+// is unchanged; ok=false on git error). Restricting to the path is cheap but reports
+// a rename as a bare deletion, so the caller escalates to wholeEntry on a deletion.
+func (dc *diffCaches) scopedEntry(repo *git.Repo, sha, head, path string) (fd *git.FileDiff, ok bool) {
+	key := sha + "\x00" + path
+	res := dc.scoped[key]
+	if res == nil {
+		files, err := repo.DiffFile(sha, head, path)
+		res = &fileDiffResult{files: files, err: err}
+		dc.scoped[key] = res
+	}
+	if res.err != nil {
+		return nil, false
+	}
+	return findEntry(res.files, path), true
+}
+
+// wholeEntry returns path's entry in the whole-tree `git diff <sha> head` (with rename
+// detection), so a rename is paired to its new path.
+func (dc *diffCaches) wholeEntry(repo *git.Repo, sha, head, path string) (fd *git.FileDiff, ok bool) {
+	res := dc.whole[sha]
+	if res == nil {
+		files, err := repo.Diff(sha, head)
+		res = &fileDiffResult{files: files, err: err}
+		dc.whole[sha] = res
+	}
+	if res.err != nil {
+		return nil, false
+	}
+	return findEntry(res.files, path), true
+}
+
+// findEntry locates the file by its OLD-side path — the side a head-anchored comment
+// is keyed to. A file that exists at commit_sha is always on the old side, so it can
+// never appear only as a NewPath; matching NewPath would just pick up an unrelated
+// file coincidentally renamed onto this path.
+func findEntry(files []git.FileDiff, path string) *git.FileDiff {
+	for i := range files {
+		if files[i].OldPath == path {
+			return &files[i]
+		}
+	}
+	return nil
+}
+
 // Route every anchor decision through these so AnchorStatus and the Current* fields
 // are always assigned together (and CurrentFilePath cleared unless a rename set it).
 func markCurrent(c *store.Comment) {
@@ -65,60 +118,58 @@ func markMoved(c *store.Comment, path string, start, end int) {
 	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine, c.CurrentFilePath = store.AnchorMoved, start, end, path
 }
 
-// Returns false to fall back to snippet matching (unresolvable commit, binary file,
-// modification with no textual hunks). The diff is queried whole (no pathspec) so
-// git can pair a rename — restricting to the old path would report a bare deletion.
-func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, cache map[string]*fileDiffResult) bool {
-	res := cache[c.CommitSHA]
-	if res == nil {
-		files, err := repo.Diff(c.CommitSHA, headRef)
-		res = &fileDiffResult{files: files, err: err}
-		cache[c.CommitSHA] = res
-	}
-	if res.err != nil {
+// annotateByDiff tracks a head-anchored comment's range from commit_sha to head via
+// git, two-tier: a cheap path-scoped diff for the common (unchanged/modified) case,
+// escalating to a whole-tree find-renames diff only when the file is gone (a possible
+// rename). Returns false to fall back to snippet matching (git error, binary file, or
+// a modification with no textual hunks).
+func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, caches *diffCaches) bool {
+	fd, ok := caches.scopedEntry(repo, c.CommitSHA, headRef, c.FilePath)
+	if !ok {
 		return false
 	}
-	// The comment is keyed to its original (old-side) path.
-	var fd *git.FileDiff
-	for i := range res.files {
-		if res.files[i].OldPath == c.FilePath || res.files[i].NewPath == c.FilePath {
-			fd = &res.files[i]
-			break
-		}
-	}
 	if fd == nil {
-		// File untouched between commit_sha and head → still where it was.
-		markCurrent(c)
+		markCurrent(c) // untouched between commit_sha and head → still where it was
 		return true
 	}
 	if fd.Status == git.FileDeleted {
-		markOutdated(c)
+		// The pathspec reports a rename as a bare deletion; the whole-tree diff pairs
+		// it, so escalate to tell a real deletion (outdated) from a rename (follow it).
+		return annotateDeletedOrRenamed(repo, c, headRef, caches)
+	}
+	if fd.Binary || len(fd.Hunks) == 0 {
+		return false // binary or mode-only change — let snippet matching decide
+	}
+	return mapContiguous(c, fd.Hunks, "") // same-file modification
+}
+
+func annotateDeletedOrRenamed(repo *git.Repo, c *store.Comment, headRef string, caches *diffCaches) bool {
+	fd, ok := caches.wholeEntry(repo, c.CommitSHA, headRef, c.FilePath)
+	if !ok {
+		return false
+	}
+	if fd == nil || fd.Status != git.FileRenamed {
+		markOutdated(c) // genuinely deleted between commit_sha and head
 		return true
 	}
 	if fd.Binary {
-		return false // no textual side to map — let the snippet path decide
-	}
-	// A rename may carry no hunks (a pure move, R100): the lines map 1:1, only the
-	// path changes. A modification with no hunks (mode-only, etc.) has nothing to
-	// map, so defer to snippet matching.
-	renamed := fd.Status == git.FileRenamed
-	if len(fd.Hunks) == 0 && !renamed {
 		return false
 	}
-	newPath := ""
-	if renamed {
-		newPath = fd.NewPath
-	}
-	// Every line in the range must survive and stay contiguous, else the block was
-	// edited (outdated) rather than merely shifted/moved.
-	ns, alive := git.MapOldLine(fd.Hunks, c.StartLine)
+	return mapContiguous(c, fd.Hunks, fd.NewPath) // follow the rename (R100 has no hunks → 1:1)
+}
+
+// mapContiguous maps c's range through hunks: every line must survive and stay
+// contiguous, else the block was edited (outdated) rather than merely shifted. A
+// non-empty newPath relocates a move that followed a rename.
+func mapContiguous(c *store.Comment, hunks []git.Hunk, newPath string) bool {
+	ns, alive := git.MapOldLine(hunks, c.StartLine)
 	if !alive {
 		markOutdated(c)
 		return true
 	}
 	prev := ns
 	for l := c.StartLine + 1; l <= c.EndLine; l++ {
-		nl, ok := git.MapOldLine(fd.Hunks, l)
+		nl, ok := git.MapOldLine(hunks, l)
 		if !ok || nl != prev+1 {
 			markOutdated(c)
 			return true

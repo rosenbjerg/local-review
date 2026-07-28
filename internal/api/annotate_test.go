@@ -328,6 +328,30 @@ func TestAnnotateByDiffRenameWithInteriorEditOutdated(t *testing.T) {
 	}
 }
 
+// When an unrelated file takes over the commented file's name (its original content
+// deleted, another file's content put at that path), the comment is outdated, never
+// "moved" onto the unrelated content. Git's endpoint diff shows the path as modified
+// (its content changed) — never as a rename target — so matching the diff entry by
+// its old-side path lands on the right (now-changed) file. Guards the file-match logic.
+func TestAnnotateByDiffUnrelatedFileTakesPathIsOutdated(t *testing.T) {
+	r := newRepo(t)
+	r.write("a.go", "aaa\nbbb\nccc\n")
+	r.write("settings.go", "sx\nsy\nsz\n")
+	sha1 := r.commitAll("c1")
+	// a.go's original content is replaced by settings.go's; settings.go removed.
+	r.write("a.go", "sx\nsy\nsz\n")
+	r.remove("settings.go")
+	r.commitAll("c2")
+
+	got := annotateOne(r, "main", store.Comment{FilePath: "a.go", StartLine: 2, EndLine: 2, Snippet: "bbb", CommitSHA: sha1})
+	if got.AnchorStatus != store.AnchorOutdated {
+		t.Fatalf("a.go's content replaced: anchorStatus = %q, want outdated", got.AnchorStatus)
+	}
+	if got.CurrentFilePath != "" {
+		t.Errorf("must not relocate onto the unrelated content, got CurrentFilePath=%q", got.CurrentFilePath)
+	}
+}
+
 // A snippet whose file is gone reads as outdated.
 func TestAnnotateMissingFileOutdated(t *testing.T) {
 	r := newRepo(t)
