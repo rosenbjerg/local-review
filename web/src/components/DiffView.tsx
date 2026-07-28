@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { ApiError, api } from "../api";
 import { langForPath, tokenize, type Token } from "../highlight";
 import type { Comment, CommentType, FileDiff, LineKind } from "../types";
@@ -125,13 +125,21 @@ export function DiffView({
     if (showFullSignal && showFullSignal.path === path) void switchMode("full");
   }, [showFullSignal, path]);
 
-  // Drop the cached source when the new side changes (toggle/Reload): the review
-  // isn't remounted, so stale text/tokens would persist. Hunks stand in for the
-  // new-side content in the key, so an unchanged file keeps its source.
+  // Drop the cached source when the new side changes (toggle/Reload/branch switch):
+  // the card is keyed by path alone and never remounts, so stale text and tokens
+  // would otherwise persist and render against the current hunks' line numbers.
+  // The key must name *which* side is being read (repo + headRef + the side flags),
+  // not just its content fingerprint: hunks stand in for the content, but a
+  // synthetic "unchanged" card has none, so without the side its key never moves.
   const contentKey = useMemo(
-    () => `${worktree} ${indexed} ${file.status} ${file.newPath} ${JSON.stringify(file.hunks)}`,
-    [worktree, indexed, file]
+    () =>
+      `${repo} ${headRef} ${worktree} ${indexed} ${file.status} ${file.newPath} ${JSON.stringify(file.hunks)}`,
+    [repo, headRef, worktree, indexed, file]
   );
+  // switchMode writes source outside the fetch effect, so it needs the live key to
+  // check against — its own closure's is the one captured before the await.
+  const contentKeyRef = useRef(contentKey);
+  contentKeyRef.current = contentKey;
   useEffect(() => {
     setSource(null);
     setMissing(false);
@@ -276,8 +284,11 @@ export function DiffView({
 
   async function switchMode(next: "changed" | "full") {
     if (next === "full" && !source) {
+      const key = contentKey;
       try {
         const res = await api.file(repo, file.newPath, headRef, worktree, indexed);
+        // The side moved while this was in flight; the fetch effect owns the refetch.
+        if (key !== contentKeyRef.current) return;
         setSource(res.content.replace(/\n$/, "").split("\n"));
       } catch (e) {
         setLoadError(`Could not load full file: ${(e as Error).message}`);

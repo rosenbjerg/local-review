@@ -371,6 +371,24 @@ web/src/
   when the Changed/Full toggle applies) and the bar signals `DiffView` via a
   `showFullSignal` prop, following `expandTarget`'s pattern; the repaint recounts.
   Line-based diff rows only: not `MarkdownView`, `MediaView`, or comment bodies.
+- **Diff/source consistency — the "wrong lines" class of bug.** A file card renders
+  two independently-fetched things that must describe the same side: the **hunks**
+  (from `/api/diff`) and the **full-file source** (from `/api/file`). Full view
+  renders `source` and marks adds from the hunks; Changed view renders hunk rows but
+  takes each add/context line's *syntax tokens* from `source`, keyed by new-side line
+  number — so a `source` that disagrees with the hunks silently prints the wrong text
+  against the current line numbers, in whichever of the two views is highlighted.
+  Anything that lets them drift shows up as "wrong lines that a reload fixes", so two
+  rules hold. (1) Nothing may write `files` for a selection the user has moved past —
+  hence the `reqSeq` gate on the ping refetch above. (2) `DiffView`'s `contentKey`
+  (which drops the cached `source`) must name **which side** is being read — `repo` +
+  `headRef` + the worktree/index flags — not just fingerprint the hunks. Hunks proxy
+  the content of a file the diff *touched*; a synthetic `unchanged` card has none, so
+  a hunks-only key is constant for it and it would keep another branch's text forever.
+  Cards are keyed by path in `App.tsx` and `LazyFile` never unmounts them, so nothing
+  else resets that state. Covered by `web/src/diffView.test.tsx` — including that a
+  no-op diff refetch still *keeps* the source, or every ping would refetch every
+  expanded file.
 - **Large change-sets stay responsive** via: `LazyFile` viewport-mounting (only
   near-viewport files fetch/tokenize/render), files > `LARGE_FILE_LINES` (500)
   auto-collapse, files > 2000 lines skip highlighting, and panel resize writes
