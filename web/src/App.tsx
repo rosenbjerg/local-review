@@ -5,6 +5,7 @@ import { CommentsPanel } from "./components/CommentsPanel";
 import { DiffView, LARGE_FILE_LINES } from "./components/DiffView";
 import { ExportModal } from "./components/ExportModal";
 import { FileExplorer, orderedFiles } from "./components/FileExplorer";
+import { FindBar } from "./components/FindBar";
 import { HelpModal } from "./components/HelpModal";
 import { LazyFile } from "./components/LazyFile";
 import { ResetConfirmModal } from "./components/ResetConfirmModal";
@@ -14,6 +15,7 @@ import { useActiveFile } from "./useActiveFile";
 import { useCommentActions } from "./useCommentActions";
 import { useJump } from "./useJump";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
+import { useOccurrenceHighlight } from "./useOccurrenceHighlight";
 import { usePanelResize } from "./usePanelResize";
 import { useReview } from "./useReview";
 import type { CommentSort } from "./commentSort";
@@ -91,6 +93,8 @@ export default function App() {
     setSelectedFile,
     onProgrammaticScroll: suppressActiveFile,
   });
+  const [showFullSignal, setShowFullSignal] = useState<{ path: string; n: number } | null>(null);
+  const highlight = useOccurrenceHighlight(!!review, diffColRef);
   const { commentActions, handleAddComment, handleDelete } = useCommentActions({
     review,
     comments,
@@ -114,6 +118,11 @@ export default function App() {
     setOpenedFiles([]);
     resetJump();
   }, [repo]);
+
+  function showFullFile() {
+    const path = highlight.path;
+    if (path) setShowFullSignal((s) => ({ path, n: (s?.n ?? 0) + 1 }));
+  }
 
   function requestReset() {
     if (!review) return;
@@ -216,6 +225,10 @@ export default function App() {
     onOpenHelp: () => setShowHelp(true),
     onCloseHelp: () => setShowHelp(false),
     onFocusSearch: () => explorerSearchRef.current?.focus(),
+    hasHighlight: highlight.term !== null,
+    onNextMatch: highlight.next,
+    onPrevMatch: highlight.prev,
+    onDismissHighlight: highlight.clear,
   });
 
   return (
@@ -323,45 +336,60 @@ export default function App() {
             onMouseDown={(e) => startResize(e, "left")}
             onKeyDown={(e) => onResizeKey(e, "left")}
           />
-          <div className="diff-column" ref={diffColRef}>
-            {allFiles.length === 0 && loading && (
-              <div className="empty">
-                <span className="spinner" aria-hidden="true" />
-                Loading diff…
-              </div>
+          <div className="diff-pane">
+            <div className="diff-column" ref={diffColRef}>
+              {allFiles.length === 0 && loading && (
+                <div className="empty">
+                  <span className="spinner" aria-hidden="true" />
+                  Loading diff…
+                </div>
+              )}
+              {allFiles.length === 0 && !loading && (
+                <div className="empty">No changes between base and head.</div>
+              )}
+              {orderedDiffFiles.map((f) => {
+                const path = f.newPath || f.oldPath;
+                return (
+                  <LazyFile
+                    key={path}
+                    anchorId={`file-${path}`}
+                    label={path}
+                    estHeight={estFileHeight(f)}
+                    rootRef={diffColRef}
+                  >
+                    <DiffView
+                      file={f}
+                      repo={repo}
+                      headRef={review.headRef}
+                      baseRef={baseSha}
+                      worktree={worktreeSide}
+                      indexed={indexedSide}
+                      comments={comments.filter((c) => effectivePath(c) === path)}
+                      onAddComment={handleAddComment}
+                      actions={commentActions}
+                      reviewed={reviewedFiles.has(path)}
+                      onToggleReviewed={(r) => toggleReviewed(path, r)}
+                      expandTarget={expandTarget}
+                      expandComment={expandComment}
+                      showFullSignal={showFullSignal}
+                      activeComment={activeComment}
+                    />
+                  </LazyFile>
+                );
+              })}
+            </div>
+            {highlight.term && (
+              <FindBar
+                term={highlight.term}
+                count={highlight.count}
+                index={highlight.index}
+                changedOnly={highlight.viewMode === "changed"}
+                onNext={highlight.next}
+                onPrev={highlight.prev}
+                onShowFullFile={showFullFile}
+                onClear={highlight.clear}
+              />
             )}
-            {allFiles.length === 0 && !loading && (
-              <div className="empty">No changes between base and head.</div>
-            )}
-            {orderedDiffFiles.map((f) => {
-              const path = f.newPath || f.oldPath;
-              return (
-                <LazyFile
-                  key={path}
-                  anchorId={`file-${path}`}
-                  label={path}
-                  estHeight={estFileHeight(f)}
-                  rootRef={diffColRef}
-                >
-                  <DiffView
-                    file={f}
-                    repo={repo}
-                    headRef={review.headRef}
-                    baseRef={baseSha}
-                    worktree={worktreeSide}
-                    indexed={indexedSide}
-                    comments={comments.filter((c) => effectivePath(c) === path)}
-                    onAddComment={handleAddComment}
-                    actions={commentActions}
-                    reviewed={reviewedFiles.has(path)}
-                    onToggleReviewed={(r) => toggleReviewed(path, r)}
-                    expandTarget={expandTarget}
-                    expandComment={expandComment}
-                    activeComment={activeComment}
-                  />
-                </LazyFile>
-              );
-            })}
           </div>
           <div
             className="resizer"

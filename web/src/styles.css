@@ -18,6 +18,13 @@
      neither the add/del shades nor the accent. Opaque like its siblings; it
      fully overrides the row shade it sits on. */
   --sel-bg: #1c2e4a;
+  /* Every other occurrence of the word you selected. Translucent so the syntax
+     colors stay readable through it, and warm because none of the row shades it
+     can land on (add, del, range-select) are. */
+  --occ-bg: rgba(210, 153, 34, 0.28);
+  /* The one match the find bar is parked on, saturated enough to pick out from
+     its siblings at a glance. */
+  --occ-bg-active: rgba(210, 153, 34, 0.55);
   /* Semantic status/feedback colors — text shade + matching border shade.
      Used by status/fstat marks, comment-type badges, and danger controls. */
   --danger: #f85149;
@@ -352,7 +359,41 @@ textarea:focus-visible {
   overflow-y: auto;
   background: var(--bg-elev);
 }
+/* Holds the find bar below the scrolling diff. It can't be sticky inside the
+   scroller (the file headers already own top:0 there), and below rather than
+   above because a bar entering above would shift the scroller's top edge down
+   and make the whole diff jump every time a highlight appears. */
+.diff-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+.find-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: var(--bg-elev);
+  border-top: 1px solid var(--border);
+}
+.find-term {
+  font-family: var(--font-mono);
+  background: var(--occ-bg);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.find-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
 .diff-column {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   /* No top padding: the file headers are sticky at top:0, so a top padding
      would leave a band where scrolling content shows above the stuck header.
@@ -863,6 +904,14 @@ textarea:focus-visible {
 }
 .row-comment-active .gutter {
   border-left: 3px solid var(--accent);
+}
+/* Ranges registered by useOccurrenceHighlight. The native selection paints
+   above this, so the word you actually picked still reads as selected. */
+::highlight(occ) {
+  background-color: var(--occ-bg);
+}
+::highlight(occ-active) {
+  background-color: var(--occ-bg-active);
 }
 
 /* Inline threads */

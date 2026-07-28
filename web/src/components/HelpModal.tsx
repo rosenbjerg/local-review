@@ -55,7 +55,7 @@ export function HelpModal({ onClose }: { onClose: () => void }) {
               <td>
                 <kbd>Esc</kbd>
               </td>
-              <td>Close a dialog / cancel a comment</td>
+              <td>Close a dialog, cancel a comment, clear the highlight</td>
             </tr>
           </tbody>
         </table>
@@ -75,6 +75,16 @@ export function HelpModal({ onClose }: { onClose: () => void }) {
                 <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>Enter</kbd>
               </td>
               <td>Submit the comment</td>
+            </tr>
+            <tr>
+              <td>Select a word</td>
+              <td>Highlight its other occurrences in the file</td>
+            </tr>
+            <tr>
+              <td>
+                <kbd>Enter</kbd> / <kbd>Shift</kbd>+<kbd>Enter</kbd>
+              </td>
+              <td>Next / previous occurrence</td>
             </tr>
           </tbody>
         </table>

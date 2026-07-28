@@ -51,6 +51,8 @@ web/src/
   mermaid.ts             ```mermaid fences → SVG; lazy-loaded, runs after highlighting
   time.ts                relative/absolute timestamp + edited-marker helpers
   commentSort.ts         the comments-pane sort orders (file / started / activity)
+  occurrences.ts         occurrence matching: term validation, whole-word vs substring, span→text-node mapping
+  useOccurrenceHighlight.ts  select a word → light up its other occurrences in that file
   useFocusTrap.ts        modal focus hook: focus-in, Tab trap, restore on close
   storage.ts             typed, error-swallowing localStorage helpers + the lr.* keys
   components/
@@ -58,6 +60,7 @@ web/src/
     DiffView.tsx         center: per-file diff, syntax highlight, inline threads/composer,
                          drag-select ranges, Changed/Full toggle, auto-collapse large files
     LazyFile.tsx         viewport lazy-mount wrapper (IntersectionObserver) + scroll anchor
+    FindBar.tsx          occurrence-highlight bar above the diff: term, n-of-N, prev/next
     CommentThread.tsx    a comment thread: root comment (edit/delete) + replies + reply composer
     CommentsPanel.tsx    right pane: cross-file comment overview, sort select, jump-to
     CommentComposer.tsx  type select + body textarea (reused for new/edit)
@@ -317,6 +320,45 @@ web/src/
   which has to be set per diagram type — there's no root-level equivalent) and
   scroll inside `.mermaid-diagram`. Renders are cached by source; ids come from a
   counter because each SVG's internal `<style>` selects on its own id.
+- **Occurrence highlighting** (`useOccurrenceHighlight.ts`): select a word in a diff
+  line and every other occurrence of it in that file lights up, so a variable's uses
+  read at a glance. Painted with the **CSS Custom Highlight API** — `Range`s over the
+  existing text nodes registered as `CSS.highlights.set("occ", …)` and styled by
+  `::highlight(occ)` — so it creates no DOM and can't disturb the per-token spans
+  `highlight.ts` renders. That also makes it **uncapped**: no elements per match, so a
+  common word costs nothing to mark. The matching rules are pure (`occurrences.ts`, so
+  a standalone node script can test them): case-sensitive, **whole-word only when the
+  term is identifier-shaped** (an arbitrary selection like `foo.bar` or `x + 1` has no
+  boundary to respect), plus a span→text-node mapping, since tokenizing splits one
+  line's text across many nodes. A selection counts only when it starts **and ends**
+  in the same `tr:not(.row-hunk) > td.line-content` — one check that rules out
+  multi-line drags, the gutters, hunk-header metadata, and comment-thread text; the
+  `.sign` (+/-/space) text node is excluded from the walk, or every offset in the line
+  would shift by one. Triple-click is ignored (via `e.detail`) since it selects a whole
+  line. **The `MutationObserver` repaint is load-bearing:** Shiki swaps a line's single
+  text node for per-token spans when its grammar resolves, detaching every range built
+  before that — without it the highlight would vanish moments after appearing (it also
+  covers the Changed/Full toggle and a refetched diff). Three ways out: click away (an
+  empty selection), scrolling the origin file card out of view (`IntersectionObserver`,
+  so a long file stays lit while you scan down it), and Escape — which **must also
+  `removeAllRanges()`**, or the next mouseup/keyup re-derives the same term and the
+  highlight returns.
+  The **find bar** (`FindBar.tsx`) sits below the diff scroller, in flow inside a
+  `.diff-pane` wrapper: it can't be sticky inside `.diff-column` (the file headers
+  already own `top: 0` there), and it has to go **below** rather than above, or the
+  bar entering would push the scroller's top edge down and jump the whole diff every
+  time a highlight appears. It shows the term, `n of N`, and prev/next. The
+  current match carries a second registration (`occ-active`, `priority: 1`), and the
+  counter **starts on the occurrence you selected** rather than the file's first, so
+  `Enter`/`Shift+Enter` step forward from where you were reading (wrapping at the
+  ends). Every control in the bar **must `preventDefault` on mousedown**
+  (`keepSelection`): a plain click collapses the text selection, which *is* the
+  dismiss gesture, so the buttons would otherwise destroy the highlight they act on.
+  Since only rendered rows can be searched, a file in **Changed** view also offers a
+  *Search full file* button — the card publishes its mode as `data-view-mode` (only
+  when the Changed/Full toggle applies) and the bar signals `DiffView` via a
+  `showFullSignal` prop, following `expandTarget`'s pattern; the repaint recounts.
+  Line-based diff rows only: not `MarkdownView`, `MediaView`, or comment bodies.
 - **Large change-sets stay responsive** via: `LazyFile` viewport-mounting (only
   near-viewport files fetch/tokenize/render), files > `LARGE_FILE_LINES` (500)
   auto-collapse, files > 2000 lines skip highlighting, and panel resize writes
@@ -340,12 +382,16 @@ web/src/
   count as activity, since `SetCommentResolved` deliberately doesn't bump
   `updated_at`. The time sorts show the sorted-on timestamp on each item so the
   order explains itself. Purely client-side over data the pane already has.
-- **Keyboard shortcuts** live in one window `keydown` effect in `App.tsx`:
-  `j`/`k` next/prev file, `n`/`p` next/prev comment (pane order via
-  `orderedCommentIds`, stepping from `activeComment`), `e` export, `r` reload,
-  `?` help overlay. The handler bails when the target is an input/textarea/select
+- **Keyboard shortcuts** live in one window `keydown` effect in
+  `useKeyboardShortcuts.ts`: `j`/`k` next/prev file, `n`/`p` next/prev comment (pane
+  order via `orderedCommentIds`, stepping from `activeComment`), `e` export, `r`
+  reload, `/` focus the file search, `?` help overlay, `Enter`/`Shift+Enter` next/prev
+  occurrence match (only while a highlight is live, and never from a focused
+  button/link, so it can't steal the key from a control), `Escape` clear an occurrence
+  highlight. The handler bails when the target is an input/textarea/select
   or a modifier is held, and while a modal is open, so it never fights the
-  composer or the browser. The `?` header button opens the same overlay.
+  composer or the browser — which is also what leaves `Escape` to the `Modal` shell
+  and the comment composer. The `?` header button opens the same overlay.
 
 ## Conventions
 

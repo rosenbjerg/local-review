@@ -47,6 +47,7 @@ interface Props {
   onToggleReviewed: (reviewed: boolean) => void;
   expandTarget: { path: string; n: number } | null;
   expandComment: { id: number; n: number } | null;
+  showFullSignal: { path: string; n: number } | null;
   activeComment: number | null;
 }
 
@@ -67,6 +68,7 @@ export function DiffView({
   onToggleReviewed,
   expandTarget,
   expandComment,
+  showFullSignal,
   activeComment,
 }: Props) {
   const changedLines = useMemo(
@@ -103,6 +105,7 @@ export function DiffView({
   // A gone file has nothing to render, so it falls back to the diff table, whose
   // leftover-thread row still shows the comments stranded there.
   const docView = markdown && mdRendered && !missing;
+  const canToggleMode = !mediaView && !docView && file.newPath !== "" && !unchanged;
   const sideLabel = indexed ? "the index" : worktree ? "the working tree" : headRef;
 
   useEffect(() => {
@@ -113,6 +116,12 @@ export function DiffView({
   useEffect(() => {
     if (expandTarget && expandTarget.path === path) setCollapsed(false);
   }, [expandTarget, path]);
+
+  // The find bar can only search rendered rows, so it offers to widen a
+  // changed-lines-only view to the whole file.
+  useEffect(() => {
+    if (showFullSignal && showFullSignal.path === path) void switchMode("full");
+  }, [showFullSignal, path]);
 
   // Drop the cached source when the new side changes (toggle/Reload): the review
   // isn't remounted, so stale text/tokens would persist. Hunks stand in for the
@@ -432,7 +441,11 @@ export function DiffView({
   }
 
   return (
-    <div className={`file${reviewed ? " file-reviewed" : ""}`}>
+    <div
+      className={`file${reviewed ? " file-reviewed" : ""}`}
+      data-file-path={path}
+      data-view-mode={canToggleMode ? mode : undefined}
+    >
       <FileHeader
         status={file.status}
         path={path}
@@ -447,7 +460,7 @@ export function DiffView({
         markdown={markdown}
         mdRendered={mdRendered}
         onMdRendered={setMdRendered}
-        showModeToggle={!mediaView && !docView && file.newPath !== "" && !unchanged}
+        showModeToggle={canToggleMode}
         mode={mode}
         onSwitchMode={switchMode}
       />
