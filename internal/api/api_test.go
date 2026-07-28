@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -253,6 +255,37 @@ func TestHandleFileMissingPathIsNotFound(t *testing.T) {
 	r.write("fresh.ts", "x\n")
 	if code, body := getFile(t, s, "/api/file", "repo="+r.name+"&path=fresh.ts&ref=feature"); code != http.StatusOK {
 		t.Errorf("untracked file: status %d, want 200 (body %s)", code, body)
+	}
+}
+
+// The working-tree fallback covers *absence* only. A git failure on an object the
+// ref genuinely has must surface, not be answered with the on-disk copy: that serves
+// uncommitted content as if it were the ref's, against a diff computed from the ref,
+// so the view renders the wrong lines with nothing to explain it. Corrupting the blob
+// produces exactly that split — `cat-file -e` still confirms the object exists, so it
+// isn't ErrNotFound, while `git show` fails to inflate it.
+func TestHandleFileGitErrorIsNotMaskedByWorktree(t *testing.T) {
+	r := newRepo(t)
+	r.write("a.txt", "committed\n")
+	r.commitAll("c1")
+	r.write("a.txt", "WORKTREE-ONLY\n") // differs, so a fallback would show in the body
+
+	sha := strings.TrimSpace(r.git("rev-parse", "HEAD:a.txt"))
+	obj := filepath.Join(r.dir, ".git", "objects", sha[:2], sha[2:])
+	if err := os.Chmod(obj, 0o644); err != nil { // loose objects are written read-only
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(obj, []byte("not-a-valid-object"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := r.server()
+
+	code, body := getFile(t, s, "/api/file", "repo="+r.name+"&path=a.txt&ref=main")
+	if code != http.StatusInternalServerError {
+		t.Errorf("status %d, want 500 (body %s)", code, body)
+	}
+	if strings.Contains(body, "WORKTREE-ONLY") {
+		t.Errorf("served the working-tree copy in place of the failed ref read: %s", body)
 	}
 }
 

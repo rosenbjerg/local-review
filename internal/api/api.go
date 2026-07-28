@@ -309,9 +309,13 @@ func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (conten
 			return "", "", false
 		}
 		content, err = repo.FileContent(ref, path)
-		if err != nil {
-			// The ref may lack the file (uncommitted new file, or a stale
-			// mid-mode-switch request); serve the on-disk copy instead of failing.
+		// Only *absence* falls back: the ref may legitimately lack a file that is on
+		// disk (an uncommitted new file, or a stale mid-mode-switch request). A real
+		// git failure must not take this path — answering it with the working-tree
+		// copy would serve uncommitted content as if it were the ref's, against a
+		// diff computed from the ref, and the view would render the wrong lines with
+		// nothing to show for it.
+		if errors.Is(err, git.ErrNotFound) {
 			if wt, wtErr := repo.WorktreeFile(path); wtErr == nil {
 				content, err = wt, nil
 			}
