@@ -180,6 +180,90 @@ test("uncommitted turns off when head isn't the checked-out branch", async () =>
   expect(result.current.indexedSide).toBe(false);
 });
 
+// The ping refetch must honour the same guard. An axis toggle keeps review.id, so the
+// SSE effect's `cancelled` flag never fires — without the seq check the ping's diff
+// (fetched under the old axes) lands after the toggle's, leaving hunks from one side
+// while worktreeSide/indexedSide tell DiffView to read file content from another. That
+// mismatch is what renders the wrong lines.
+test("a ping's diff is dropped when a view axis moved while it was in flight", async () => {
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.review).not.toBeNull());
+  await waitFor(() => expect(vi.mocked(api.diff).mock.calls.length).toBe(1)); // startReview's
+
+  // The ping's diff is slow and carries the committed-range (uncommitted=false) files.
+  let releaseStale: (() => void) | undefined;
+  vi.mocked(api.diff).mockImplementationOnce(
+    () =>
+      new Promise((res) => {
+        releaseStale = () =>
+          res({
+            base: "b",
+            head: "h",
+            files: [{ newPath: "STALE", oldPath: "STALE", status: "modified", hunks: [] }],
+          });
+      }) as ReturnType<typeof api.diff>
+  );
+  const es = (globalThis as unknown as { EventSource: { instances: { onmessage: ((e: { data: string }) => void) | null }[] } }).EventSource.instances.at(-1);
+  act(() => {
+    es?.onmessage?.({ data: "diff" });
+  });
+  await waitFor(() => expect(vi.mocked(api.diff).mock.calls.length).toBe(2)); // in flight
+
+  // The user switches to the working-tree axis; that diff resolves first.
+  vi.mocked(api.diff).mockResolvedValue({
+    base: "b",
+    head: "h",
+    files: [{ newPath: "FRESH", oldPath: "FRESH", status: "modified", hunks: [] }],
+  });
+  act(() => result.current.setUncommitted(true));
+  await waitFor(() => expect(result.current.files.map((f) => f.newPath)).toEqual(["FRESH"]));
+  expect(result.current.worktreeSide).toBe(true);
+
+  await act(async () => {
+    releaseStale?.();
+    await Promise.resolve();
+  });
+  await new Promise((r) => setTimeout(r, 0));
+  expect(result.current.files.map((f) => f.newPath)).toEqual(["FRESH"]);
+});
+
+// The review half of a ping refetch is fetched by id, so it stays valid even when the
+// seq guard drops that ping's git state — gating it too would swallow the comment and
+// reviewed-file updates the ping was sent for.
+test("a ping still applies review state when its diff is dropped", async () => {
+  vi.mocked(api.getReview).mockImplementation(async (id: number) => ({
+    id,
+    repoPath: "A",
+    baseRef: "main",
+    headRef: "main",
+    headSha: "sha",
+    status: "draft" as const,
+    createdAt: "",
+    updatedAt: "",
+    comments: [],
+    reviewedFiles: ["reviewed.ts"],
+  }));
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.review).not.toBeNull());
+
+  let release: (() => void) | undefined;
+  vi.mocked(api.diff).mockImplementationOnce(
+    () => new Promise((res) => { release = () => res({ base: "b", head: "h", files: [] }); }) as ReturnType<typeof api.diff>
+  );
+  const es = (globalThis as unknown as { EventSource: { instances: { onmessage: ((e: { data: string }) => void) | null }[] } }).EventSource.instances.at(-1);
+  act(() => {
+    es?.onmessage?.({ data: "diff" });
+  });
+  await waitFor(() => expect(vi.mocked(api.diff).mock.calls.length).toBe(2));
+
+  act(() => result.current.setUncommitted(true)); // supersedes the ping's git state
+  await act(async () => {
+    release?.();
+    await Promise.resolve();
+  });
+  await waitFor(() => expect([...result.current.reviewedFiles]).toEqual(["reviewed.ts"]));
+});
+
 // The shared reqSeq guard: a slow diff response for a selection the user has already
 // moved past must be discarded, not applied over the newer result.
 test("a superseded (slow) diff response is discarded", async () => {

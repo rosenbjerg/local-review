@@ -185,6 +185,11 @@ export function useReview() {
       }
       inFlight = true;
       try {
+        // Snapshot the selection this read belongs to: a ping's git state is only
+        // valid for the axes it was fetched under, and an axis toggle mid-flight
+        // (which keeps review.id, so `cancelled` never fires) would otherwise land
+        // hunks from one side while the view reads its file content from another.
+        const seq = reqSeq.current;
         const p = diffParams.current;
         // A `diff` ping means the repo's git state moved (commit, checkout, edit), so
         // also refresh the branch list (keeps headIsCurrent honest after an out-of-band
@@ -201,19 +206,23 @@ export function useReview() {
             : Promise.resolve(null),
         ]);
         if (!cancelled) {
+          // The review is fetched by id, so it stays valid across an axis toggle —
+          // gating it on seq would drop comment/reviewed updates the ping came for.
           setReview(rev);
           setComments(rev.comments ?? []);
           setReviewedFiles(new Set(rev.reviewedFiles ?? []));
-          if (d) {
-            setFiles(d.files ?? []);
-            setBaseSha(d.base ?? "");
-          }
-          if (br) setBranches(br.branches);
-          if (cm) {
-            const list = cm.commits ?? [];
-            setCommits(list);
-            // A rebased/amended-away picked `from` would 400 the next diff — fall back.
-            if (p.from !== "all" && !list.some((x) => x.sha === p.from)) setFrom("all");
+          if (reqSeq.current === seq) {
+            if (d) {
+              setFiles(d.files ?? []);
+              setBaseSha(d.base ?? "");
+            }
+            if (br) setBranches(br.branches);
+            if (cm) {
+              const list = cm.commits ?? [];
+              setCommits(list);
+              // A rebased/amended-away picked `from` would 400 the next diff — fall back.
+              if (p.from !== "all" && !list.some((x) => x.sha === p.from)) setFrom("all");
+            }
           }
         }
       } catch {

@@ -245,7 +245,12 @@ web/src/
   handler clears it with `Swap`, so a dropped (coalesced) wakeup never loses the
   fact that the diff moved. The refetch params (repo + head/base/from + the resolved
   diff-view opts) come from a ref in `useReview`, since the SSE effect is keyed only
-  on `review.id`. The
+  on `review.id`. **A ping's git-derived results (diff/branches/commits) are gated on
+  the shared `reqSeq`** — a view-axis toggle keeps `review.id`, so the effect's
+  `cancelled` flag never fires, and an older in-flight ping would otherwise land hunks
+  from the side you just left (see *Diff/source consistency* below). The review half
+  is deliberately **not** gated: it's fetched by id, so gating it would swallow the
+  comment/reviewed updates the ping was sent to deliver. The
   hub (`internal/api/events.go`) is in-memory with non-blocking coalescing sends, so
   a stalled tab never blocks a handler; empty review entries are pruned on the last
   unsubscribe. A 25s keepalive comment keeps the stream warm and turns a half-open
