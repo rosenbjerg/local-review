@@ -282,15 +282,21 @@ func (s *Server) handleCommits(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"commits": commits})
 }
 
-func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (content, path string, ok bool) {
+// readFileContent reads path from the side the query asks for. `fromWorktree`
+// reports the side the content *actually* came from, which a ref read can't promise:
+// the ref may lack a file that's on disk, and the caller has to say so rather than
+// pass the on-disk copy off as the ref's content — that content is the new side of a
+// diff the reader is comparing against, so an unlabelled substitution reads as the
+// committed file and its lines look wrong for no visible reason.
+func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (content, path string, fromWorktree, ok bool) {
 	repo, ok := s.repoParam(w, r)
 	if !ok {
-		return "", "", false
+		return "", "", false, false
 	}
 	path = r.URL.Query().Get("path")
 	if err := validPath(path); err != nil {
 		httpError(w, http.StatusBadRequest, err)
-		return "", "", false
+		return "", "", false, false
 	}
 	var err error
 	var side string
@@ -302,11 +308,12 @@ func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (conten
 		// worktree reads the on-disk new side, which git show can't reach.
 		content, err = repo.WorktreeFile(path)
 		side = "the working tree"
+		fromWorktree = true
 	} else {
 		ref := r.URL.Query().Get("ref")
 		if err = validRef(ref); err != nil {
 			httpError(w, http.StatusBadRequest, err)
-			return "", "", false
+			return "", "", false, false
 		}
 		content, err = repo.FileContent(ref, path)
 		// Only *absence* falls back: the ref may legitimately lack a file that is on
@@ -317,7 +324,7 @@ func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (conten
 		// nothing to show for it.
 		if errors.Is(err, git.ErrNotFound) {
 			if wt, wtErr := repo.WorktreeFile(path); wtErr == nil {
-				content, err = wt, nil
+				content, err, fromWorktree = wt, nil, true
 			}
 		}
 		side = ref
@@ -328,24 +335,31 @@ func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (conten
 		// server fault dressed up as a raw git error.
 		if errors.Is(err, git.ErrNotFound) {
 			httpError(w, http.StatusNotFound, fmt.Errorf("%s does not exist in %s", path, side))
-			return "", "", false
+			return "", "", false, false
 		}
 		httpError(w, http.StatusInternalServerError, err)
-		return "", "", false
+		return "", "", false, false
 	}
-	return content, path, true
+	return content, path, fromWorktree, true
 }
 
+// The response's "ref" echoes what was asked for; "worktree" says where the content
+// came from. They differ when the ref lacked the file and the on-disk copy stood in.
 func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
-	content, path, ok := s.readFileContent(w, r)
+	content, path, fromWorktree, ok := s.readFileContent(w, r)
 	if !ok {
 		return
 	}
-	writeJSON(w, map[string]any{"path": path, "ref": r.URL.Query().Get("ref"), "content": content})
+	writeJSON(w, map[string]any{
+		"path":     path,
+		"ref":      r.URL.Query().Get("ref"),
+		"content":  content,
+		"worktree": fromWorktree,
+	})
 }
 
 func (s *Server) handleBlob(w http.ResponseWriter, r *http.Request) {
-	content, path, ok := s.readFileContent(w, r)
+	content, path, _, ok := s.readFileContent(w, r)
 	if !ok {
 		return
 	}

@@ -258,6 +258,45 @@ func TestHandleFileMissingPathIsNotFound(t *testing.T) {
 	}
 }
 
+// The response has to say which side it read, because a ref read can't promise the
+// ref supplied it. Without that the client renders an uncommitted file as the ref's
+// content, against hunks the ref produced, and the mismatch has nothing to explain it.
+func TestHandleFileReportsTheSideItServed(t *testing.T) {
+	r := newRepo(t)
+	r.write("tracked.ts", "x\n")
+	r.commitAll("c1")
+	r.write("fresh.ts", "y\n") // on disk, not at the ref
+	s := r.server()
+
+	served := func(query string) bool {
+		t.Helper()
+		code, body := getFile(t, s, "/api/file", query)
+		if code != http.StatusOK {
+			t.Fatalf("status %d, want 200 (body %s)", code, body)
+		}
+		var got struct {
+			Worktree bool `json:"worktree"`
+		}
+		if err := json.Unmarshal([]byte(body), &got); err != nil {
+			t.Fatalf("unmarshal %s: %v", body, err)
+		}
+		return got.Worktree
+	}
+
+	if served("repo=" + r.name + "&path=tracked.ts&ref=main") {
+		t.Error("a ref read the ref satisfied must not claim the working tree")
+	}
+	if !served("repo=" + r.name + "&path=fresh.ts&ref=main") {
+		t.Error("a ref read served from disk must say so")
+	}
+	if !served("repo=" + r.name + "&path=tracked.ts&ref=main&worktree=true") {
+		t.Error("an explicit working-tree read must say so")
+	}
+	if served("repo=" + r.name + "&path=tracked.ts&ref=main&indexed=true") {
+		t.Error("an index read is not the working tree")
+	}
+}
+
 // The working-tree fallback covers *absence* only. A git failure on an object the
 // ref genuinely has must surface, not be answered with the on-disk copy: that serves
 // uncommitted content as if it were the ref's, against a diff computed from the ref,

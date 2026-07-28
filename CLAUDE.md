@@ -286,7 +286,17 @@ web/src/
   anchored before a rename or delete keeps asking for the old path (and the frontend
   synthesizes a file card for it), so `/api/file` and `/api/blob` answer 404 —
   `"<path> does not exist in <side>"` — when the path, or the ref itself, is gone
-  from the side asked for; only a genuine git/IO failure is a 500. `git.ErrNotFound`
+  from the side asked for; only a genuine git/IO failure is a 500. A ref read that
+  `git.ErrNotFound` says the ref can't satisfy falls back to the **on-disk copy** —
+  a file can exist in the working tree without existing at the ref (an uncommitted
+  new file a reviewer commented on). That fallback is gated on `ErrNotFound`
+  *precisely*: catching every error would answer a git failure with working-tree
+  content against ref-computed hunks, i.e. the wrong-lines mismatch with no visible
+  cause. And because a ref read can't promise the ref supplied it, `/api/file`
+  returns **`worktree`** — the side the content actually came from, as opposed to the
+  echoed `ref` it was asked for. `DiffView` compares the two and notes the
+  substitution on the card, so on-disk text is never rendered as the ref's.
+  `git.ErrNotFound`
   marks the case, wrapped by `FileContent`/`IndexFile`/`WorktreeFile`; the git reads
   confirm absence with `git cat-file -e` instead of matching stderr, whose wording
   varies by git version and locale. A path that can't name a repo file at all —

@@ -94,6 +94,9 @@ export function DiffView({
   const [fileComposer, setFileComposer] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
+  // The ref couldn't supply this file, so the server served the on-disk copy. The
+  // hunks still come from the ref, so the text below may not match them.
+  const [substituted, setSubstituted] = useState(false);
 
   const path = file.newPath || file.oldPath;
   const lang = langForPath(path);
@@ -143,6 +146,7 @@ export function DiffView({
   useEffect(() => {
     setSource(null);
     setMissing(false);
+    setSubstituted(false);
   }, [contentKey]);
 
   useEffect(() => {
@@ -153,6 +157,7 @@ export function DiffView({
       .then((res) => {
         if (cancelled) return;
         setMissing(false);
+        setSubstituted(!worktree && !indexed && res.worktree);
         setSource(res.content.replace(/\n$/, "").split("\n"));
       })
       .catch((e) => {
@@ -289,6 +294,7 @@ export function DiffView({
         const res = await api.file(repo, file.newPath, headRef, worktree, indexed);
         // The side moved while this was in flight; the fetch effect owns the refetch.
         if (key !== contentKeyRef.current) return;
+        setSubstituted(!worktree && !indexed && res.worktree);
         setSource(res.content.replace(/\n$/, "").split("\n"));
       } catch (e) {
         setLoadError(`Could not load full file: ${(e as Error).message}`);
@@ -491,6 +497,12 @@ export function DiffView({
             <div className="binary-note media-body">
               No longer in {sideLabel} — renamed or deleted.
               {comments.length > 0 && " The comments below are anchored to where it was."}
+            </div>
+          )}
+          {substituted && (
+            <div className="binary-note media-body">
+              Not in {sideLabel} — showing the working-tree copy, which the diff was
+              not computed against.
             </div>
           )}
           {mediaView ? (

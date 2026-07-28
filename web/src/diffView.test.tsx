@@ -40,7 +40,12 @@ const props = {
   commentIds: new Set<number>(),
 };
 
-const content = (text: string) => ({ path: "a.txt", ref: "r", content: `${text}\n` });
+const content = (text: string, worktree = false) => ({
+  path: "a.txt",
+  ref: "r",
+  content: `${text}\n`,
+  worktree,
+});
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -73,6 +78,34 @@ test("an unchanged-file card refetches its source when the repo switches", async
   rerender(<DiffView {...props} file={unchanged()} headRef="main" repo="B" />);
 
   await waitFor(() => expect(screen.getByText("IN-REPO-B")).toBeTruthy());
+});
+
+// A ref read the ref couldn't satisfy is served from disk. The hunks still come from
+// the ref, so that text may not match them — say so rather than let it read as the
+// ref's content, which is the same wrong-lines confusion with no visible cause.
+test("a working-tree substitution is labelled, an honest ref read is not", async () => {
+  const file = (): FileDiff => ({ oldPath: "a.txt", newPath: "a.txt", status: "unchanged", hunks: [] });
+  vi.mocked(api.file).mockResolvedValue(content("UNCOMMITTED", true));
+
+  const { rerender } = render(<DiffView {...props} file={file()} headRef="main" />);
+  await waitFor(() => expect(screen.getByText(/showing the working-tree copy/)).toBeTruthy());
+
+  // The same content served from the ref it was asked for carries no note.
+  vi.mocked(api.file).mockResolvedValue(content("COMMITTED", false));
+  rerender(<DiffView {...props} file={file()} headRef="other" />);
+  await waitFor(() => expect(screen.getByText("COMMITTED")).toBeTruthy());
+  expect(screen.queryByText(/showing the working-tree copy/)).toBeNull();
+});
+
+// Asking for the working tree and getting it is not a substitution — the note is for
+// the surprise, so it must not fire on the side the card requested.
+test("an explicit working-tree read is not labelled a substitution", async () => {
+  const file = (): FileDiff => ({ oldPath: "a.txt", newPath: "a.txt", status: "unchanged", hunks: [] });
+  vi.mocked(api.file).mockResolvedValue(content("ON-DISK", true));
+
+  render(<DiffView {...props} file={file()} headRef="main" worktree={true} />);
+  await waitFor(() => expect(screen.getByText("ON-DISK")).toBeTruthy());
+  expect(screen.queryByText(/showing the working-tree copy/)).toBeNull();
 });
 
 // The source cache still has to survive a diff refetch that changed nothing, or every

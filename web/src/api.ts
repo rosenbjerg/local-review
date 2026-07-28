@@ -76,7 +76,12 @@ export const api = {
     const p = new URLSearchParams({ repo, path, ref });
     if (indexed) p.set("indexed", "true");
     else if (worktree) p.set("worktree", "true");
-    return req<{ path: string; ref: string; content: string }>(`/api/file?${p.toString()}`);
+    // `worktree` is where the content came from, not what was asked for: a ref read
+    // that the ref can't satisfy is served from disk instead, and the caller has to
+    // label that rather than render it as the ref's content.
+    return req<{ path: string; ref: string; content: string; worktree: boolean }>(
+      `/api/file?${p.toString()}`
+    );
   },
 
   blobURL: (repo: string, path: string, ref: string, worktree?: boolean, indexed?: boolean) => {
