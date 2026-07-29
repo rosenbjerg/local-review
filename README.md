@@ -13,41 +13,52 @@
 
 local-review gives you GitHub-style review ergonomics for a branch you haven't
 pushed — or don't want to push — entirely on your machine. Point it at a folder
-of git repos, pick a branch, and review the diff it introduces: comment on any
-line or range, reply in threads, resolve what's done, mark files reviewed. Then
-**export the review as markdown** — file path, line(s), code snippet, and your
-comment — to paste straight into a coding agent. The agent can even reply to
-your comments through the API, and its replies show up live in the UI.
+of git repos, pick a branch, and review the diff it introduces (or just the work
+sitting uncommitted in your tree): comment on any line or range, reply in threads,
+resolve what's done, mark files reviewed. Then **export the review as markdown** —
+file path, line(s), code snippet, and your comment — to paste straight into a
+coding agent. The agent can even reply to your comments through the API, and its
+replies show up live in the UI.
 
 It ships as a **single binary**: a Go backend with the React frontend embedded,
 no runtime dependencies beyond `git`.
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="local-review reviewing a branch diff: hierarchical file tree on the left, a syntax-highlighted diff with an inline comment thread in the center, and the cross-file comments panel on the right" width="900">
+  <img src="docs/screenshot.png" alt="local-review reviewing a branch diff: hierarchical file tree with reviewed checkboxes on the left, a syntax-highlighted diff in the center, and the cross-file comments panel on the right" width="900">
   <br>
-  <em>Reviewing a branch diff with inline comments, ready to export to a coding agent.</em>
+  <em>Reviewing a branch diff, ready to export to a coding agent.</em>
 </p>
 
 ## Highlights
 
-- **Branch-scoped diff.** Reviews what a branch introduces (diff against the
-  merge-base with `main`/`master`), with a full-file / changed-only toggle.
-- **Comment anywhere.** Any line or dragged range, on changed or unchanged
-  lines. Threads with replies, a type per comment (bug / suggestion / question /
-  nit), and resolvable threads that drop out of the export.
+- **Branch-scoped diff, narrowable.** Reviews what a branch introduces (diff
+  against the merge-base with `main`/`master`), with a full-file / changed-only
+  toggle. Narrow it with the **from** picker to start at one of the branch's own
+  commits, or tick **uncommitted** to review your working tree — and untick
+  **unstaged** to review only what's staged.
+- **Comment anywhere.** Any line or dragged range, on changed or unchanged lines,
+  and on files the branch never touched. Threads with replies, a type per comment
+  (bug / suggestion / question / nit), `#id` cross-references between threads, and
+  resolvable threads that drop out of the export.
 - **Drift-resistant anchors.** Comments capture the code they point at and track
   it as the branch moves — precise git line-mapping where possible, snippet
-  matching otherwise — badging threads that *moved* or went *outdated*.
+  matching otherwise — following renames and badging threads that *moved* or went
+  *outdated*.
 - **Reviewed-file tracking** that un-checks a file automatically when its content
   changes after you reviewed it.
-- **Agent handoff, two ways.** Point an agent at the review's API to pull the
-  feedback and reply itself, or export the markdown to paste in directly —
+- **Agent handoff, two ways.** Hand a coding agent the review to address, or send
+  an agent to review the branch itself and file its findings next to yours —
   [details below](#the-agent-handoff-loop).
-- **Live multi-tab sync** over SSE — comments and reviewed state stay in sync
-  across browser tabs.
+- **Live sync.** SSE keeps every tab current, and a filesystem watcher catches
+  work done outside the UI — an agent's edits and new commits show up without a
+  reload.
 - **Renders every file, stays fast.** Syntax highlighting for ~235 languages,
-  before/after previews for images, and a text/image toggle for SVGs — with lazy
-  rendering so large change-sets stay responsive.
+  rendered markdown (mermaid diagrams included), before/after previews for images,
+  and a text/image toggle for SVGs — with lazy rendering so large change-sets stay
+  responsive.
+- **Keyboard-driven.** `j`/`k` between files, `n`/`p` between comments, `/` to
+  search files, `?` for the full list. Select a word to light up its other
+  occurrences in the file and step through them with `Enter`.
 
 ## Install
 
@@ -112,12 +123,19 @@ Or use the one-shot script, which builds everything and starts the server:
 It opens `http://127.0.0.1:7777` in your browser. From there:
 
 1. **Pick a repository** — any git repo directly under `-root`.
-2. **Pick a head branch.** The base defaults to the merge-base with
-   `main`/`master`; override it with an explicit ref if you want.
-3. **Review the diff.** Click a line number or drag across a range to comment.
+2. **Pick a head branch.** The base defaults to your trunk — a local
+   `main`/`master`, else the remote's default branch — and the diff runs from its
+   merge-base with head. Override it with an explicit ref if you want.
+3. **Narrow the diff** (optional). Move the *from* side to one of the branch's own
+   commits with the **from** picker, or move the *to* side off the branch head with
+   **uncommitted** (available while you have that branch checked out) to review
+   your working tree — plus **unstaged** to pick the tree or, unticked, only
+   what's staged. These are view options, not part of the review: comments and
+   reviewed marks persist as you switch between them.
+4. **Review the diff.** Click a line number or drag across a range to comment.
    Reply in threads, set a type, resolve threads, and mark files reviewed as you
-   go.
-4. **Export.** Preview the markdown, then copy or download it.
+   go. Press `?` for the keyboard shortcuts.
+5. **Export.** Preview the markdown, then copy or download it.
 
 State lives in a SQLite database under `~/.local-review/` (override with
 `-data-dir`), keyed by repo path — so one install serves many repos and resumes
@@ -128,17 +146,23 @@ each review independently. Draft reviews older than `-retention-days` (default
 
 The review is a markdown artifact — each comment as a file path, line(s),
 captured snippet, and your note, grouped by file, with resolved threads excluded
-so the agent only sees open, actionable feedback. There are two ways to get it
-to a coding agent:
+so the agent only sees open, actionable feedback. **Agent prompts** (toolbar)
+opens two copyable prompts, one per direction:
 
-- **Copy agent instructions** (toolbar) — copies a short prompt that points the
-  agent at *this review's* API. The agent pulls the review itself
-  (`POST /api/reviews/{id}/export`, reading the `markdown` field) and replies to
-  comments by id. Best for iterating: after you add or change comments, the agent
-  just re-fetches the latest — no re-paste.
-- **Export** (modal) — preview, then copy or download the rendered markdown to
-  paste in directly. Optionally include **reply instructions**, a `curl` example
-  so a paste-only agent can still post replies.
+- **Address the review** — points a coding agent at *this review's* API. The agent
+  pulls the review itself (`POST /api/reviews/{id}/export`, reading the `markdown`
+  field) and replies to comments by id. Best for iterating: after you add or
+  change comments, the agent just re-fetches the latest — no re-paste.
+- **Do a review** — points an agent at the branch to review it adversarially and
+  file what it finds as comments through the API, tagged `review-agent` so its
+  findings stay distinct from yours and from the agent addressing them. It reads
+  back only its own threads
+  (`GET /api/reviews/{id}/comments?author=review-agent`) to follow up on your
+  replies.
+
+Prefer to paste? **Export** (modal) previews the rendered markdown, then copies or
+downloads it — optionally with **agent reply instructions**, a `curl` example so
+a paste-only agent can still post replies.
 
 Either way the agent posts replies back to each comment
 (`POST /api/comments/{id}/replies`), and they appear **live in the UI** — read
@@ -160,7 +184,10 @@ A single Go binary serves a JSON API and the embedded React app, reading git by
 shelling out to the real `git` binary and storing review state in SQLite (the
 backend is the source of truth; the frontend is a cache over it). Comments anchor
 to the new side and stay drift-resistant; staleness and reviewed-state are
-*derived* on every read rather than trusted from a stored flag.
+*derived* on every read rather than trusted from a stored flag. Open tabs hold an
+SSE stream and refetch on a ping, and while anyone is watching a review the server
+fingerprints the repo on a timer — so changes made outside the UI reach the screen
+on their own.
 
 For the full design rationale see [SPEC.md](SPEC.md); for a map of the codebase
 and the architecture notes see [CLAUDE.md](CLAUDE.md).
