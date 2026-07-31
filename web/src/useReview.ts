@@ -4,6 +4,25 @@ import { type ComboOption } from "./components/Combobox";
 import type { Branch, Comment, Commit, DiffOpts, FileDiff, Review } from "./types";
 import { LS, getString, readBasePref } from "./storage";
 
+// A ping refetches whether or not anything the client holds actually changed —
+// the filesystem poller fires on any on-disk edit, and every comment/reply/
+// reviewed-file mutation pings all tabs. Parsed JSON is a fresh object graph
+// every time, so handing it straight to setState would replace every value's
+// identity and re-render every mounted file card for a ping that changed
+// nothing. Keeping the previous value when the new one is structurally the same
+// is what keeps that cost proportional to real changes. The serialize compares
+// only small payloads (review metadata, comments, branches, commits); the diff's
+// file list is deliberately left out, since a `diff` ping means the git state
+// moved and stringifying a large diff would cost more than it saves.
+function keepIfSame<T>(prev: T, next: T): T {
+  return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+}
+
+function keepIfSameSet(prev: Set<string>, next: string[]): Set<string> {
+  if (prev.size === next.length && next.every((p) => prev.has(p))) return prev;
+  return new Set(next);
+}
+
 // The review data layer: repo/branch selection, the diff-scope view toggle, and
 // the review lifecycle (create, SSE refetch, diff refetch, reviewed-file marks).
 // Owns the reqSeq stale-response guard and the coordinated repo-change reset of
@@ -208,18 +227,18 @@ export function useReview() {
         if (!cancelled) {
           // The review is fetched by id, so it stays valid across an axis toggle —
           // gating it on seq would drop comment/reviewed updates the ping came for.
-          setReview(rev);
-          setComments(rev.comments ?? []);
-          setReviewedFiles(new Set(rev.reviewedFiles ?? []));
+          setReview((prev) => keepIfSame(prev, rev));
+          setComments((prev) => keepIfSame(prev, rev.comments ?? []));
+          setReviewedFiles((prev) => keepIfSameSet(prev, rev.reviewedFiles ?? []));
           if (reqSeq.current === seq) {
             if (d) {
               setFiles(d.files ?? []);
               setBaseSha(d.base ?? "");
             }
-            if (br) setBranches(br.branches);
+            if (br) setBranches((prev) => keepIfSame(prev, br.branches));
             if (cm) {
               const list = cm.commits ?? [];
-              setCommits(list);
+              setCommits((prev) => keepIfSame(prev, list));
               // A rebased/amended-away picked `from` would 400 the next diff — fall back.
               if (p.from !== "all" && !list.some((x) => x.sha === p.from)) setFrom("all");
             }

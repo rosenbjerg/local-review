@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import { api } from "./api";
 import type { CommentActions } from "./components/CommentThread";
 import type { Comment, CommentType, Reply, Review } from "./types";
@@ -17,9 +17,17 @@ interface Params {
 
 // The comment/reply CRUD handlers, as optimistic mutations over the comments
 // state. Returns the CommentActions bag (for CommentThread) plus the add/delete
-// handlers used directly by DiffView and CommentsPanel. Not memoized — the
-// handlers must close over live `comments` each render.
+// handlers used directly by DiffView and CommentsPanel.
 export function useCommentActions({ review, comments, setComments, setError, worktree, indexed }: Params) {
+  // These handlers reach every memoized file card, so they must not take a new
+  // identity each time the comment list does — that alone would re-render every
+  // mounted card whenever a comment lands anywhere. Only handleUpdate needs the
+  // list, and a ref hands it the live one without capturing it.
+  const commentsRef = useRef(comments);
+  useEffect(() => {
+    commentsRef.current = comments;
+  });
+
   async function handleAddComment(args: {
     filePath: string;
     startLine: number;
@@ -40,7 +48,7 @@ export function useCommentActions({ review, comments, setComments, setError, wor
   }
 
   async function handleUpdate(id: number, body: string, type: CommentType): Promise<boolean> {
-    const existing = comments.find((c) => c.id === id);
+    const existing = commentsRef.current.find((c) => c.id === id);
     if (!existing) return false;
     setError(null);
     try {

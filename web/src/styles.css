@@ -475,6 +475,18 @@ textarea:focus-visible {
 .file-body {
   overflow: hidden;
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  /* File cards mount once and never unmount (LazyFile), so the browser would
+     otherwise style, lay out and paint every file ever scrolled past on every
+     frame. This skips the off-screen ones while React keeps them mounted, which
+     is what makes staying mounted affordable — the point of never unmounting is
+     that scrolling back doesn't refetch and re-tokenize.
+     It belongs here rather than on .file: the containment would clip the sticky
+     .file-header to its own card, and .file-body already excludes the header
+     (that's what its overflow:hidden is for). `auto` remembers each body's
+     last-rendered height, so the scrollbar doesn't jump; the fallback only
+     applies in the frame between mounting and first render. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 600px;
 }
 .file-toggle {
   background: none;

@@ -264,6 +264,82 @@ test("a ping still applies review state when its diff is dropped", async () => {
   await waitFor(() => expect([...result.current.reviewedFiles]).toEqual(["reviewed.ts"]));
 });
 
+// A review payload the create and ping reads both serve, so a ping can return
+// byte-identical state (the common case) or a changed body.
+const reviewWith = (body: string) => (id: number) => ({
+  id,
+  repoPath: "A",
+  baseRef: "main",
+  headRef: "main",
+  headSha: "sha",
+  status: "draft" as const,
+  createdAt: "",
+  updatedAt: "",
+  comments: [
+    {
+      id: 7,
+      reviewId: id,
+      filePath: "a.ts",
+      startLine: 1,
+      endLine: 1,
+      type: "suggestion" as const,
+      body,
+      snippet: "s",
+      author: "reviewer",
+      createdAt: "",
+      updatedAt: "",
+    },
+  ],
+  reviewedFiles: ["reviewed.ts"],
+});
+
+const lastEventSource = () =>
+  (globalThis as unknown as { EventSource: { instances: { onmessage: ((e: { data: string }) => void) | null }[] } })
+    .EventSource.instances.at(-1);
+
+// Pings are frequent (every comment mutation, plus the filesystem poller on any
+// on-disk edit) and most change nothing the client holds. Since parsed JSON is a
+// fresh object graph, applying it unconditionally would churn the identity of every
+// value downstream and re-render every mounted file card for nothing — the cost of
+// which grows with how many files the reviewer has scrolled past.
+test("a ping that changes nothing keeps the review state's identity", async () => {
+  const payload = reviewWith("b");
+  vi.mocked(api.createReview).mockImplementation(async () => payload(1));
+  vi.mocked(api.getReview).mockImplementation(async (id: number) => payload(id));
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.comments.length).toBe(1));
+  const before = {
+    review: result.current.review,
+    comments: result.current.comments,
+    reviewedFiles: result.current.reviewedFiles,
+  };
+
+  await act(async () => {
+    lastEventSource()?.onmessage?.({ data: "meta" });
+  });
+  await waitFor(() => expect(vi.mocked(api.getReview).mock.calls.length).toBeGreaterThan(0));
+
+  expect(result.current.review).toBe(before.review);
+  expect(result.current.comments).toBe(before.comments);
+  expect(result.current.reviewedFiles).toBe(before.reviewedFiles);
+});
+
+// ...and a ping that does change something must still land, or holding identity
+// would just be swallowing updates.
+test("a ping that changes a comment replaces it", async () => {
+  vi.mocked(api.createReview).mockImplementation(async () => reviewWith("first")(1));
+  vi.mocked(api.getReview).mockImplementation(async (id: number) => reviewWith("first")(id));
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.comments[0]?.body).toBe("first"));
+
+  vi.mocked(api.getReview).mockImplementation(async (id: number) => reviewWith("edited")(id));
+  await act(async () => {
+    lastEventSource()?.onmessage?.({ data: "meta" });
+  });
+
+  await waitFor(() => expect(result.current.comments[0]?.body).toBe("edited"));
+});
+
 // The shared reqSeq guard: a slow diff response for a selection the user has already
 // moved past must be discarded, not applied over the newer result.
 test("a superseded (slow) diff response is discarded", async () => {

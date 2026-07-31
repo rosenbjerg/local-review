@@ -22,6 +22,7 @@ import { usePanelResize } from "./usePanelResize";
 import { useReview } from "./useReview";
 import type { CommentSort } from "./commentSort";
 import { isCommentSort, sortComments } from "./commentSort";
+import { commentsFor, groupByPath } from "./commentsByPath";
 import type { FileDiff } from "./types";
 import { effectivePath } from "./types";
 import { LS, getString, setString, writeBasePref } from "./storage";
@@ -195,6 +196,9 @@ export default function App() {
     () => new Set(commentIdKey ? commentIdKey.split(",").map(Number) : []),
     [commentIdKey]
   );
+  // Each file card gets only its own comments, so a card whose comments didn't
+  // change compares equal and skips the re-render (see DiffView's memo boundary).
+  const commentsByPath = useMemo(() => groupByPath(comments), [comments]);
 
   // The comments panel and the n/p keyboard nav share one ordering, so stepping
   // through comments always follows what the pane shows.
@@ -377,11 +381,11 @@ export default function App() {
                       baseRef={baseSha}
                       worktree={worktreeSide}
                       indexed={indexedSide}
-                      comments={comments.filter((c) => effectivePath(c) === path)}
+                      comments={commentsFor(commentsByPath, path)}
                       onAddComment={handleAddComment}
                       actions={commentActions}
                       reviewed={reviewedFiles.has(path)}
-                      onToggleReviewed={(r) => toggleReviewed(path, r)}
+                      onToggleReviewed={toggleReviewed}
                       expandTarget={expandTarget}
                       expandComment={expandComment}
                       showFullSignal={showFullSignal}

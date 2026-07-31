@@ -54,6 +54,7 @@ web/src/
   mermaid.ts             ```mermaid fences → SVG; lazy-loaded, runs after highlighting
   time.ts                relative/absolute timestamp + edited-marker helpers
   commentSort.ts         the comments-pane sort orders (file / started / activity)
+  commentsByPath.ts      group comments per file card + the by-value compare its memo uses
   occurrences.ts         occurrence matching: term validation, whole-word vs substring, span→text-node mapping
   useOccurrenceHighlight.ts  select a word → light up its other occurrences in that file
   useFocusTrap.ts        modal focus hook: focus-in, Tab trap, restore on close
@@ -405,6 +406,41 @@ web/src/
   `grid-template-columns` to the DOM via ref (no per-mousemove re-render). Export
   markdown preview is rendered with `markdown-it` (`html:false`, so safe);
   Copy/Download always emit the raw markdown.
+- **Nothing may cost O(files scrolled past).** `LazyFile` mounts a card once and
+  never unmounts it, so a long scroll leaves every file visited mounted — a `tr`
+  and a syntax-token `span` per line. That is deliberate (unmounting would refetch
+  and re-tokenize on every pass), and it makes any per-frame or per-render work
+  that scales with the mounted set degrade the further into a review you get,
+  which reads as "it gets slow around file 70". Four things hold that line, and
+  each is easy to undo by accident:
+  - **The scroll-spy stays off the diff's DOM.** `useActiveFile` scans
+    `root.children` for the `#file-<path>` anchors, which are always direct
+    children of `.diff-column`. A `[id^="file-"]` subtree query (what it used to
+    do) has no fast path and walks every element under the column, once per
+    scroll frame.
+  - **`.file-body` carries `content-visibility: auto`** (+ `contain-intrinsic-size:
+    auto`), so the browser skips style/layout/paint for off-screen cards while
+    React keeps them mounted — the half that makes mounting-forever affordable.
+    It belongs on `.file-body`, not `.file`: the containment would clip the sticky
+    `.file-header`, and `.file-body` already excludes it (that's what its
+    `overflow: hidden` is for).
+  - **A no-op SSE ping must not churn state identity.** Pings are frequent (every
+    comment/reply/reviewed mutation, plus the ~1.5s filesystem poller) and mostly
+    carry no news, but parsed JSON is a fresh object graph every time. `useReview`'s
+    refresh keeps the previous value when the new one is structurally the same
+    (`keepIfSame`/`keepIfSameSet`), because identity is what the whole memo graph
+    downstream is keyed on. The diff's file list is deliberately exempt — a `diff`
+    ping means the git state actually moved.
+  - **`DiffView` is `memo`ised with a custom comparator** (`samePropsExceptComments`),
+    since the React Compiler can't cache per-iteration inside `App`'s file map.
+    Every prop compares by identity except `comments`, which compares by value
+    (a review read always rebuilds it). That rests on the props actually being
+    stable: `commentsByPath.ts` groups comments once (one shared empty array for
+    the many files with none), `useCommentActions` reads the live list through a
+    ref so its handler bag doesn't churn, and `onToggleReviewed` takes the path so
+    `App` can pass one shared handler instead of a per-card closure. **Adding a
+    prop that takes a new identity each render silently disables the whole thing.**
+    Covered by `web/src/diffViewMemo.test.tsx`.
 - **The comments pane is sortable** — `web/src/commentSort.ts` is the single
   ordering authority, and `App.tsx` feeds its output to *both* the pane and
   `orderedCommentIds`, so `n`/`p` always steps in the order on screen. Comments

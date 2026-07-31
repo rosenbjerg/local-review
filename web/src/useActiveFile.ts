@@ -28,7 +28,7 @@ export function useActiveFile(
     const compute = () => {
       raf = 0;
       if (performance.now() < suppressUntil.current) return;
-      const anchors = root.querySelectorAll<HTMLElement>('[id^="file-"]');
+      const anchors = fileAnchors(root);
       if (anchors.length === 0) return;
       // A thin band below the top is the "you're reading this" line; the last file
       // whose top is above it is the active one. Anchors are in document (top-down)
@@ -59,4 +59,17 @@ export function useActiveFile(
       suppressUntil.current = performance.now() + ms;
     },
   };
+}
+
+// The anchors are LazyFile's wrappers, always direct children of the diff column.
+// Scanning children (not a `[id^="file-"]` subtree query) is what keeps this off
+// the diff's own DOM: cards never unmount, so that subtree grows with every file
+// scrolled past — a row and a syntax-token span per line — and this runs on every
+// scroll frame.
+function fileAnchors(root: HTMLElement): HTMLElement[] {
+  const out: HTMLElement[] = [];
+  for (const el of root.children) {
+    if (el instanceof HTMLElement && el.id.startsWith("file-")) out.push(el);
+  }
+  return out;
 }

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { ApiError, api } from "../api";
+import { sameComments } from "../commentsByPath";
 import { langForPath, tokenize, type Token } from "../highlight";
 import type { Comment, CommentType, FileDiff, LineKind } from "../types";
 import { effectiveLines } from "../types";
@@ -44,7 +45,9 @@ interface Props {
   }) => Promise<boolean>;
   actions: CommentActions;
   reviewed: boolean;
-  onToggleReviewed: (reviewed: boolean) => void;
+  // Takes the path so App can pass one shared handler rather than a per-card
+  // closure, which would defeat the memo below.
+  onToggleReviewed: (path: string, reviewed: boolean) => void;
   expandTarget: { path: string; n: number } | null;
   expandComment: { id: number; n: number } | null;
   showFullSignal: { path: string; n: number } | null;
@@ -55,7 +58,24 @@ interface Props {
 export const LARGE_FILE_LINES = 500;
 const HIGHLIGHT_MAX_LINES = 2000;
 
-export function DiffView({
+// Cards mount once and never unmount, so an un-memoized card re-renders on every
+// App render — for every file the reviewer has scrolled past, each rebuilding every
+// row and a style object per syntax token. The React Compiler can't cache
+// per-iteration inside App's file map, so the boundary has to be explicit.
+//
+// Every prop compares by identity, which App keeps stable, except `comments`: that
+// one is rebuilt from JSON on each review read, so it compares by value instead.
+// Adding a prop that changes identity every render silently disables all of this.
+function samePropsExceptComments(a: Props, b: Props): boolean {
+  const x = a as unknown as Record<string, unknown>;
+  const y = b as unknown as Record<string, unknown>;
+  const keys = Object.keys(x);
+  if (keys.length !== Object.keys(y).length) return false;
+  for (const k of keys) if (k !== "comments" && x[k] !== y[k]) return false;
+  return sameComments(a.comments, b.comments);
+}
+
+export const DiffView = memo(function DiffView({
   file,
   repo,
   headRef,
@@ -478,7 +498,7 @@ export function DiffView({
         onToggleCollapsed={() => setCollapsed((c) => !c)}
         openCount={openCount}
         reviewed={reviewed}
-        onToggleReviewed={onToggleReviewed}
+        onToggleReviewed={(r) => onToggleReviewed(path, r)}
         svg={svg}
         svgAsImage={svgAsImage}
         onSvgAsImage={setSvgAsImage}
@@ -542,4 +562,5 @@ export function DiffView({
       )}
     </div>
   );
-}
+},
+samePropsExceptComments);
