@@ -178,7 +178,7 @@ web/src/
   (`origin/HEAD`) / `origin/main` / `origin/master` — so a branch worked off
   `origin/main` with no local trunk still gets an auto base. If nothing
   resolves it returns `""` and create-review/diff ask for an explicit base.
-- **The diff view is two orthogonal transient axes**, *not* part of review identity —
+- **The diff view is two orthogonal axes**, *not* part of review identity —
   the review still resumes by `(repo, base_ref, head_ref)` and comments still anchor
   to whichever side they were added on, regardless of the view on screen. `/api/diff`
   takes `from` + `uncommitted` + `unstaged` and maps them to a `(from → to)` git range:
@@ -202,6 +202,14 @@ web/src/
   && headIsCurrent`) plus `worktreeSide` (`effectiveUncommitted && unstaged`) and
   `indexedSide` (`effectiveUncommitted && !unstaged`), which pick the anchor side
   threaded into add-comment / set-reviewed / file / blob calls.
+  **`uncommitted`/`unstaged` are remembered per repo** (`lr.diffViewByRepo`, keyed by
+  repo alone — they describe how you look at a repo, not at a branch or review);
+  `from` stays per-session, since a sha belongs to one head's history. The restore
+  happens in the *branch-load* `.then`, in the same update as `head`: the guard above
+  clears `uncommitted` whenever head isn't the checked-out branch, and while branches
+  are loading it never is. And only the reviewer's toggles write
+  (`changeUncommitted`/`changeUnstaged`) — persisting from an effect on the state
+  would let that guard, or the `unstaged` reset, erase the stored choice.
 - **DB lives in `~/.local-review/`** by default; override the directory with the
   `-data-dir` flag (a leading `~` is expanded, relative paths are made absolute).
   One DB serves many repos, keyed by abs path.
@@ -489,9 +497,10 @@ web/src/
   chips — status labels, code, kbd, thumbnails), `--radius-md` (controls & cards
   — buttons, inputs, threads, code blocks), `--radius-lg` (large surfaces — file
   cards, modals), `--radius-pill` (count/type badges).
-- Persisted UI prefs (panel widths, comment sort) go in `localStorage` under
-  `lr.*` keys. Validate a stored union on read (`isCommentSort`) so a stale value
-  falls back to the default rather than reaching the app.
+- Persisted UI prefs (panel widths, comment sort, and the per-repo base branch and
+  diff-view axes) go in `localStorage` under `lr.*` keys, via `storage.ts`. Validate
+  a stored value on read (`isCommentSort`, `normalizeDiffView`) so a stale or
+  impossible one falls back to the default rather than reaching the app.
 - Modals (`.modal` inside a `.modal-backdrop`) close on Escape and backdrop
   click, and use `useFocusTrap` for focus-in / Tab-trap / restore-on-close —
   give a new modal the same treatment (mark its safe default control

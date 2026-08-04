@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { type ComboOption } from "./components/Combobox";
 import type { Branch, Comment, Commit, DiffOpts, FileDiff, Review } from "./types";
-import { LS, getString, readBasePref } from "./storage";
+import { LS, getString, readBasePref, readDiffViewPref, writeDiffViewPref } from "./storage";
 
 // A ping refetches whether or not anything the client holds actually changed —
 // the filesystem poller fires on any on-disk edit, and every comment/reply/
@@ -40,9 +40,11 @@ export function useReview() {
   const [baseSha, setBaseSha] = useState("");
   const [comments, setComments] = useState<Comment[]>([]);
   const [reviewedFiles, setReviewedFiles] = useState<Set<string>>(new Set());
-  // The diff view — two orthogonal transient axes. `from` is the before side:
-  // "all" (the whole branch) or a picked commit sha. `uncommitted` moves the after
-  // side to the working tree/index; `unstaged` (default) keeps unstaged edits in.
+  // The diff view — two orthogonal axes. `from` is the before side: "all" (the whole
+  // branch) or a picked commit sha. `uncommitted` moves the after side to the working
+  // tree/index; `unstaged` (default) keeps unstaged edits in. That pair is remembered
+  // per repo (restored on the branch load below); `from` isn't, since a picked sha
+  // belongs to one head's history.
   const [from, setFrom] = useState("all");
   const [uncommitted, setUncommitted] = useState(false);
   const [unstaged, setUnstaged] = useState(true);
@@ -110,6 +112,15 @@ export function useReview() {
         const firstLocal = r.branches.find((b) => !b.isRemote);
         // Head is a local-only picker, so never default it to a remote.
         setHead(current?.name ?? firstLocal?.name ?? "");
+        // Restore the remembered view axes here rather than above, in the same update
+        // as `head`: the guard effect below clears `uncommitted` whenever head isn't
+        // the checked-out branch, and while branches are loading it never is. `current`
+        // being set is exactly what makes the defaulted head the checked-out one.
+        const view = readDiffViewPref(repo);
+        if (view.uncommitted && current) {
+          setUncommitted(true);
+          setUnstaged(view.unstaged);
+        }
         const savedBase = readBasePref(repo);
         if (savedBase === "" || r.branches.some((b) => b.name === savedBase)) {
           setBase(savedBase);
@@ -131,6 +142,19 @@ export function useReview() {
   useEffect(() => {
     if (!uncommitted) setUnstaged(true);
   }, [uncommitted]);
+
+  // Persist from the toggles, not from an effect on the state: the two effects above
+  // also move these values, and a forced-off (head left the checked-out branch) or a
+  // reset must not overwrite what the reviewer actually chose for this repo.
+  function changeUncommitted(v: boolean) {
+    setUncommitted(v);
+    writeDiffViewPref(repo, { uncommitted: v, unstaged });
+  }
+
+  function changeUnstaged(v: boolean) {
+    setUnstaged(v);
+    writeDiffViewPref(repo, { uncommitted, unstaged: v });
+  }
 
   // Change head via `changeHead` (below), which resets `from` in the same update —
   // a picked sha belongs to the old head's history. This effect (re)loads the "from"
@@ -447,9 +471,9 @@ export function useReview() {
     from,
     setFrom,
     uncommitted,
-    setUncommitted,
+    changeUncommitted,
     unstaged,
-    setUnstaged,
+    changeUnstaged,
     loading,
     error,
     setError,

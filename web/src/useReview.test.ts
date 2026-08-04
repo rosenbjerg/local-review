@@ -33,6 +33,7 @@ vi.mock("./api", () => {
 });
 
 import { api } from "./api";
+import { readDiffViewPref } from "./storage";
 import { useReview } from "./useReview";
 
 const branch = (name: string, o: { current?: boolean; main?: boolean; remote?: boolean } = {}) => ({
@@ -98,11 +99,11 @@ test("worktreeSide / indexedSide derive from uncommitted + unstaged", async () =
   expect(result.current.worktreeSide).toBe(false);
   expect(result.current.indexedSide).toBe(false);
 
-  act(() => result.current.setUncommitted(true));
+  act(() => result.current.changeUncommitted(true));
   expect(result.current.worktreeSide).toBe(true); // uncommitted + unstaged(default) → working tree
   expect(result.current.indexedSide).toBe(false);
 
-  act(() => result.current.setUnstaged(false));
+  act(() => result.current.changeUnstaged(false));
   expect(result.current.worktreeSide).toBe(false);
   expect(result.current.indexedSide).toBe(true); // uncommitted + !unstaged → git index
 });
@@ -147,10 +148,10 @@ test("diffOpts maps the view axes to the api.diff params", async () => {
     expect(lastOpts()).toMatchObject({ from: "all", base: "main", uncommitted: false, unstaged: true })
   );
 
-  act(() => result.current.setUncommitted(true)); // working tree (staged + unstaged)
+  act(() => result.current.changeUncommitted(true)); // working tree (staged + unstaged)
   await waitFor(() => expect(lastOpts()).toMatchObject({ from: "all", uncommitted: true, unstaged: true }));
 
-  act(() => result.current.setUnstaged(false)); // staged only → git index
+  act(() => result.current.changeUnstaged(false)); // staged only → git index
   await waitFor(() => expect(lastOpts()).toMatchObject({ uncommitted: true, unstaged: false }));
 
   act(() => result.current.setFrom("c1")); // since a commit → base dropped
@@ -174,10 +175,48 @@ test("uncommitted turns off when head isn't the checked-out branch", async () =>
   act(() => result.current.changeHead("feature")); // head=feature, current=main → not current
   await waitFor(() => expect(result.current.headIsCurrent).toBe(false));
 
-  act(() => result.current.setUncommitted(true));
+  act(() => result.current.changeUncommitted(true));
   await waitFor(() => expect(result.current.uncommitted).toBe(false)); // guard turns it back off
   expect(result.current.worktreeSide).toBe(false);
   expect(result.current.indexedSide).toBe(false);
+});
+
+// The view axes are remembered per repo, so reopening a repo lands on the side you
+// were last reviewing it from — and only that repo's (each keeps its own entry).
+test("the view axes are restored per repo", async () => {
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.head).toBe("main"));
+
+  act(() => result.current.changeUncommitted(true));
+  act(() => result.current.changeUnstaged(false));
+
+  act(() => result.current.changeRepo("B"));
+  await waitFor(() => expect(result.current.head).toBe("main"));
+  expect(result.current.uncommitted).toBe(false); // B has no pref of its own
+  expect(result.current.unstaged).toBe(true);
+
+  act(() => result.current.changeRepo("A"));
+  await waitFor(() => expect(result.current.uncommitted).toBe(true));
+  expect(result.current.unstaged).toBe(false);
+  expect(result.current.indexedSide).toBe(true);
+});
+
+// Only a reviewer's toggle is a preference: the checked-out-branch guard also moves
+// `uncommitted`, and persisting from that would erase the stored choice on a head
+// switch — so the pref survives it and the axis comes back with the branch.
+test("the checked-out-branch guard doesn't overwrite the stored axes", async () => {
+  vi.mocked(api.branches).mockResolvedValue({
+    main: "main",
+    branches: [branch("main", { current: true, main: true }), branch("feature")],
+  });
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.head).toBe("main"));
+
+  act(() => result.current.changeUncommitted(true));
+  act(() => result.current.changeHead("feature"));
+  await waitFor(() => expect(result.current.uncommitted).toBe(false)); // forced off, not chosen
+
+  expect(readDiffViewPref("A")).toEqual({ uncommitted: true, unstaged: true });
 });
 
 // The ping refetch must honour the same guard. An axis toggle keeps review.id, so the
@@ -215,7 +254,7 @@ test("a ping's diff is dropped when a view axis moved while it was in flight", a
     head: "h",
     files: [{ newPath: "FRESH", oldPath: "FRESH", status: "modified", hunks: [] }],
   });
-  act(() => result.current.setUncommitted(true));
+  act(() => result.current.changeUncommitted(true));
   await waitFor(() => expect(result.current.files.map((f) => f.newPath)).toEqual(["FRESH"]));
   expect(result.current.worktreeSide).toBe(true);
 
@@ -256,7 +295,7 @@ test("a ping still applies review state when its diff is dropped", async () => {
   });
   await waitFor(() => expect(vi.mocked(api.diff).mock.calls.length).toBe(2));
 
-  act(() => result.current.setUncommitted(true)); // supersedes the ping's git state
+  act(() => result.current.changeUncommitted(true)); // supersedes the ping's git state
   await act(async () => {
     release?.();
     await Promise.resolve();

@@ -131,7 +131,8 @@ It opens `http://127.0.0.1:7777` in your browser. From there:
    **uncommitted** (available while you have that branch checked out) to review
    your working tree — plus **unstaged** to pick the tree or, unticked, only
    what's staged. These are view options, not part of the review: comments and
-   reviewed marks persist as you switch between them.
+   reviewed marks persist as you switch between them. The **uncommitted**/
+   **unstaged** choice is remembered per repository.
 4. **Review the diff.** Click a line number or drag across a range to comment.
    Reply in threads, set a type, resolve threads, and mark files reviewed as you
    go. Press `?` for the keyboard shortcuts.
