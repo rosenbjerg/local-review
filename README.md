@@ -56,8 +56,9 @@ no runtime dependencies beyond `git`.
   rendered markdown (mermaid diagrams included), before/after previews for images,
   and a text/image toggle for SVGs — with lazy rendering so large change-sets stay
   responsive.
-- **Keyboard-driven.** `j`/`k` between files, `n`/`p` between comments, `/` to
-  search files, `?` for the full list. Select a word to light up its other
+- **Keyboard-driven.** `j`/`k` between files, `n`/`p` between comments, `v` to mark
+  a file reviewed and jump to the next one still unread, `/` to search files, `?`
+  for the full list. Select a word to light up its other
   occurrences in the file and step through them with `Enter`.
 
 ## Install

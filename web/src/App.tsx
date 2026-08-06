@@ -23,6 +23,7 @@ import { useReview } from "./useReview";
 import type { CommentSort } from "./commentSort";
 import { isCommentSort, sortComments } from "./commentSort";
 import { commentsFor, groupByPath } from "./commentsByPath";
+import { nextUnreviewed } from "./reviewNav";
 import type { FileDiff } from "./types";
 import { effectivePath } from "./types";
 import { LS, getString, setString, writeBasePref } from "./storage";
@@ -228,6 +229,24 @@ export default function App() {
     jumpTo(orderedCommentIds[next]);
   }
 
+  // Mark the file you're on reviewed and move to the next one still unread, so a
+  // read-through never needs the mouse. Unmarking stays put — undoing a keystroke
+  // shouldn't also move you.
+  function markReviewedAndAdvance() {
+    if (!selectedFile) return;
+    if (reviewedFiles.has(selectedFile)) {
+      toggleReviewed(selectedFile, false);
+      return;
+    }
+    toggleReviewed(selectedFile, true);
+    const next = nextUnreviewed(orderedFilePaths, selectedFile, reviewedFiles);
+    if (!next) return;
+    // Deferred, like openFile's scroll: marking a file reviewed collapses its card
+    // on the next render, and that card is above the target — scrolling first
+    // computes an offset the collapse then invalidates, landing short of the file.
+    setTimeout(() => jumpToFile(next), 50);
+  }
+
   useKeyboardShortcuts({
     enabled: !!review,
     modalOpen: showHelp || confirmingReset || showExport || showPrompts || showAddFile,
@@ -239,6 +258,7 @@ export default function App() {
     onPrevComment: () => moveComment(-1),
     onExport: () => setShowExport(true),
     onReload: startReview,
+    onMarkReviewed: markReviewedAndAdvance,
     onOpenHelp: () => setShowHelp(true),
     onCloseHelp: () => setShowHelp(false),
     onFocusSearch: () => explorerSearchRef.current?.focus(),

@@ -29,6 +29,12 @@ export function HelpModal({ onClose }: { onClose: () => void }) {
             </tr>
             <tr>
               <td>
+                <kbd>v</kbd>
+              </td>
+              <td>Mark the current file reviewed and jump to the next unreviewed one</td>
+            </tr>
+            <tr>
+              <td>
                 <kbd>e</kbd>
               </td>
               <td>Export review</td>

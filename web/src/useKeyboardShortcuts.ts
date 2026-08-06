@@ -14,6 +14,7 @@ export interface Shortcuts {
   onPrevComment: () => void;
   onExport: () => void;
   onReload: () => void;
+  onMarkReviewed: () => void;
   onOpenHelp: () => void;
   onCloseHelp: () => void;
   onFocusSearch: () => void;
@@ -75,6 +76,10 @@ export function useKeyboardShortcuts(opts: Shortcuts) {
         case "e":
           e.preventDefault();
           o.onExport();
+          break;
+        case "v":
+          e.preventDefault();
+          o.onMarkReviewed();
           break;
         case "r":
           if (!o.loading) {

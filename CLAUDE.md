@@ -468,7 +468,9 @@ web/src/
   order explains itself. Purely client-side over data the pane already has.
 - **Keyboard shortcuts** live in one window `keydown` effect in
   `useKeyboardShortcuts.ts`: `j`/`k` next/prev file, `n`/`p` next/prev comment (pane
-  order via `orderedCommentIds`, stepping from `activeComment`), `e` export, `r`
+  order via `orderedCommentIds`, stepping from `activeComment`), `v` mark the
+  selected file reviewed and jump to the next unreviewed one (`nextUnreviewed` in
+  `reviewNav.ts`; unmarking deliberately stays put), `e` export, `r`
   reload, `/` focus the file search, `?` help overlay, `Enter`/`Shift+Enter` next/prev
   occurrence match (only while a highlight is live, and never from a focused
   button/link, so it can't steal the key from a control), `Escape` clear an occurrence
