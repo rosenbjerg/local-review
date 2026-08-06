@@ -95,6 +95,7 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/reviews/{id}/export", s.handleExport)
 	mux.HandleFunc("POST /api/reviews/{id}/reset", s.handleResetReview)
 	mux.HandleFunc("POST /api/reviews/{id}/reviewed", s.handleSetReviewed)
+	mux.HandleFunc("POST /api/reviews/{id}/summary", s.handleSetSummary)
 
 	mux.HandleFunc("POST /api/reviews/{id}/comments", s.handleAddComment)
 	mux.HandleFunc("GET /api/reviews/{id}/comments", s.handleListComments)
@@ -779,6 +780,27 @@ func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
 
 type setResolvedReq struct {
 	Resolved bool `json:"resolved"`
+}
+
+type setSummaryReq struct {
+	Summary string `json:"summary"`
+}
+
+func (s *Server) handleSetSummary(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	req, ok := decodeBody[setSummaryReq](w, r)
+	if !ok {
+		return
+	}
+	if err := s.Store.SetReviewSummary(id, strings.TrimSpace(req.Summary)); err != nil {
+		storeError(w, err)
+		return
+	}
+	s.notify(id)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleSetResolved(w http.ResponseWriter, r *http.Request) {

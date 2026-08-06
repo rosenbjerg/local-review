@@ -116,6 +116,7 @@ export interface Review {
   headRef: string;
   headSha: string;
   status: ReviewStatus;
+  summary: string;
   createdAt: string;
   updatedAt: string;
   comments: Comment[] | null;

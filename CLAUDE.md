@@ -68,6 +68,7 @@ web/src/
     FindBar.tsx          occurrence-highlight bar above the diff: term, n-of-N, prev/next
     CommentThread.tsx    a comment thread: root comment (edit/delete) + replies + reply composer
     CommentsPanel.tsx    right pane: cross-file comment overview, sort select, jump-to
+    ReviewSummary.tsx    the review's free-text summary above the comments pane (view/edit)
     CommentComposer.tsx  type select + body textarea (reused for new/edit)
     MarkdownView.tsx     rendered (as-published) view of a .md file + file-level comments
     ExportModal.tsx      rendered-markdown preview (via Markdown) + Raw toggle + copy/download
@@ -140,6 +141,21 @@ web/src/
   `currentFilePath` are computed on `store.Comment` in the API layer with
   `omitempty` — the store never reads or writes them. Diffs are cached per distinct
   commit_sha (the whole diff), file reads per path, per review read.
+- **A review carries a free-text `summary`** — the framing a pile of line comments
+  can't give ("the auth refactor is fine, but the error handling needs a
+  rethink"). Set via `POST /api/reviews/{id}/summary` (trimmed server-side, and
+  again in `useReview.setSummary` so the optimistic value matches what a refetch
+  returns), edited in `ReviewSummary.tsx` above the comments pane, and rendered by
+  `export.Render` **above the counts and every file section**. It is deliberately
+  labelled `**Summary**` rather than `## Summary`: files own the h2 level, so a
+  heading there would read as a file named Summary to anything parsing the
+  artifact by section. `SetReviewSummary` reports a missing review through
+  `RowsAffected`, not through the text being blank — an empty summary is the
+  legitimate way to clear one, which is also why the editor has no non-empty
+  guard. **`ResetReview` clears it** alongside the comments and reviewed marks —
+  it's review-level feedback like they are, so leaving it would carry one pass's
+  framing into the next; it also counts toward `canReset`, so a review holding
+  only a summary is still resettable.
 - **Threads are two levels.** A comment is a thread root; the `replies` table
   holds follow-ups (body + timestamps only — anchor and `type` stay on the root).
   A reply's `comment_id` FK cascade-deletes it with its comment (and the comment

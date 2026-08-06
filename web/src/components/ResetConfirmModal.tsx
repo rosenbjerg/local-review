@@ -3,12 +3,20 @@ import { Modal } from "./Modal";
 interface Props {
   commentCount: number;
   reviewedCount: number;
+  hasSummary: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }
 
-// Confirms the destructive Reset (delete all comments + unmark all reviewed files).
-export function ResetConfirmModal({ commentCount, reviewedCount, onCancel, onConfirm }: Props) {
+// Confirms the destructive Reset (delete all comments, unmark all reviewed files,
+// clear the summary).
+export function ResetConfirmModal({
+  commentCount,
+  reviewedCount,
+  hasSummary,
+  onCancel,
+  onConfirm,
+}: Props) {
   return (
     <Modal onClose={onCancel} labelledBy="reset-title" className="modal-sm">
       <div className="modal-head">
@@ -24,7 +32,7 @@ export function ResetConfirmModal({ commentCount, reviewedCount, onCancel, onCon
           <strong>
             {reviewedCount} reviewed file{reviewedCount === 1 ? "" : "s"}
           </strong>{" "}
-          in this review. It can't be undone.
+          in this review{hasSummary && ", along with the review summary"}. It can't be undone.
         </p>
       </div>
       <div className="confirm-actions">

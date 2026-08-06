@@ -13,6 +13,7 @@ vi.mock("./api", () => {
     headRef: head,
     headSha: "sha",
     status: "draft",
+    summary: "",
     createdAt: "",
     updatedAt: "",
     comments: [],
@@ -277,6 +278,7 @@ test("a ping still applies review state when its diff is dropped", async () => {
     headRef: "main",
     headSha: "sha",
     status: "draft" as const,
+    summary: "",
     createdAt: "",
     updatedAt: "",
     comments: [],
@@ -312,6 +314,7 @@ const reviewWith = (body: string) => (id: number) => ({
   headRef: "main",
   headSha: "sha",
   status: "draft" as const,
+  summary: "",
   createdAt: "",
   updatedAt: "",
   comments: [

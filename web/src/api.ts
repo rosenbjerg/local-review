@@ -149,6 +149,12 @@ export const api = {
 
   deleteReply: (id: number) => req<void>(`/api/replies/${id}`, { method: "DELETE" }),
 
+  setSummary: (reviewId: number, summary: string) =>
+    req<void>(`/api/reviews/${reviewId}/summary`, {
+      method: "POST",
+      body: JSON.stringify({ summary }),
+    }),
+
   setReviewed: (
     reviewId: number,
     filePaths: string[],

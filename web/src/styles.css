@@ -1249,6 +1249,43 @@ textarea:focus-visible {
   font-size: 11px;
 }
 
+/* Review summary */
+.review-summary {
+  padding: 16px 16px 0;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+.review-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.review-summary-head h2 {
+  font-size: 14px;
+  margin: 0;
+}
+.review-summary-add {
+  padding: 0;
+  font-size: 12px;
+}
+.review-summary-body {
+  font-size: 13px;
+  color: var(--muted);
+}
+.review-summary-input {
+  width: 100%;
+  min-height: 90px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
 /* Comments panel */
 .comments-panel {
   padding: 16px;

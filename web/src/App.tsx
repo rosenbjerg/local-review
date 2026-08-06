@@ -10,6 +10,7 @@ import { FindBar } from "./components/FindBar";
 import { HelpModal } from "./components/HelpModal";
 import { LazyFile } from "./components/LazyFile";
 import { ResetConfirmModal } from "./components/ResetConfirmModal";
+import { ReviewSummary } from "./components/ReviewSummary";
 import { TopBar } from "./components/TopBar";
 import { buildReplyPrompt, buildReviewPrompt } from "./prompts";
 import { useActiveFile } from "./useActiveFile";
@@ -66,6 +67,7 @@ export default function App() {
     resetReview,
     setReviewedPaths,
     toggleReviewed,
+    setSummary,
   } = useReview();
 
   // Files the branch didn't change, opened so they can be commented on. Session
@@ -132,7 +134,7 @@ export default function App() {
 
   function requestReset() {
     if (!review) return;
-    if (comments.length === 0 && reviewedFiles.size === 0) return;
+    if (comments.length === 0 && reviewedFiles.size === 0 && !review.summary) return;
     setConfirmingReset(true);
   }
 
@@ -309,7 +311,7 @@ export default function App() {
           review,
           shortSha,
           openCommentCount: comments.filter((c) => !c.resolved).length,
-          canReset: comments.length > 0 || reviewedFiles.size > 0,
+          canReset: comments.length > 0 || reviewedFiles.size > 0 || !!review?.summary,
         }}
       />
 
@@ -442,6 +444,7 @@ export default function App() {
             onKeyDown={(e) => onResizeKey(e, "right")}
           />
           <aside className="side-column">
+            <ReviewSummary summary={review.summary} onSave={setSummary} />
             <CommentsPanel
               comments={sortedComments}
               sort={commentSort}
@@ -494,6 +497,7 @@ export default function App() {
         <ResetConfirmModal
           commentCount={comments.length}
           reviewedCount={reviewedFiles.size}
+          hasSummary={!!review?.summary}
           onCancel={() => setConfirmingReset(false)}
           onConfirm={performReset}
         />

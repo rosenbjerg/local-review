@@ -395,6 +395,7 @@ export function useReview() {
       await api.resetReview(review.id);
       setComments([]);
       setReviewedFiles(new Set());
+      setReview((r) => (r ? { ...r, summary: "" } : r));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -424,6 +425,22 @@ export function useReview() {
   }
 
   const toggleReviewed = (path: string, reviewed: boolean) => setReviewedPaths([path], reviewed);
+
+  // Trimmed here as well as server-side, so the optimistic value and the one the
+  // next refetch brings back can't differ by whitespace.
+  async function setSummary(text: string) {
+    if (!review) return;
+    const summary = text.trim();
+    const previous = review.summary;
+    setError(null);
+    setReview((r) => (r ? { ...r, summary } : r));
+    try {
+      await api.setSummary(review.id, summary);
+    } catch (e) {
+      setReview((r) => (r ? { ...r, summary: previous } : r));
+      setError((e as Error).message);
+    }
+  }
 
   const mainBranch = branches.find((b) => b.isMain)?.name;
   const shortSha = review?.headSha.slice(0, 7);
@@ -489,5 +506,6 @@ export function useReview() {
     resetReview,
     setReviewedPaths,
     toggleReviewed,
+    setSummary,
   };
 }

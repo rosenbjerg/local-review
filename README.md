@@ -36,6 +36,8 @@ no runtime dependencies beyond `git`.
   toggle. Narrow it with the **from** picker to start at one of the branch's own
   commits, or tick **uncommitted** to review your working tree — and untick
   **unstaged** to review only what's staged.
+- **A review summary.** A free-text note above the comments pane that leads the
+  export — the framing a list of line comments can't carry on its own.
 - **Comment anywhere.** Any line or dragged range, on changed or unchanged lines,
   and on files the branch never touched. Threads with replies, a type per comment
   (bug / suggestion / question / nit), `#id` cross-references between threads, and
@@ -146,9 +148,9 @@ each review independently. Draft reviews older than `-retention-days` (default
 
 ### The agent handoff loop
 
-The review is a markdown artifact — each comment as a file path, line(s),
-captured snippet, and your note, grouped by file, with resolved threads excluded
-so the agent only sees open, actionable feedback. **Agent prompts** (toolbar)
+The review is a markdown artifact — your summary up top, then each comment as a
+file path, line(s), captured snippet, and your note, grouped by file, with
+resolved threads excluded so the agent only sees open, actionable feedback. **Agent prompts** (toolbar)
 opens two copyable prompts, one per direction:
 
 - **Address the review** — points a coding agent at *this review's* API. The agent

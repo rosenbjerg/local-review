@@ -32,6 +32,14 @@ func Render(r *store.Review, agentInstructions bool, baseURL string) string {
 
 	fmt.Fprintf(&b, "# Review: %s → %s @ %s\n\n", r.HeadRef, r.BaseRef, shortSHA)
 
+	// Deliberately not a "## Summary" heading: files are the h2 level, so one here
+	// would read as a file named Summary to anything parsing the artifact by
+	// section. The body goes in raw — like comment bodies, it's the author's
+	// markdown, and it sits above every heading so it can't break out of one.
+	if summary := strings.TrimSpace(r.Summary); summary != "" {
+		fmt.Fprintf(&b, "**Summary**\n\n%s\n\n", summary)
+	}
+
 	// Resolved threads need no agent action, so the export carries only open ones.
 	unresolved := make([]store.Comment, 0, len(r.Comments))
 	for _, c := range r.Comments {

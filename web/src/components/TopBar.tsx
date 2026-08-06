@@ -160,7 +160,7 @@ export function TopBar({ selection: s, actions, status }: Props) {
             className="btn danger"
             onClick={actions.onReset}
             disabled={!status.canReset}
-            title="Delete all comments and unmark all reviewed files"
+            title="Delete all comments, unmark all reviewed files, and clear the summary"
           >
             Reset
           </button>

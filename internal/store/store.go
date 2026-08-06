@@ -35,6 +35,7 @@ type Review struct {
 	HeadRef       string       `json:"headRef"`
 	HeadSHA       string       `json:"headSha"`
 	Status        ReviewStatus `json:"status"`
+	Summary       string       `json:"summary"`
 	CreatedAt     time.Time    `json:"createdAt"`
 	UpdatedAt     time.Time    `json:"updatedAt"`
 	Comments      []Comment    `json:"comments"`
@@ -122,6 +123,7 @@ CREATE TABLE IF NOT EXISTS reviews (
   head_ref   TEXT NOT NULL,
   head_sha   TEXT NOT NULL,
   status     TEXT NOT NULL DEFAULT 'draft',
+  summary    TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -167,6 +169,9 @@ CREATE TABLE IF NOT EXISTS reviewed_files (
 	}
 	// Columns added after the initial schema — CREATE TABLE IF NOT EXISTS won't
 	// backfill them onto older DBs, so add each explicitly (no-op once present).
+	if err := s.ensureColumn("reviews", "summary", "summary TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
 	if err := s.ensureColumn("comments", "resolved", "resolved INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
@@ -234,7 +239,7 @@ type rowScanner interface {
 // the Scan order in the matching helper must move together — keeping each pair
 // adjacent is the whole point of single-sourcing them.
 const (
-	reviewCols  = `id, repo_path, base_ref, head_ref, head_sha, status, created_at, updated_at`
+	reviewCols  = `id, repo_path, base_ref, head_ref, head_sha, status, created_at, updated_at, summary`
 	commentCols = `id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved, author, commit_sha, worktree, indexed`
 	replyCols   = `id, comment_id, body, created_at, updated_at, author`
 )
@@ -242,7 +247,7 @@ const (
 func scanReview(sc rowScanner) (Review, error) {
 	var r Review
 	var created, updated string
-	if err := sc.Scan(&r.ID, &r.RepoPath, &r.BaseRef, &r.HeadRef, &r.HeadSHA, &r.Status, &created, &updated); err != nil {
+	if err := sc.Scan(&r.ID, &r.RepoPath, &r.BaseRef, &r.HeadRef, &r.HeadSHA, &r.Status, &created, &updated, &r.Summary); err != nil {
 		return Review{}, err
 	}
 	r.CreatedAt, _ = time.Parse(timeFmt, created)
@@ -463,7 +468,26 @@ func (s *Store) ResetReview(id int64) error {
 	if _, err := tx.Exec(`DELETE FROM reviewed_files WHERE review_id=?`, id); err != nil {
 		return err
 	}
+	// The summary is review-level feedback like the comments are, so a reset that
+	// left it behind would carry one reviewer's framing into the next pass.
+	if _, err := tx.Exec(`UPDATE reviews SET summary='', updated_at=? WHERE id=?`, nowStr(), id); err != nil {
+		return err
+	}
 	return tx.Commit()
+}
+
+// An empty summary is a legitimate value (clearing it), so a missing review is
+// told apart by rows affected rather than by the text being blank.
+func (s *Store) SetReviewSummary(id int64, summary string) error {
+	res, err := s.db.Exec(`UPDATE reviews SET summary=?, updated_at=? WHERE id=?`,
+		summary, nowStr(), id)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (s *Store) SetStatus(id int64, status ReviewStatus) error {

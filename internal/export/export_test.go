@@ -212,3 +212,36 @@ func TestRenderFenceNotClosedBySnippet(t *testing.T) {
 		t.Fatalf("expected exactly one opening and one closing 4-backtick fence, got:\n%s", out)
 	}
 }
+
+// The summary frames the whole review, so it leads the artifact — above the
+// counts and every file section, and deliberately not as an h2 (which is the
+// file level, so "## Summary" would read as a file named Summary).
+func TestRenderSummary(t *testing.T) {
+	r := &store.Review{
+		HeadRef: "feature",
+		BaseRef: "main",
+		HeadSHA: "abc1234",
+		Summary: "The auth refactor is fine.\n\nError handling needs a rethink.",
+		Comments: []store.Comment{
+			{ID: 1, FilePath: "main.go", StartLine: 3, EndLine: 3, Type: "bug", Body: "x"},
+		},
+	}
+	out := Render(r, false, "")
+
+	if !strings.Contains(out, "**Summary**\n\nThe auth refactor is fine.\n\nError handling needs a rethink.\n") {
+		t.Fatalf("summary should render verbatim under a bold label:\n%s", out)
+	}
+	if strings.Contains(out, "## Summary") {
+		t.Fatalf("summary must not use the h2 level that files occupy:\n%s", out)
+	}
+	if i, j := strings.Index(out, "**Summary**"), strings.Index(out, "unresolved comment(s)"); i > j {
+		t.Fatalf("summary should lead the artifact, before the counts:\n%s", out)
+	}
+}
+
+func TestRenderOmitsEmptySummary(t *testing.T) {
+	r := &store.Review{HeadRef: "feature", BaseRef: "main", HeadSHA: "abc1234", Summary: "   "}
+	if out := Render(r, false, ""); strings.Contains(out, "**Summary**") {
+		t.Fatalf("a blank summary should render nothing:\n%s", out)
+	}
+}
