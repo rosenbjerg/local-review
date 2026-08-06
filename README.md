@@ -54,6 +54,8 @@ no runtime dependencies beyond `git`.
 - **Live sync.** SSE keeps every tab current, and a filesystem watcher catches
   work done outside the UI — an agent's edits and new commits show up without a
   reload.
+- **Word-level diffs.** A changed line shades just the words that changed, so a
+  one-character edit doesn't read as a line rewritten.
 - **Renders every file, stays fast.** Syntax highlighting for ~235 languages,
   rendered markdown (mermaid diagrams included), before/after previews for images,
   and a text/image toggle for SVGs — with lazy rendering so large change-sets stay

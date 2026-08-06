@@ -13,6 +13,11 @@
   --add-bg: #12261e;
   --add-border: #238636;
   --del-bg: #25171c;
+  /* The parts of a changed line that actually changed, sitting on top of the
+     row shade above. Opaque and clearly brighter than their row, since against
+     --add-bg/--del-bg a translucent tint is almost invisible. */
+  --add-word-bg: #205c33;
+  --del-word-bg: #6b2b33;
   /* Range-select highlight — a dark accent-family blue so selecting lines
      matches the blue gutter-hover, rather than the old olive that belonged to
      neither the add/del shades nor the accent. Opaque like its siblings; it
@@ -898,6 +903,19 @@ textarea:focus-visible {
   display: inline-block;
   width: 1ch;
   color: var(--muted);
+}
+.row-add .word-diff {
+  background: var(--add-word-bg);
+}
+.row-del .word-diff {
+  background: var(--del-word-bg);
+}
+/* Both of these swap the row's add/del shade for --sel-bg (with !important), so
+   the word marks would otherwise sit on a background they were never picked
+   against. Any future rule that replaces a row shade belongs here too. */
+.row-selected .word-diff,
+.row-comment-active .word-diff {
+  background: none;
 }
 .row-add {
   background: var(--add-bg);

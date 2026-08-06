@@ -55,6 +55,7 @@ web/src/
   time.ts                relative/absolute timestamp + edited-marker helpers
   commentSort.ts         the comments-pane sort orders (file / started / activity)
   commentsByPath.ts      group comments per file card + the by-value compare its memo uses
+  wordDiff.ts            intra-line diff: token LCS → changed char ranges + the segment splitter
   occurrences.ts         occurrence matching: term validation, whole-word vs substring, span→text-node mapping
   useOccurrenceHighlight.ts  select a word → light up its other occurrences in that file
   useFocusTrap.ts        modal focus hook: focus-in, Tab trap, restore on close
@@ -348,6 +349,27 @@ web/src/
   to language ids via Shiki's own alias metadata (+ a tiny extras map). `DiffView`
   tokenizes the whole file once and renders tokens per line (avoids per-line
   breakage on multi-line constructs); deleted lines are highlighted per-line.
+- **Word-level intra-line diff** (`wordDiff.ts`): a one-character edit rendered as
+  a whole line deleted and a whole line added makes the reader diff it by eye, so
+  a changed line shades only the spans that changed. Pure and covered by
+  `wordDiff.test.ts`: tokenize (word runs / whitespace runs / single punctuation),
+  trim the shared head and tail — which is what keeps the **quadratic** LCS off
+  the common case of one word changed in a long line — then LCS the middles and
+  turn the token flags into character ranges. Three ways it declines, all
+  deliberate: lines too long (`MAX_CHARS`/`MAX_TOKENS`, since a minified bundle is
+  one enormous "line"), a pair below `MIN_SIMILARITY` (different code, not an edit
+  — this is also what makes positional pairing safe when a del run and add run
+  have different lengths), and a change spanning both whole lines, which says
+  nothing the row shade doesn't. Ranges are keyed by **line number** — deletions
+  by old, additions by new — so the Changed and Full views look rows up the same
+  way even though Full renders no deleted rows. `splitPieces` cuts the Shiki
+  segments at the range boundaries so colour and changedness compose rather than
+  one overwriting the other; the extra nesting is safe for occurrence
+  highlighting, whose `textNodesIn` walks all descendants and rejects only
+  `.sign`. The marks are cleared on `.row-selected` **and `.row-comment-active`**,
+  both of which replace the row's add/del shade with `--sel-bg` — a rule that
+  swaps a row shade has to clear the word marks too, or they sit on a background
+  they were never picked against.
 - **Mermaid diagrams** (`mermaid.ts`): a second enhancement pass over rendered
   markdown, same `(html) => Promise<string | null>` shape as `highlightBlocks`
   and chained after it in `Markdown`, so it applies **everywhere** `Markdown`

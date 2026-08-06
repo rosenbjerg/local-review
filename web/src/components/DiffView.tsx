@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { ApiError, api } from "../api";
 import { sameComments } from "../commentsByPath";
+import { hunkWordRanges, splitPieces, type Segment } from "../wordDiff";
 import { langForPath, tokenize, type Token } from "../highlight";
 import type { Comment, CommentType, FileDiff, LineKind } from "../types";
 import { effectiveLines } from "../types";
@@ -241,6 +242,10 @@ export const DiffView = memo(function DiffView({
     return () => window.removeEventListener("mouseup", onUp);
   }, [dragAnchor]);
 
+  // Which parts of each changed line actually changed. Keyed by line number, so
+  // Full view marks the additions too even though it renders no deleted rows.
+  const wordRanges = useMemo(() => hunkWordRanges(file.hunks), [file]);
+
   const addedSet = useMemo(() => {
     const s = new Set<number>();
     for (const h of file.hunks) {
@@ -370,12 +375,32 @@ export const DiffView = memo(function DiffView({
     if (ok) setFileComposer(false);
   }
 
-  function renderContent(kind: LineKind | "hunk", newLine: number | undefined, content: string) {
+  function renderContent(
+    kind: LineKind | "hunk",
+    oldLine: number | undefined,
+    newLine: number | undefined,
+    content: string
+  ) {
     const toks = kind === "del" ? delTokens?.get(content) : newLine ? newTokens?.get(newLine) : undefined;
-    if (!toks || toks.length === 0) return content;
-    return toks.map((t, i) => (
-      <span key={i} style={{ color: t.color }}>
-        {t.content}
+    const ranges =
+      kind === "del"
+        ? oldLine && wordRanges.del.get(oldLine)
+        : kind === "add"
+          ? newLine && wordRanges.add.get(newLine)
+          : undefined;
+    if (!ranges || ranges.length === 0) {
+      if (!toks || toks.length === 0) return content;
+      return toks.map((t, i) => (
+        <span key={i} style={{ color: t.color }}>
+          {t.content}
+        </span>
+      ));
+    }
+    const segments: Segment[] =
+      toks && toks.length > 0 ? toks.map((t) => ({ text: t.content, color: t.color })) : [{ text: content }];
+    return splitPieces(segments, ranges).map((p, i) => (
+      <span key={i} className={p.changed ? "word-diff" : undefined} style={{ color: p.color }}>
+        {p.text}
       </span>
     ));
   }
@@ -442,7 +467,7 @@ export const DiffView = memo(function DiffView({
           <span className="sign">
             {r.kind === "add" ? "+" : r.kind === "del" ? "-" : " "}
           </span>
-          {renderContent(r.kind, r.newLine, r.content)}
+          {renderContent(r.kind, r.oldLine, r.newLine, r.content)}
         </td>
       </tr>
     );

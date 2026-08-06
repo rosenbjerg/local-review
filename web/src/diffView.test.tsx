@@ -126,3 +126,55 @@ test("a diff refetch with identical hunks keeps the cached source", async () => 
   await new Promise((r) => setTimeout(r, 0));
   expect(vi.mocked(api.file).mock.calls.length).toBe(1);
 });
+
+// The word-diff ranges are computed from the hunks but painted onto the rendered
+// rows, so the two can drift apart independently of wordDiff.ts being correct.
+test("a paired -/+ line marks only the words that changed", async () => {
+  const file = (): FileDiff => ({
+    oldPath: "a.txt",
+    newPath: "a.txt",
+    status: "modified",
+    hunks: [
+      {
+        header: "@@ -1 +1 @@",
+        lines: [
+          { kind: "del", oldLine: 1, content: "const total = price * quantity;" },
+          { kind: "add", newLine: 1, content: "const total = price * amount;" },
+        ],
+      },
+    ],
+  });
+  vi.mocked(api.file).mockResolvedValue(content("const total = price * amount;"));
+
+  const { container } = render(<DiffView {...props} file={file()} headRef="main" />);
+  await waitFor(() => expect(container.querySelectorAll(".word-diff").length).toBeGreaterThan(0));
+
+  const marked = [...container.querySelectorAll(".word-diff")].map((el) => el.textContent);
+  expect(marked).toEqual(["quantity", "amount"]);
+  // The rest of the line is still rendered, just unmarked.
+  expect(container.querySelector(".row-add")?.textContent).toContain("const total = price *");
+});
+
+// Two lines that merely sit next to each other in a hunk aren't an edit of one
+// another; marking their few shared tokens would be worse than marking nothing.
+test("an unrelated -/+ pair is left unmarked", async () => {
+  const file = (): FileDiff => ({
+    oldPath: "a.txt",
+    newPath: "a.txt",
+    status: "modified",
+    hunks: [
+      {
+        header: "@@ -1 +1 @@",
+        lines: [
+          { kind: "del", oldLine: 1, content: "    return err" },
+          { kind: "add", newLine: 1, content: "    logger.debug(payload, ctx)" },
+        ],
+      },
+    ],
+  });
+  vi.mocked(api.file).mockResolvedValue(content("    logger.debug(payload, ctx)"));
+
+  const { container } = render(<DiffView {...props} file={file()} headRef="main" />);
+  await waitFor(() => expect(screen.getAllByText(/logger\.debug/).length).toBeGreaterThan(0));
+  expect(container.querySelectorAll(".word-diff").length).toBe(0);
+});
