@@ -600,7 +600,17 @@ textarea:focus-visible {
   padding: 8px 12px;
   font-weight: 600;
   font-size: 13px;
-  border-bottom: 1px solid var(--border);
+}
+/* The head's bottom edge *is* the reviewed-progress bar — hence no border-bottom
+   above; re-adding one puts a second rule right beneath this one. */
+.explorer-progress {
+  height: 2px;
+  background: var(--border);
+}
+.explorer-progress-fill {
+  height: 100%;
+  background: var(--success);
+  transition: width 120ms ease-out;
 }
 .explorer-head .muted {
   font-weight: 400;

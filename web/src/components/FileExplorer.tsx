@@ -279,6 +279,19 @@ export function FileExplorer({
             +
           </button>
         </div>
+        <div
+          className="explorer-progress"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={files.length}
+          aria-valuenow={reviewedCount}
+          aria-label="Files reviewed"
+        >
+          <div
+            className="explorer-progress-fill"
+            style={{ width: files.length ? `${(reviewedCount / files.length) * 100}%` : "0%" }}
+          />
+        </div>
         <div className="explorer-search-row">
           <div className="explorer-search-wrap">
             <input

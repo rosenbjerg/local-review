@@ -60,7 +60,8 @@ web/src/
   useFocusTrap.ts        modal focus hook: focus-in, Tab trap, restore on close
   storage.ts             typed, error-swallowing localStorage helpers + the lr.* keys
   components/
-    FileExplorer.tsx     left pane: hierarchical file tree, collapse, reviewed toggle
+    FileExplorer.tsx     left pane: hierarchical file tree, collapse, reviewed toggle,
+                         reviewed-progress bar (the head's bottom edge)
     DiffView.tsx         center: per-file diff, syntax highlight, inline threads/composer,
                          drag-select ranges, Changed/Full toggle, auto-collapse large files
     LazyFile.tsx         viewport lazy-mount wrapper (IntersectionObserver) + scroll anchor
