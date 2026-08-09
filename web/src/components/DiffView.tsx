@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { ApiError, api } from "../api";
 import { sameComments } from "../commentsByPath";
+import { EXPAND_STEP, gapView, hunkGaps, type Gap, type Reveal } from "../hunkGaps";
 import { hunkWordRanges, splitPieces, type Segment } from "../wordDiff";
 import { langForPath, tokenize, type Token } from "../highlight";
 import type { Comment, CommentType, FileDiff, LineKind } from "../types";
@@ -23,10 +24,14 @@ const isMarkdown = (path: string) => extOf(path) === "md" || extOf(path) === "ma
 
 interface Row {
   key: string;
-  kind: LineKind | "hunk";
+  kind: LineKind | "hunk" | "gap";
   oldLine?: number;
   newLine?: number;
   content: string;
+  // On a "gap" row: the hidden region its expanders act on, and how much of that
+  // region is still hidden.
+  gap?: Gap;
+  hidden?: number;
 }
 
 interface Props {
@@ -113,6 +118,9 @@ export const DiffView = memo(function DiffView({
   const [svgAsImage, setSvgAsImage] = useState(false);
   const [mdRendered, setMdRendered] = useState(false);
   const [fileComposer, setFileComposer] = useState(false);
+  // How much of each hidden region between hunks the reviewer has revealed, keyed
+  // by the gap's index (see hunkGaps).
+  const [revealed, setRevealed] = useState<Record<number, Reveal>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
   // The ref couldn't supply this file, so the server served the on-disk copy. The
@@ -168,6 +176,7 @@ export const DiffView = memo(function DiffView({
     setSource(null);
     setMissing(false);
     setSubstituted(false);
+    setRevealed({});
   }, [contentKey]);
 
   useEffect(() => {
@@ -284,6 +293,13 @@ export const DiffView = memo(function DiffView({
     return c ? effectiveLines(c) : null;
   }, [activeComment, comments]);
 
+  // The unchanged regions the changed-lines-only view hides. They come out of the
+  // full file, which is already fetched, so revealing one costs no request.
+  const gaps = useMemo(
+    () => (mode === "changed" && source ? hunkGaps(file.hunks, source.length) : []),
+    [mode, source, file]
+  );
+
   const rows: Row[] = useMemo(() => {
     if (mode === "full" && source) {
       return source.map((content, i) => {
@@ -297,8 +313,36 @@ export const DiffView = memo(function DiffView({
       });
     }
     const out: Row[] = [];
+    const gapByHunk = new Map(gaps.map((g) => [g.hunkIndex, g]));
+    const pushGap = (gap: Gap, header: string) => {
+      const view = gapView(gap, revealed[gap.hunkIndex]);
+      const context = (n: number) =>
+        out.push({
+          key: `g${gap.hunkIndex}c${n}`,
+          kind: "context",
+          oldLine: n + gap.delta,
+          newLine: n,
+          content: source?.[n - 1] ?? "",
+        });
+      if (view.head) for (let n = view.head.start; n <= view.head.end; n++) context(n);
+      if (view.hidden > 0) {
+        out.push({
+          key: `g${gap.hunkIndex}`,
+          kind: "gap",
+          content: header,
+          gap,
+          hidden: view.hidden,
+        });
+      }
+      if (view.tail) for (let n = view.tail.start; n <= view.tail.end; n++) context(n);
+    };
     file.hunks.forEach((h, hi) => {
-      out.push({ key: `h${hi}`, kind: "hunk", content: h.header });
+      const gap = gapByHunk.get(hi);
+      // A hidden region's bar carries the hunk's @@ header, so the two never stack.
+      // Once the region is fully revealed the lines run continuously into the hunk
+      // and the header would be noise, so neither row is emitted.
+      if (gap) pushGap(gap, h.header);
+      else out.push({ key: `h${hi}`, kind: "hunk", content: h.header });
       h.lines.forEach((l, li) => {
         out.push({
           key: `h${hi}l${li}`,
@@ -309,8 +353,21 @@ export const DiffView = memo(function DiffView({
         });
       });
     });
+    const trailing = gapByHunk.get(file.hunks.length);
+    if (trailing) pushGap(trailing, "");
     return out;
-  }, [mode, source, file, addedSet]);
+  }, [mode, source, file, addedSet, gaps, revealed]);
+
+  function expand(gap: Gap, side: "head" | "tail", amount: number) {
+    setRevealed((s) => {
+      const cur = s[gap.hunkIndex] ?? { head: 0, tail: 0 };
+      return { ...s, [gap.hunkIndex]: { ...cur, [side]: cur[side] + amount } };
+    });
+  }
+
+  function expandAll(gap: Gap) {
+    setRevealed((s) => ({ ...s, [gap.hunkIndex]: { head: gap.end - gap.start + 1, tail: 0 } }));
+  }
 
   async function switchMode(next: "changed" | "full") {
     if (next === "full" && !source) {
@@ -405,6 +462,53 @@ export const DiffView = memo(function DiffView({
     ));
   }
 
+  // The bar over a hidden region: expanders in the gutter, the count and the
+  // following hunk's @@ header in the content cell. It keeps `row-hunk` so that
+  // occurrence highlighting goes on treating the cell as metadata, not file text.
+  function gapRow(r: Row) {
+    const gap = r.gap!;
+    const hidden = r.hidden ?? 0;
+    const step = Math.min(EXPAND_STEP, hidden);
+    // Each arrow points at where its lines will appear. At the file's own ends only
+    // the hunk-adjacent direction is worth offering — the other would strand a run
+    // of lines against the top or bottom of the file.
+    const stepped = hidden > EXPAND_STEP;
+    const showUp = stepped && gap.hunkIndex > 0;
+    const showDown = stepped && gap.hunkIndex < file.hunks.length;
+    return (
+      <tr key={r.key} className="row-hunk row-gap">
+        <td className="gutter gap-gutter" colSpan={2}>
+          {showUp && (
+            <button
+              className="gap-btn"
+              title={`Show ${step} more lines above`}
+              aria-label={`Show ${step} more lines above`}
+              onClick={() => expand(gap, "head", step)}
+            >
+              ↑
+            </button>
+          )}
+          {showDown && (
+            <button
+              className="gap-btn"
+              title={`Show ${step} more lines below`}
+              aria-label={`Show ${step} more lines below`}
+              onClick={() => expand(gap, "tail", step)}
+            >
+              ↓
+            </button>
+          )}
+        </td>
+        <td className="line-content">
+          <button className="gap-all" onClick={() => expandAll(gap)}>
+            {hidden === 1 ? "Show 1 hidden line" : `Show all ${hidden} hidden lines`}
+          </button>
+          {r.content && <span className="gap-header">{r.content}</span>}
+        </td>
+      </tr>
+    );
+  }
+
   function threadRow(key: string, children: ReactNode) {
     return (
       <tr key={key} className="thread-row">
@@ -431,6 +535,10 @@ export const DiffView = memo(function DiffView({
   const body: ReactNode[] = [];
 
   for (const r of rows) {
+    if (r.kind === "gap") {
+      body.push(gapRow(r));
+      continue;
+    }
     if (r.kind === "hunk") {
       body.push(
         <tr key={r.key} className="row-hunk">

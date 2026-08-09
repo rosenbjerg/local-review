@@ -56,6 +56,7 @@ web/src/
   commentSort.ts         the comments-pane sort orders (file / started / activity)
   commentsByPath.ts      group comments per file card + the by-value compare its memo uses
   wordDiff.ts            intra-line diff: token LCS → changed char ranges + the segment splitter
+  hunkGaps.ts            the unchanged regions a hunk view hides: their line ranges + how much is revealed
   occurrences.ts         occurrence matching: term validation, whole-word vs substring, span→text-node mapping
   useOccurrenceHighlight.ts  select a word → light up its other occurrences in that file
   useFocusTrap.ts        modal focus hook: focus-in, Tab trap, restore on close
@@ -64,7 +65,8 @@ web/src/
     FileExplorer.tsx     left pane: hierarchical file tree, collapse, reviewed toggle,
                          reviewed-progress bar (the head's bottom edge)
     DiffView.tsx         center: per-file diff, syntax highlight, inline threads/composer,
-                         drag-select ranges, Changed/Full toggle, auto-collapse large files
+                         drag-select ranges, Changed/Full toggle, expandable hidden regions,
+                         auto-collapse large files
     LazyFile.tsx         viewport lazy-mount wrapper (IntersectionObserver) + scroll anchor
     FindBar.tsx          occurrence-highlight bar above the diff: term, n-of-N, prev/next
     CommentThread.tsx    a comment thread: root comment (edit/delete) + replies + reply composer
@@ -370,6 +372,26 @@ web/src/
   both of which replace the row's add/del shade with `--sel-bg` — a rule that
   swaps a row shade has to clear the word marks too, or they sit on a background
   they were never picked against.
+- **Expandable hidden regions** (`hunkGaps.ts`): Changed view shows only the hunks
+  and Full view the whole file, so reading the few lines around a change meant
+  loading all of it. The gaps between hunks (and before the first / after the last)
+  now carry a bar that reveals context from the **already-fetched `source`**, so an
+  expansion costs no request. `hunkGaps` derives each gap from the **`@@` headers**,
+  not from the hunk lines — a pure-deletion hunk has no new-side lines to derive
+  from — and one unparseable header returns no gaps at all rather than a set that
+  is silently off by the mis-parsed hunk's size. It also carries each gap's `delta`
+  (`oldLine = newLine + delta`), which holds only because a gap by definition
+  contains no changes; that's what keeps the left gutter honest in revealed rows.
+  Note git writes a **zero-length side as the line _before_ the change** (`+4,0` =
+  "after new line 4"), so both edges are off by one there — `lastBefore`/`lastOf`
+  are the only places that know it. The bar carries the following hunk's `@@`
+  header, so the two never stack, and a fully-revealed gap emits **neither** (the
+  lines run continuously into the hunk, so the header would be noise). It keeps
+  `row-hunk` on the bar's row: that class is what tells occurrence highlighting the
+  cell is metadata, not file text. Revealed rows are ordinary context rows, so
+  commenting, occurrence highlighting, and inline threads all work in them for
+  free. Reveal state resets with `contentKey`, alongside the cached source it reads
+  — the two describe the same side and must move together.
 - **Mermaid diagrams** (`mermaid.ts`): a second enhancement pass over rendered
   markdown, same `(html) => Promise<string | null>` shape as `highlightBlocks`
   and chained after it in `Markdown`, so it applies **everywhere** `Markdown`

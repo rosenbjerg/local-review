@@ -1,5 +1,5 @@
 import { beforeEach, expect, test, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 // DiffView renders the full-file source it fetches separately from the diff, and keys
 // the add/context syntax tokens by new-side line number — so a source that no longer
@@ -153,6 +153,88 @@ test("a paired -/+ line marks only the words that changed", async () => {
   expect(marked).toEqual(["quantity", "amount"]);
   // The rest of the line is still rendered, just unmarked.
   expect(container.querySelector(".row-add")?.textContent).toContain("const total = price *");
+});
+
+// The expanders read the hidden lines out of the full file the card already
+// fetched, and place them against the hunks — the same source/hunks pairing the
+// tests above guard, so a gap misplaced by one prints the wrong text at a line.
+const numbered = (n: number) => Array.from({ length: n }, (_, i) => `L${i + 1}`).join("\n");
+
+const modifiedAt = (line: number): FileDiff => ({
+  oldPath: "a.txt",
+  newPath: "a.txt",
+  status: "modified",
+  hunks: [
+    {
+      header: `@@ -${line} +${line} @@`,
+      lines: [
+        { kind: "del", oldLine: line, content: "gone" },
+        { kind: "add", newLine: line, content: `L${line}` },
+      ],
+    },
+  ],
+});
+
+test("a hidden region expands a step at a time, from the end nearest its hunk", async () => {
+  vi.mocked(api.file).mockResolvedValue(content(numbered(100)));
+
+  render(<DiffView {...props} file={modifiedAt(40)} headRef="main" />);
+  await waitFor(() => expect(screen.getByText("Show all 39 hidden lines")).toBeTruthy());
+  expect(screen.queryByText("L39")).toBeNull();
+
+  // The region above the hunk can only grow downward — the file's top edge is the
+  // other side of it, so it offers one direction.
+  expect(screen.queryByLabelText("Show 20 more lines above")).toBeTruthy(); // the region below
+  fireEvent.click(screen.getByLabelText("Show 20 more lines below"));
+
+  expect(screen.getByText("L39")).toBeTruthy(); // revealed up against the hunk
+  expect(screen.queryByText("L19")).toBeNull(); // still hidden, further from it
+  expect(screen.getByText("Show all 19 hidden lines")).toBeTruthy();
+});
+
+test("a fully revealed region drops its bar and the hunk header with it", async () => {
+  vi.mocked(api.file).mockResolvedValue(content(numbered(30)));
+
+  render(<DiffView {...props} file={modifiedAt(5)} headRef="main" />);
+  await waitFor(() => expect(screen.getByText("Show all 4 hidden lines")).toBeTruthy());
+  expect(screen.getByText("@@ -5 +5 @@")).toBeTruthy();
+
+  fireEvent.click(screen.getByText("Show all 4 hidden lines"));
+
+  expect(screen.getByText("L1")).toBeTruthy();
+  // The lines now run continuously into the hunk, so the header says nothing.
+  expect(screen.queryByText("@@ -5 +5 @@")).toBeNull();
+});
+
+test("a revealed line carries the old-side number its region runs at", async () => {
+  const added: FileDiff = {
+    oldPath: "a.txt",
+    newPath: "a.txt",
+    status: "modified",
+    hunks: [
+      {
+        header: "@@ -9,0 +10,3 @@",
+        lines: [
+          { kind: "add", newLine: 10, content: "L10" },
+          { kind: "add", newLine: 11, content: "L11" },
+          { kind: "add", newLine: 12, content: "L12" },
+        ],
+      },
+    ],
+  };
+  vi.mocked(api.file).mockResolvedValue(content(numbered(100)));
+
+  const { container } = render(<DiffView {...props} file={added} headRef="main" />);
+  await waitFor(() => expect(screen.getByLabelText("Show 20 more lines above")).toBeTruthy());
+  fireEvent.click(screen.getByLabelText("Show 20 more lines above"));
+
+  const row = [...container.querySelectorAll("tr")].find(
+    (tr) => tr.querySelector(".line-content")?.textContent?.trim() === "L13"
+  );
+  const gutters = row?.querySelectorAll(".gutter");
+  // Three lines were added above, so the new side runs three ahead of the old.
+  expect(gutters?.[0].textContent).toBe("10");
+  expect(gutters?.[1].textContent).toBe("13");
 });
 
 // Two lines that merely sit next to each other in a hunk aren't an edit of one

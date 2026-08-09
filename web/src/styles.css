@@ -930,6 +930,38 @@ textarea:focus-visible {
 .row-hunk .line-content {
   font-size: 11.5px;
 }
+.gap-gutter {
+  text-align: center;
+  padding: 0 2px;
+}
+.gap-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font: inherit;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.gap-btn:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.gap-all {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+}
+.gap-all:hover {
+  text-decoration: underline;
+}
+.gap-header {
+  margin-left: 12px;
+}
 .row-selected {
   background: var(--sel-bg) !important;
 }
