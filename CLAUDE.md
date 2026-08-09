@@ -60,6 +60,7 @@ web/src/
   hunkGaps.ts            the unchanged regions a hunk view hides: their line ranges + how much is revealed
   occurrences.ts         occurrence matching: term validation, whole-word vs substring, span→text-node mapping
   useOccurrenceHighlight.ts  select a word → light up its other occurrences in that file
+  useUnseenActivity.ts   count agent comments/replies that arrived while the tab was hidden
   useFocusTrap.ts        modal focus hook: focus-in, Tab trap, restore on close
   storage.ts             typed, error-swallowing localStorage helpers + the lr.* keys
   components/
@@ -288,6 +289,13 @@ web/src/
   focus/visibility refetch as a fallback for the reconnect gap, gated on the stream
   not being `OPEN` — and it passes `diff` (a dead stream may have missed a content
   change).
+  **A hidden tab takes the review half of a ping but defers the diff half**
+  (`missedDiff`, replayed on the next visible). Taking the review is what feeds the
+  unseen-activity badge below — a tab that skipped the fetch entirely would have
+  nothing to count. Deferring the diff is the other half of that bargain, and the
+  replay is **load-bearing**: the focus fallback stands down while the stream is
+  `OPEN`, so a diff dropped here would have nothing left to fetch it and the tab
+  would come back showing stale hunks.
   The `diff` pings come not just from commits landing but from a **filesystem
   poller** covering **out-of-band** changes an agent makes without hitting the API —
   editing files or committing. `internal/api/watch.go` runs one poller per review *while it
@@ -541,6 +549,16 @@ web/src/
   `N of M` while narrowed, and everything else that counts comments (the explorer
   badges, the export button) deliberately ignores the filter — those describe the
   review, not the pane. Filtering never touches the store or the export.
+- **The tab title carries unseen agent activity** (`useUnseenActivity.ts`): handing a
+  review to an agent means waiting somewhere else, and the tab is the only surface
+  that can say "it answered" while you're in an editor. Comments and replies whose
+  `author` isn't `reviewer` count — the reviewer's own come from this app (or a
+  second tab of it) and are never news. The count is keyed on **visibility alone**
+  (hidden accumulates, visible clears), the same axis the ping refetch uses. Two
+  rules keep it honest: whatever is already on a review at the **first** read is
+  history, not activity (else opening a review in a background tab would badge its
+  whole history), and the `seen` set **re-primes on `review.id`**, so switching
+  reviews doesn't count the new one's comments as arrivals.
 - **Keyboard shortcuts** live in one window `keydown` effect in
   `useKeyboardShortcuts.ts`: `j`/`k` next/prev file, `n`/`p` next/prev comment (pane
   order via `orderedCommentIds`, stepping from `activeComment`), `v` mark the

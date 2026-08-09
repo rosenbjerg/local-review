@@ -21,6 +21,7 @@ import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 import { useOccurrenceHighlight } from "./useOccurrenceHighlight";
 import { usePanelResize } from "./usePanelResize";
 import { useReview } from "./useReview";
+import { useUnseenActivity } from "./useUnseenActivity";
 import type { CommentFilter } from "./commentFilter";
 import { NO_FILTER, authorsOf, filterComments } from "./commentFilter";
 import type { CommentSort } from "./commentSort";
@@ -117,11 +118,16 @@ export default function App() {
   });
 
 
+  // Agent activity that landed while the tab was hidden, counted into the title so
+  // a review left open in a background tab says when the agent has answered.
+  const unseen = useUnseenActivity(comments, review?.id);
+
   useEffect(() => {
+    const badge = unseen > 0 ? `(${unseen}) ` : "";
     document.title = review
-      ? `${repo} · ${review.headRef} → ${review.baseRef} — local-review`
+      ? `${badge}${repo} · ${review.headRef} → ${review.baseRef} — local-review`
       : "local-review";
-  }, [review, repo]);
+  }, [review, repo, unseen]);
 
   // A filter belongs to the review it was set on — carried into another one it
   // would open a pane that silently hides that review's comments.

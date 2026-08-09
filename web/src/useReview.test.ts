@@ -382,6 +382,57 @@ test("a ping that changes a comment replaces it", async () => {
   await waitFor(() => expect(result.current.comments[0]?.body).toBe("edited"));
 });
 
+function setVisibility(state: "visible" | "hidden") {
+  Object.defineProperty(document, "visibilityState", { value: state, configurable: true });
+  document.dispatchEvent(new Event("visibilitychange"));
+}
+
+// A hidden tab still takes the review: the tab-title activity badge is the whole
+// reason to know about a change you can't see. The diff is the expensive half and
+// nothing renders it while hidden, so it's deferred — and it must actually arrive on
+// return, since the focus fallback stands down while the stream is OPEN, leaving
+// nothing else to fetch what the missed ping announced.
+test("a ping while hidden takes the review and defers the diff until the tab returns", async () => {
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.review).not.toBeNull());
+  const diffs = vi.mocked(api.diff).mock.calls.length;
+  const reviews = vi.mocked(api.getReview).mock.calls.length;
+
+  setVisibility("hidden");
+  await act(async () => {
+    lastEventSource()?.onmessage?.({ data: "diff" });
+  });
+  expect(vi.mocked(api.getReview).mock.calls.length).toBe(reviews + 1);
+  expect(vi.mocked(api.diff).mock.calls.length).toBe(diffs);
+
+  await act(async () => {
+    setVisibility("visible");
+  });
+  await waitFor(() => expect(vi.mocked(api.diff).mock.calls.length).toBe(diffs + 1));
+  setVisibility("visible");
+});
+
+// The deferral is only for what was missed; coming back with nothing outstanding
+// must not refetch a diff the live stream would have pushed anyway.
+test("returning to a tab that missed nothing does not refetch the diff", async () => {
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.review).not.toBeNull());
+  const es = lastEventSource() as unknown as { readyState: number };
+  es.readyState = 1; // OPEN
+  const diffs = vi.mocked(api.diff).mock.calls.length;
+
+  setVisibility("hidden");
+  await act(async () => {
+    lastEventSource()?.onmessage?.({ data: "meta" }); // comment churn, no content move
+  });
+  await act(async () => {
+    setVisibility("visible");
+  });
+
+  await new Promise((r) => setTimeout(r, 0));
+  expect(vi.mocked(api.diff).mock.calls.length).toBe(diffs);
+});
+
 // The shared reqSeq guard: a slow diff response for a selection the user has already
 // moved past must be discarded, not applied over the newer result.
 test("a superseded (slow) diff response is discarded", async () => {

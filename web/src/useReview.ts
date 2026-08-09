@@ -217,8 +217,18 @@ export function useReview() {
     let inFlight = false;
     let pending = false;
     let pendingDiff = false;
+    // A `diff` ping that arrived while hidden. Without this the tab would come back
+    // showing a stale diff: the focus fallback stands down while the stream is OPEN,
+    // so nothing else would ever fetch what the missed ping announced.
+    let missedDiff = false;
     async function refresh(withDiff: boolean) {
-      if (cancelled || document.visibilityState !== "visible") return;
+      if (cancelled) return;
+      // A hidden tab still takes the review — it's small, and the unseen-activity
+      // badge in the tab title exists precisely to report what you can't see. The
+      // diff is the expensive half and nothing renders it while hidden, so it waits.
+      const hidden = document.visibilityState !== "visible";
+      if (hidden && withDiff) missedDiff = true;
+      withDiff = withDiff && !hidden;
       if (inFlight) {
         // Ping mid-fetch: the in-flight response may predate the change, so queue
         // exactly one trailing refetch — carrying the diff if any queued ping wanted it.
@@ -284,6 +294,12 @@ export function useReview() {
     es.onmessage = (e) => refresh(e.data === "diff");
     // No onerror — EventSource auto-reconnects; the focus fallback covers the gap.
     function onFocus() {
+      if (document.visibilityState !== "visible") return; // also fires on hide
+      if (missedDiff) {
+        missedDiff = false;
+        refresh(true); // a ping deferred its diff while the tab was hidden
+        return;
+      }
       if (es.readyState === EventSource.OPEN) return; // stream live — it'll push
       // A dead stream may have missed a content change, so refetch the diff to be safe.
       refresh(true);
