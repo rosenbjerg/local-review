@@ -21,6 +21,8 @@ import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 import { useOccurrenceHighlight } from "./useOccurrenceHighlight";
 import { usePanelResize } from "./usePanelResize";
 import { useReview } from "./useReview";
+import type { CommentFilter } from "./commentFilter";
+import { NO_FILTER, authorsOf, filterComments } from "./commentFilter";
 import type { CommentSort } from "./commentSort";
 import { isCommentSort, sortComments } from "./commentSort";
 import { commentsFor, groupByPath } from "./commentsByPath";
@@ -83,6 +85,8 @@ export default function App() {
     const stored = getString(LS.commentSort);
     return isCommentSort(stored) ? stored : "file";
   });
+  // Session state, unlike the sort — see commentFilter.ts.
+  const [commentFilter, setCommentFilter] = useState<CommentFilter>(NO_FILTER);
   const diffColRef = useRef<HTMLDivElement>(null);
   const explorerSearchRef = useRef<HTMLInputElement>(null);
   // Which file the tree highlights: the scroll-spy sets it as you scroll, clicks/nav
@@ -118,6 +122,12 @@ export default function App() {
       ? `${repo} · ${review.headRef} → ${review.baseRef} — local-review`
       : "local-review";
   }, [review, repo]);
+
+  // A filter belongs to the review it was set on — carried into another one it
+  // would open a pane that silently hides that review's comments.
+  useEffect(() => {
+    setCommentFilter(NO_FILTER);
+  }, [review?.id]);
 
   // Clear pure view/nav state on a repo switch; useReview resets its own data.
   useEffect(() => {
@@ -203,12 +213,13 @@ export default function App() {
   // change compares equal and skips the re-render (see DiffView's memo boundary).
   const commentsByPath = useMemo(() => groupByPath(comments), [comments]);
 
-  // The comments panel and the n/p keyboard nav share one ordering, so stepping
-  // through comments always follows what the pane shows.
+  // The comments panel and the n/p keyboard nav share one ordering *and* one
+  // filter, so stepping through comments always follows what the pane shows.
   const sortedComments = useMemo(
-    () => sortComments(comments, commentSort, orderedFilePaths),
-    [comments, commentSort, orderedFilePaths]
+    () => sortComments(filterComments(comments, commentFilter), commentSort, orderedFilePaths),
+    [comments, commentFilter, commentSort, orderedFilePaths]
   );
+  const commentAuthors = useMemo(() => authorsOf(comments), [comments]);
   const orderedCommentIds = useMemo(() => sortedComments.map((c) => c.id), [sortedComments]);
 
   function moveFile(delta: number) {
@@ -447,11 +458,15 @@ export default function App() {
             <ReviewSummary summary={review.summary} onSave={setSummary} />
             <CommentsPanel
               comments={sortedComments}
+              total={comments.length}
               sort={commentSort}
               onSortChange={(v) => {
                 setCommentSort(v);
                 setString(LS.commentSort, v);
               }}
+              filter={commentFilter}
+              onFilterChange={setCommentFilter}
+              authors={commentAuthors}
               onJump={jumpTo}
               onDelete={handleDelete}
             />

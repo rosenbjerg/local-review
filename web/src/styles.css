@@ -1355,6 +1355,28 @@ textarea:focus-visible {
   font-size: 14px;
   margin: 0;
 }
+.comments-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.comments-filter select {
+  font-size: 12px;
+  padding: 2px 4px;
+}
+.filter-clear {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-size: 12px;
+  color: var(--accent);
+  cursor: pointer;
+}
+.filter-clear:hover {
+  text-decoration: underline;
+}
 .comment-file-group {
   margin-bottom: 16px;
 }

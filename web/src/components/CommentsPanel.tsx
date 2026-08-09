@@ -1,3 +1,5 @@
+import type { CommentFilter, TypeFilter } from "../commentFilter";
+import { ANY, NO_FILTER, STATUS_FILTERS, TYPE_FILTERS, isFiltered } from "../commentFilter";
 import type { CommentSort } from "../commentSort";
 import { COMMENT_SORTS, sortTimestamp } from "../commentSort";
 import type { Comment } from "../types";
@@ -5,9 +7,14 @@ import { effectivePath } from "../types";
 import { CommentPreview } from "./CommentPreview";
 
 interface Props {
+  // Already filtered and sorted — the same list the n/p shortcuts step through.
   comments: Comment[];
+  total: number;
   sort: CommentSort;
   onSortChange: (sort: CommentSort) => void;
+  filter: CommentFilter;
+  onFilterChange: (filter: CommentFilter) => void;
+  authors: string[];
   onJump: (id: number) => void;
   onDelete: (id: number) => void;
 }
@@ -25,14 +32,30 @@ function fileRuns(comments: Comment[]): { path: string; items: Comment[] }[] {
   return runs;
 }
 
-export function CommentsPanel({ comments, sort, onSortChange, onJump, onDelete }: Props) {
+export function CommentsPanel({
+  comments,
+  total,
+  sort,
+  onSortChange,
+  filter,
+  onFilterChange,
+  authors,
+  onJump,
+  onDelete,
+}: Props) {
+  const narrowed = isFiltered(filter);
+  // A filtered-on author whose last thread just went away still needs its option,
+  // or the select would sit blank on a filter that is quietly hiding everything.
+  const authorOptions =
+    filter.author === ANY || authors.includes(filter.author) ? authors : [...authors, filter.author];
   return (
     <div className="comments-panel">
       <div className="comments-panel-header">
         <h2>
-          Comments <span className="muted">({comments.length})</span>
+          Comments{" "}
+          <span className="muted">({narrowed ? `${comments.length} of ${total}` : total})</span>
         </h2>
-        {comments.length > 0 && (
+        {total > 0 && (
           <select
             aria-label="Sort comments"
             value={sort}
@@ -46,8 +69,56 @@ export function CommentsPanel({ comments, sort, onSortChange, onJump, onDelete }
           </select>
         )}
       </div>
-      {comments.length === 0 && (
-        <p className="muted">Click a line number in the diff to add a comment.</p>
+      {total > 0 && (
+        <div className="comments-filter">
+          <select
+            aria-label="Filter by status"
+            value={filter.status}
+            onChange={(e) => onFilterChange({ ...filter, status: e.target.value as CommentFilter["status"] })}
+          >
+            {STATUS_FILTERS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Filter by type"
+            value={filter.type}
+            onChange={(e) => onFilterChange({ ...filter, type: e.target.value as TypeFilter })}
+          >
+            {TYPE_FILTERS.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+          {/* One author is every author — the choice only means something once a
+              second identity (an agent) has commented. */}
+          {authorOptions.length > 1 && (
+            <select
+              aria-label="Filter by author"
+              value={filter.author}
+              onChange={(e) => onFilterChange({ ...filter, author: e.target.value })}
+            >
+              <option value={ANY}>Any author</option>
+              {authorOptions.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+          )}
+          {narrowed && (
+            <button className="filter-clear" onClick={() => onFilterChange(NO_FILTER)}>
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+      {total === 0 && <p className="muted">Click a line number in the diff to add a comment.</p>}
+      {total > 0 && comments.length === 0 && (
+        <p className="muted">No comments match the filter.</p>
       )}
       {fileRuns(comments).map((run) => (
         <div key={run.path} className="comment-file-group">

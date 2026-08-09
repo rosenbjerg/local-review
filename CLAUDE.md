@@ -54,6 +54,7 @@ web/src/
   mermaid.ts             ```mermaid fences → SVG; lazy-loaded, runs after highlighting
   time.ts                relative/absolute timestamp + edited-marker helpers
   commentSort.ts         the comments-pane sort orders (file / started / activity)
+  commentFilter.ts       the comments-pane filters (status / type / author) + the authors present
   commentsByPath.ts      group comments per file card + the by-value compare its memo uses
   wordDiff.ts            intra-line diff: token LCS → changed char ranges + the segment splitter
   hunkGaps.ts            the unchanged regions a hunk view hides: their line ranges + how much is revealed
@@ -70,7 +71,7 @@ web/src/
     LazyFile.tsx         viewport lazy-mount wrapper (IntersectionObserver) + scroll anchor
     FindBar.tsx          occurrence-highlight bar above the diff: term, n-of-N, prev/next
     CommentThread.tsx    a comment thread: root comment (edit/delete) + replies + reply composer
-    CommentsPanel.tsx    right pane: cross-file comment overview, sort select, jump-to
+    CommentsPanel.tsx    right pane: cross-file comment overview, sort + filter selects, jump-to
     ReviewSummary.tsx    the review's free-text summary above the comments pane (view/edit)
     CommentComposer.tsx  type select + body textarea (reused for new/edit)
     MarkdownView.tsx     rendered (as-published) view of a .md file + file-level comments
@@ -527,6 +528,19 @@ web/src/
   count as activity, since `SetCommentResolved` deliberately doesn't bump
   `updated_at`. The time sorts show the sorted-on timestamp on each item so the
   order explains itself. Purely client-side over data the pane already has.
+- **The comments pane is filterable** (`web/src/commentFilter.ts`) on three axes —
+  status (open / resolved / outdated), `type`, and the thread's root `author`. With
+  three identities writing comments (see *author*, above), "only what `review-agent`
+  found" is the view a sort can't give. Like the sort it feeds **both** the pane and
+  `orderedCommentIds`, so `n`/`p` steps what's on screen; unlike the sort it is
+  **not persisted** — a filter remembered from a previous session would open the
+  pane already hiding comments — and it **resets when `review.id` changes**, since a
+  filter set on one review would silently hide another's. Author choices come from
+  the review's own comments (`authorsOf`), because authors are open-ended: the API
+  default is `agent`, but a client can send any string. The pane's count reads
+  `N of M` while narrowed, and everything else that counts comments (the explorer
+  badges, the export button) deliberately ignores the filter — those describe the
+  review, not the pane. Filtering never touches the store or the export.
 - **Keyboard shortcuts** live in one window `keydown` effect in
   `useKeyboardShortcuts.ts`: `j`/`k` next/prev file, `n`/`p` next/prev comment (pane
   order via `orderedCommentIds`, stepping from `activeComment`), `v` mark the
