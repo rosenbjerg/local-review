@@ -58,6 +58,7 @@ web/src/
   commentsByPath.ts      group comments per file card + the by-value compare its memo uses
   wordDiff.ts            intra-line diff: token LCS → changed char ranges + the segment splitter
   hunkGaps.ts            the unchanged regions a hunk view hides: their line ranges + how much is revealed
+  diffStats.ts           per-file / whole-review added+removed line counts, off the hunks
   occurrences.ts         occurrence matching: term validation, whole-word vs substring, span→text-node mapping
   useOccurrenceHighlight.ts  select a word → light up its other occurrences in that file
   useUnseenActivity.ts   count agent comments/replies that arrived while the tab was hidden
@@ -65,7 +66,7 @@ web/src/
   storage.ts             typed, error-swallowing localStorage helpers + the lr.* keys
   components/
     FileExplorer.tsx     left pane: hierarchical file tree, collapse, reviewed toggle,
-                         reviewed-progress bar (the head's bottom edge)
+                         per-file +/- counts, reviewed-progress bar (the head's bottom edge)
     DiffView.tsx         center: per-file diff, syntax highlight, inline threads/composer,
                          drag-select ranges, Changed/Full toggle, expandable hidden regions,
                          auto-collapse large files
@@ -83,7 +84,8 @@ web/src/
     ViewToggle.tsx       data-driven segmented control (Changed/Full, Text/Image,
                          Code/Rendered, Preview/Raw)
     CopyButton.tsx       clipboard button with idle/ok/fail state (lazy text builder)
-    (small shared UI primitives: Chevron, CommentCount, AnchorBadge, MetaTimestamps,
+    (small shared UI primitives: Chevron, CommentCount, DiffStatBadge, AnchorBadge,
+     MetaTimestamps,
      Markdown — markdown-it + async Shiki code-fence highlight, then async mermaid
      render; `softBreaks` picks comment (GFM <br>) vs document (CommonMark)
      newline handling)
@@ -489,8 +491,13 @@ web/src/
   and a syntax-token `span` per line. That is deliberate (unmounting would refetch
   and re-tokenize on every pass), and it makes any per-frame or per-render work
   that scales with the mounted set degrade the further into a review you get,
-  which reads as "it gets slow around file 70". Four things hold that line, and
+  which reads as "it gets slow around file 70". Five things hold that line, and
   each is easy to undo by accident:
+  - **Per-file work in the explorer stays behind a memo.** The scroll-spy sets
+    `selectedFile` as you scroll, which re-renders `FileExplorer` (unmemoized) —
+    so anything it computes per file runs per scroll frame. `statByFile`
+    (`diffStats.ts`) walks every hunk line in the review, hence the `useMemo` on
+    `files`; add a second such computation without one and it lands in that loop.
   - **The scroll-spy stays off the diff's DOM.** `useActiveFile` scans
     `root.children` for the `#file-<path>` anchors, which are always direct
     children of `.diff-column`. A `[id^="file-"]` subtree query (what it used to

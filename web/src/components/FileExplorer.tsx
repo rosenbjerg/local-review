@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { fileStat } from "../diffStats";
 import type { Comment, FileDiff } from "../types";
 import { Chevron } from "./Chevron";
+import { DiffStatBadge } from "./DiffStatBadge";
 
 interface Props {
   files: FileDiff[];
@@ -137,6 +139,13 @@ export function FileExplorer({
     activeRowRef.current?.scrollIntoView({ block: "nearest" });
   }, [selected]);
 
+  // Held behind a memo on purpose: the scroll spy re-renders this component on
+  // every scroll frame, and counting the lines is O(the whole diff).
+  const statByFile = useMemo(
+    () => new Map(files.map((f) => [f.newPath || f.oldPath, fileStat(f)])),
+    [files]
+  );
+
   const countByFile = new Map<string, number>();
   for (const c of comments) {
     if (c.resolved) continue;
@@ -229,6 +238,7 @@ export function FileExplorer({
       } else {
         const isReviewed = reviewed.has(n.path);
         const count = countByFile.get(n.path) ?? 0;
+        const stat = statByFile.get(n.path);
         out.push(
           <div
             key={`f:${n.path}`}
@@ -251,6 +261,7 @@ export function FileExplorer({
               </span>
               <span className="fname">{highlightMatch(n.name, q)}</span>
             </button>
+            {stat && <DiffStatBadge stat={stat} />}
             {count > 0 && <span className="explorer-count">{count}</span>}
           </div>
         );

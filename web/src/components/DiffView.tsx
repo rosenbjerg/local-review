@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { ApiError, api } from "../api";
 import { sameComments } from "../commentsByPath";
+import { fileStat } from "../diffStats";
 import { EXPAND_STEP, gapView, hunkGaps, type Gap, type Reveal } from "../hunkGaps";
 import { hunkWordRanges, splitPieces, type Segment } from "../wordDiff";
 import { langForPath, tokenize, type Token } from "../highlight";
@@ -103,6 +104,7 @@ export const DiffView = memo(function DiffView({
     () => file.hunks.reduce((n, h) => n + h.lines.length, 0),
     [file]
   );
+  const stat = useMemo(() => fileStat(file), [file]);
   const isLarge = changedLines > LARGE_FILE_LINES;
 
   // A synthetic "unchanged" file (opened to comment on, no diff hunks) has
@@ -627,6 +629,7 @@ export const DiffView = memo(function DiffView({
       <FileHeader
         status={file.status}
         path={path}
+        stat={stat}
         collapsed={collapsed}
         onToggleCollapsed={() => setCollapsed((c) => !c)}
         openCount={openCount}

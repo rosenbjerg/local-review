@@ -735,6 +735,21 @@ textarea:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* The +N -M line counts (file header, explorer row, review total). */
+.diff-stat {
+  flex: none;
+  display: inline-flex;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.stat-add {
+  color: var(--success);
+}
+.stat-del {
+  color: var(--danger);
+}
 .explorer-count {
   flex: none;
   font-size: 11px;

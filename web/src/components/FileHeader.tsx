@@ -1,11 +1,14 @@
+import type { DiffStat } from "../diffStats";
 import type { FileStatus } from "../types";
 import { Chevron } from "./Chevron";
 import { CommentCount } from "./CommentCount";
+import { DiffStatBadge } from "./DiffStatBadge";
 import { ViewToggle } from "./ViewToggle";
 
 interface Props {
   status: FileStatus;
   path: string;
+  stat: DiffStat;
   collapsed: boolean;
   onToggleCollapsed: () => void;
   openCount: number;
@@ -22,12 +25,13 @@ interface Props {
   onSwitchMode: (mode: "changed" | "full") => void;
 }
 
-// The file card's header row: collapse toggle, status + path, comment count,
-// reviewed checkbox, and the SVG (Text/Image), markdown (Code/Rendered) and
-// diff (Changed/Full) toggles.
+// The file card's header row: collapse toggle, status + path, +/- line counts,
+// comment count, reviewed checkbox, and the SVG (Text/Image), markdown
+// (Code/Rendered) and diff (Changed/Full) toggles.
 export function FileHeader({
   status,
   path,
+  stat,
   collapsed,
   onToggleCollapsed,
   openCount,
@@ -58,6 +62,7 @@ export function FileHeader({
       <span className="file-path" title={path}>
         {path}
       </span>
+      <DiffStatBadge stat={stat} />
       {openCount > 0 && <CommentCount n={openCount} />}
       <label className="viewed-check" title="Mark file as reviewed">
         <input type="checkbox" checked={reviewed} onChange={(e) => onToggleReviewed(e.target.checked)} />

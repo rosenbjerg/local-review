@@ -27,6 +27,7 @@ import { NO_FILTER, authorsOf, filterComments } from "./commentFilter";
 import type { CommentSort } from "./commentSort";
 import { isCommentSort, sortComments } from "./commentSort";
 import { commentsFor, groupByPath } from "./commentsByPath";
+import { totalStat } from "./diffStats";
 import { nextUnreviewed } from "./reviewNav";
 import type { FileDiff } from "./types";
 import { effectivePath } from "./types";
@@ -201,6 +202,10 @@ export default function App() {
     return [...files, ...synthetic];
   }, [files, openedFiles, comments]);
 
+  // The review's own totals, off the real diff — the synthetic cards in `allFiles`
+  // have no hunks and nothing to count.
+  const diffStat = useMemo(() => totalStat(files), [files]);
+
   const orderedDiffFiles = useMemo(() => orderedFiles(allFiles), [allFiles]);
   const orderedFilePaths = useMemo(
     () => orderedDiffFiles.map((f) => f.newPath || f.oldPath),
@@ -327,6 +332,7 @@ export default function App() {
         status={{
           review,
           shortSha,
+          stat: diffStat,
           openCommentCount: comments.filter((c) => !c.resolved).length,
           canReset: comments.length > 0 || reviewedFiles.size > 0 || !!review?.summary,
         }}

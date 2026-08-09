@@ -1,4 +1,6 @@
 import { Combobox, type ComboOption } from "./Combobox";
+import { DiffStatBadge } from "./DiffStatBadge";
+import type { DiffStat } from "../diffStats";
 import type { Review } from "../types";
 
 // Repo/head/base pickers + the diff-view controls + reload.
@@ -37,6 +39,7 @@ export interface TopBarActions {
 export interface TopBarStatus {
   review: Review | null;
   shortSha?: string;
+  stat: DiffStat;
   openCommentCount: number;
   canReset: boolean;
 }
@@ -146,6 +149,7 @@ export function TopBar({ selection: s, actions, status }: Props) {
             {status.shortSha}
             {viewLabel(s) && ` · ${viewLabel(s)}`}
           </span>
+          <DiffStatBadge stat={status.stat} title="Lines added and removed in this diff" />
           <button
             className="btn"
             onClick={actions.onShowPrompts}
