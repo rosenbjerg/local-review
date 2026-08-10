@@ -2,7 +2,26 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { type ComboOption } from "./components/Combobox";
 import type { Branch, Comment, Commit, DiffOpts, FileDiff, Review } from "./types";
-import { LS, getString, readBasePref } from "./storage";
+import { LS, getString, readBasePref, readDiffViewPref, writeDiffViewPref } from "./storage";
+
+// A ping refetches whether or not anything the client holds actually changed —
+// the filesystem poller fires on any on-disk edit, and every comment/reply/
+// reviewed-file mutation pings all tabs. Parsed JSON is a fresh object graph
+// every time, so handing it straight to setState would replace every value's
+// identity and re-render every mounted file card for a ping that changed
+// nothing. Keeping the previous value when the new one is structurally the same
+// is what keeps that cost proportional to real changes. The serialize compares
+// only small payloads (review metadata, comments, branches, commits); the diff's
+// file list is deliberately left out, since a `diff` ping means the git state
+// moved and stringifying a large diff would cost more than it saves.
+function keepIfSame<T>(prev: T, next: T): T {
+  return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+}
+
+function keepIfSameSet(prev: Set<string>, next: string[]): Set<string> {
+  if (prev.size === next.length && next.every((p) => prev.has(p))) return prev;
+  return new Set(next);
+}
 
 // The review data layer: repo/branch selection, the diff-scope view toggle, and
 // the review lifecycle (create, SSE refetch, diff refetch, reviewed-file marks).
@@ -21,9 +40,11 @@ export function useReview() {
   const [baseSha, setBaseSha] = useState("");
   const [comments, setComments] = useState<Comment[]>([]);
   const [reviewedFiles, setReviewedFiles] = useState<Set<string>>(new Set());
-  // The diff view — two orthogonal transient axes. `from` is the before side:
-  // "all" (the whole branch) or a picked commit sha. `uncommitted` moves the after
-  // side to the working tree/index; `unstaged` (default) keeps unstaged edits in.
+  // The diff view — two orthogonal axes. `from` is the before side: "all" (the whole
+  // branch) or a picked commit sha. `uncommitted` moves the after side to the working
+  // tree/index; `unstaged` (default) keeps unstaged edits in. That pair is remembered
+  // per repo (restored on the branch load below); `from` isn't, since a picked sha
+  // belongs to one head's history.
   const [from, setFrom] = useState("all");
   const [uncommitted, setUncommitted] = useState(false);
   const [unstaged, setUnstaged] = useState(true);
@@ -91,6 +112,15 @@ export function useReview() {
         const firstLocal = r.branches.find((b) => !b.isRemote);
         // Head is a local-only picker, so never default it to a remote.
         setHead(current?.name ?? firstLocal?.name ?? "");
+        // Restore the remembered view axes here rather than above, in the same update
+        // as `head`: the guard effect below clears `uncommitted` whenever head isn't
+        // the checked-out branch, and while branches are loading it never is. `current`
+        // being set is exactly what makes the defaulted head the checked-out one.
+        const view = readDiffViewPref(repo);
+        if (view.uncommitted && current) {
+          setUncommitted(true);
+          setUnstaged(view.unstaged);
+        }
         const savedBase = readBasePref(repo);
         if (savedBase === "" || r.branches.some((b) => b.name === savedBase)) {
           setBase(savedBase);
@@ -112,6 +142,19 @@ export function useReview() {
   useEffect(() => {
     if (!uncommitted) setUnstaged(true);
   }, [uncommitted]);
+
+  // Persist from the toggles, not from an effect on the state: the two effects above
+  // also move these values, and a forced-off (head left the checked-out branch) or a
+  // reset must not overwrite what the reviewer actually chose for this repo.
+  function changeUncommitted(v: boolean) {
+    setUncommitted(v);
+    writeDiffViewPref(repo, { uncommitted: v, unstaged });
+  }
+
+  function changeUnstaged(v: boolean) {
+    setUnstaged(v);
+    writeDiffViewPref(repo, { uncommitted, unstaged: v });
+  }
 
   // Change head via `changeHead` (below), which resets `from` in the same update —
   // a picked sha belongs to the old head's history. This effect (re)loads the "from"
@@ -185,6 +228,11 @@ export function useReview() {
       }
       inFlight = true;
       try {
+        // Snapshot the selection this read belongs to: a ping's git state is only
+        // valid for the axes it was fetched under, and an axis toggle mid-flight
+        // (which keeps review.id, so `cancelled` never fires) would otherwise land
+        // hunks from one side while the view reads its file content from another.
+        const seq = reqSeq.current;
         const p = diffParams.current;
         // A `diff` ping means the repo's git state moved (commit, checkout, edit), so
         // also refresh the branch list (keeps headIsCurrent honest after an out-of-band
@@ -204,19 +252,23 @@ export function useReview() {
             : Promise.resolve(null),
         ]);
         if (!cancelled) {
-          setReview(rev);
-          setComments(rev.comments ?? []);
-          setReviewedFiles(new Set(rev.reviewedFiles ?? []));
-          if (d) {
-            setFiles(d.files ?? []);
-            setBaseSha(d.base ?? "");
-          }
-          if (br) setBranches(br.branches);
-          if (cm) {
-            const list = cm.commits ?? [];
-            setCommits(list);
-            // A rebased/amended-away picked `from` would 400 the next diff — fall back.
-            if (p.from !== "all" && !list.some((x) => x.sha === p.from)) setFrom("all");
+          // The review is fetched by id, so it stays valid across an axis toggle —
+          // gating it on seq would drop comment/reviewed updates the ping came for.
+          setReview((prev) => keepIfSame(prev, rev));
+          setComments((prev) => keepIfSame(prev, rev.comments ?? []));
+          setReviewedFiles((prev) => keepIfSameSet(prev, rev.reviewedFiles ?? []));
+          if (reqSeq.current === seq) {
+            if (d) {
+              setFiles(d.files ?? []);
+              setBaseSha(d.base ?? "");
+            }
+            if (br) setBranches((prev) => keepIfSame(prev, br.branches));
+            if (cm) {
+              const list = cm.commits ?? [];
+              setCommits((prev) => keepIfSame(prev, list));
+              // A rebased/amended-away picked `from` would 400 the next diff — fall back.
+              if (p.from !== "all" && !list.some((x) => x.sha === p.from)) setFrom("all");
+            }
           }
         }
       } catch {
@@ -422,9 +474,9 @@ export function useReview() {
     from,
     setFrom,
     uncommitted,
-    setUncommitted,
+    changeUncommitted,
     unstaged,
-    setUnstaged,
+    changeUnstaged,
     loading,
     error,
     setError,

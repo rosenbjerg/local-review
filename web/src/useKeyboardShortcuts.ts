@@ -17,6 +17,11 @@ export interface Shortcuts {
   onOpenHelp: () => void;
   onCloseHelp: () => void;
   onFocusSearch: () => void;
+  // An occurrence highlight is live, so Enter steps through its matches.
+  hasHighlight: boolean;
+  onNextMatch: () => void;
+  onPrevMatch: () => void;
+  onDismissHighlight: () => void;
 }
 
 // One window keydown listener for the app's single-key shortcuts. A ref holds the
@@ -84,6 +89,20 @@ export function useKeyboardShortcuts(opts: Shortcuts) {
         case "/":
           e.preventDefault();
           o.onFocusSearch();
+          break;
+        // Only claimed while a highlight is live, and never from a control that
+        // Enter would otherwise activate.
+        case "Enter":
+          if (o.hasHighlight && t?.tagName !== "BUTTON" && t?.tagName !== "A") {
+            e.preventDefault();
+            if (e.shiftKey) o.onPrevMatch();
+            else o.onNextMatch();
+          }
+          break;
+        // Not prevented: with no modal open Escape is free, but the browser may
+        // still want it (stopping a load).
+        case "Escape":
+          o.onDismissHighlight();
           break;
       }
     };

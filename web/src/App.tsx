@@ -6,6 +6,7 @@ import { CommentsPanel } from "./components/CommentsPanel";
 import { DiffView, LARGE_FILE_LINES } from "./components/DiffView";
 import { ExportModal } from "./components/ExportModal";
 import { FileExplorer, orderedFiles } from "./components/FileExplorer";
+import { FindBar } from "./components/FindBar";
 import { HelpModal } from "./components/HelpModal";
 import { LazyFile } from "./components/LazyFile";
 import { ResetConfirmModal } from "./components/ResetConfirmModal";
@@ -16,11 +17,15 @@ import { useCommentActions } from "./useCommentActions";
 import { useCommentRefs } from "./useCommentRefs";
 import { useJump } from "./useJump";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
+import { useOccurrenceHighlight } from "./useOccurrenceHighlight";
 import { usePanelResize } from "./usePanelResize";
 import { useReview } from "./useReview";
+import type { CommentSort } from "./commentSort";
+import { isCommentSort, sortComments } from "./commentSort";
+import { commentsFor, groupByPath } from "./commentsByPath";
 import type { FileDiff } from "./types";
-import { effectiveLines, effectivePath } from "./types";
-import { LS, setString, writeBasePref } from "./storage";
+import { effectivePath } from "./types";
+import { LS, getString, setString, writeBasePref } from "./storage";
 import { clamp } from "./util";
 
 export default function App() {
@@ -42,9 +47,9 @@ export default function App() {
     from,
     setFrom,
     uncommitted,
-    setUncommitted,
+    changeUncommitted,
     unstaged,
-    setUnstaged,
+    changeUnstaged,
     headIsCurrent,
     loading,
     error,
@@ -71,6 +76,10 @@ export default function App() {
   const [showPrompts, setShowPrompts] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const [commentSort, setCommentSort] = useState<CommentSort>(() => {
+    const stored = getString(LS.commentSort);
+    return isCommentSort(stored) ? stored : "file";
+  });
   const diffColRef = useRef<HTMLDivElement>(null);
   const explorerSearchRef = useRef<HTMLInputElement>(null);
   // Which file the tree highlights: the scroll-spy sets it as you scroll, clicks/nav
@@ -87,6 +96,8 @@ export default function App() {
     setSelectedFile,
     onProgrammaticScroll: suppressActiveFile,
   });
+  const [showFullSignal, setShowFullSignal] = useState<{ path: string; n: number } | null>(null);
+  const highlight = useOccurrenceHighlight(!!review, diffColRef);
   // `#<id>` references in comment bodies: click jumps, hover/focus previews.
   const refHover = useCommentRefs(jumpTo);
   const { commentActions, handleAddComment, handleDelete } = useCommentActions({
@@ -112,6 +123,11 @@ export default function App() {
     setOpenedFiles([]);
     resetJump();
   }, [repo]);
+
+  function showFullFile() {
+    const path = highlight.path;
+    if (path) setShowFullSignal((s) => ({ path, n: (s?.n ?? 0) + 1 }));
+  }
 
   function requestReset() {
     if (!review) return;
@@ -180,23 +196,17 @@ export default function App() {
     () => new Set(commentIdKey ? commentIdKey.split(",").map(Number) : []),
     [commentIdKey]
   );
+  // Each file card gets only its own comments, so a card whose comments didn't
+  // change compares equal and skips the re-render (see DiffView's memo boundary).
+  const commentsByPath = useMemo(() => groupByPath(comments), [comments]);
 
-  const orderedCommentIds = useMemo(() => {
-    const ids: number[] = [];
-    const seen = new Set<number>();
-    for (const f of orderedDiffFiles) {
-      const p = f.newPath || f.oldPath;
-      const inFile = comments
-        .filter((c) => effectivePath(c) === p)
-        .sort((a, b) => effectiveLines(a).start - effectiveLines(b).start);
-      for (const c of inFile) {
-        ids.push(c.id);
-        seen.add(c.id);
-      }
-    }
-    for (const c of comments) if (!seen.has(c.id)) ids.push(c.id);
-    return ids;
-  }, [orderedDiffFiles, comments]);
+  // The comments panel and the n/p keyboard nav share one ordering, so stepping
+  // through comments always follows what the pane shows.
+  const sortedComments = useMemo(
+    () => sortComments(comments, commentSort, orderedFilePaths),
+    [comments, commentSort, orderedFilePaths]
+  );
+  const orderedCommentIds = useMemo(() => sortedComments.map((c) => c.id), [sortedComments]);
 
   function moveFile(delta: number) {
     const fileList = orderedDiffFiles.map((f) => f.newPath || f.oldPath);
@@ -232,6 +242,10 @@ export default function App() {
     onOpenHelp: () => setShowHelp(true),
     onCloseHelp: () => setShowHelp(false),
     onFocusSearch: () => explorerSearchRef.current?.focus(),
+    hasHighlight: highlight.term !== null,
+    onNextMatch: highlight.next,
+    onPrevMatch: highlight.prev,
+    onDismissHighlight: highlight.clear,
   });
 
   return (
@@ -259,9 +273,9 @@ export default function App() {
           onFromChange: setFrom,
           headIsCurrent,
           uncommitted,
-          onUncommittedChange: setUncommitted,
+          onUncommittedChange: changeUncommitted,
           unstaged,
-          onUnstagedChange: setUnstaged,
+          onUnstagedChange: changeUnstaged,
           loading,
           onReload: startReview,
         }}
@@ -339,46 +353,61 @@ export default function App() {
             onMouseDown={(e) => startResize(e, "left")}
             onKeyDown={(e) => onResizeKey(e, "left")}
           />
-          <div className="diff-column" ref={diffColRef}>
-            {allFiles.length === 0 && loading && (
-              <div className="empty">
-                <span className="spinner" aria-hidden="true" />
-                Loading diff…
-              </div>
+          <div className="diff-pane">
+            <div className="diff-column" ref={diffColRef}>
+              {allFiles.length === 0 && loading && (
+                <div className="empty">
+                  <span className="spinner" aria-hidden="true" />
+                  Loading diff…
+                </div>
+              )}
+              {allFiles.length === 0 && !loading && (
+                <div className="empty">No changes between base and head.</div>
+              )}
+              {orderedDiffFiles.map((f) => {
+                const path = f.newPath || f.oldPath;
+                return (
+                  <LazyFile
+                    key={path}
+                    anchorId={`file-${path}`}
+                    label={path}
+                    estHeight={estFileHeight(f)}
+                    rootRef={diffColRef}
+                  >
+                    <DiffView
+                      file={f}
+                      repo={repo}
+                      headRef={review.headRef}
+                      baseRef={baseSha}
+                      worktree={worktreeSide}
+                      indexed={indexedSide}
+                      comments={commentsFor(commentsByPath, path)}
+                      onAddComment={handleAddComment}
+                      actions={commentActions}
+                      reviewed={reviewedFiles.has(path)}
+                      onToggleReviewed={toggleReviewed}
+                      expandTarget={expandTarget}
+                      expandComment={expandComment}
+                      showFullSignal={showFullSignal}
+                      activeComment={activeComment}
+                      commentIds={commentIds}
+                    />
+                  </LazyFile>
+                );
+              })}
+            </div>
+            {highlight.term && (
+              <FindBar
+                term={highlight.term}
+                count={highlight.count}
+                index={highlight.index}
+                changedOnly={highlight.viewMode === "changed"}
+                onNext={highlight.next}
+                onPrev={highlight.prev}
+                onShowFullFile={showFullFile}
+                onClear={highlight.clear}
+              />
             )}
-            {allFiles.length === 0 && !loading && (
-              <div className="empty">No changes between base and head.</div>
-            )}
-            {orderedDiffFiles.map((f) => {
-              const path = f.newPath || f.oldPath;
-              return (
-                <LazyFile
-                  key={path}
-                  anchorId={`file-${path}`}
-                  label={path}
-                  estHeight={estFileHeight(f)}
-                  rootRef={diffColRef}
-                >
-                  <DiffView
-                    file={f}
-                    repo={repo}
-                    headRef={review.headRef}
-                    baseRef={baseSha}
-                    worktree={worktreeSide}
-                    indexed={indexedSide}
-                    comments={comments.filter((c) => effectivePath(c) === path)}
-                    onAddComment={handleAddComment}
-                    actions={commentActions}
-                    reviewed={reviewedFiles.has(path)}
-                    onToggleReviewed={(r) => toggleReviewed(path, r)}
-                    expandTarget={expandTarget}
-                    expandComment={expandComment}
-                    activeComment={activeComment}
-                    commentIds={commentIds}
-                  />
-                </LazyFile>
-              );
-            })}
           </div>
           <div
             className="resizer"
@@ -394,8 +423,12 @@ export default function App() {
           />
           <aside className="side-column">
             <CommentsPanel
-              comments={comments}
-              fileOrder={orderedFilePaths}
+              comments={sortedComments}
+              sort={commentSort}
+              onSortChange={(v) => {
+                setCommentSort(v);
+                setString(LS.commentSort, v);
+              }}
               onJump={jumpTo}
               onDelete={handleDelete}
             />

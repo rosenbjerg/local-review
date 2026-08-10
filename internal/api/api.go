@@ -294,55 +294,84 @@ func (s *Server) handleCommits(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"commits": commits})
 }
 
-func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (content, path string, ok bool) {
+// readFileContent reads path from the side the query asks for. `fromWorktree`
+// reports the side the content *actually* came from, which a ref read can't promise:
+// the ref may lack a file that's on disk, and the caller has to say so rather than
+// pass the on-disk copy off as the ref's content — that content is the new side of a
+// diff the reader is comparing against, so an unlabelled substitution reads as the
+// committed file and its lines look wrong for no visible reason.
+func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (content, path string, fromWorktree, ok bool) {
 	repo, ok := s.repoParam(w, r)
 	if !ok {
-		return "", "", false
+		return "", "", false, false
 	}
 	path = r.URL.Query().Get("path")
-	if path == "" {
-		httpError(w, http.StatusBadRequest, errString("path is required"))
-		return "", "", false
+	if err := validPath(path); err != nil {
+		httpError(w, http.StatusBadRequest, err)
+		return "", "", false, false
 	}
 	var err error
+	var side string
 	if r.URL.Query().Get("indexed") == "true" {
 		// The staged (index) new side: git show :path.
 		content, err = repo.IndexFile(path)
+		side = "the git index"
 	} else if r.URL.Query().Get("worktree") == "true" {
 		// worktree reads the on-disk new side, which git show can't reach.
 		content, err = repo.WorktreeFile(path)
+		side = "the working tree"
+		fromWorktree = true
 	} else {
 		ref := r.URL.Query().Get("ref")
 		if err = validRef(ref); err != nil {
 			httpError(w, http.StatusBadRequest, err)
-			return "", "", false
+			return "", "", false, false
 		}
 		content, err = repo.FileContent(ref, path)
-		if err != nil {
-			// The ref may lack the file (uncommitted new file, or a stale
-			// mid-mode-switch request); serve the on-disk copy instead of failing.
+		// Only *absence* falls back: the ref may legitimately lack a file that is on
+		// disk (an uncommitted new file, or a stale mid-mode-switch request). A real
+		// git failure must not take this path — answering it with the working-tree
+		// copy would serve uncommitted content as if it were the ref's, against a
+		// diff computed from the ref, and the view would render the wrong lines with
+		// nothing to show for it.
+		if errors.Is(err, git.ErrNotFound) {
 			if wt, wtErr := repo.WorktreeFile(path); wtErr == nil {
-				content, err = wt, nil
+				content, err, fromWorktree = wt, nil, true
 			}
 		}
+		side = ref
 	}
 	if err != nil {
+		// A path can outlive the file it names — a comment anchored before a rename
+		// or delete still asks for it — so absence is a 404 about the file, not a
+		// server fault dressed up as a raw git error.
+		if errors.Is(err, git.ErrNotFound) {
+			httpError(w, http.StatusNotFound, fmt.Errorf("%s does not exist in %s", path, side))
+			return "", "", false, false
+		}
 		httpError(w, http.StatusInternalServerError, err)
-		return "", "", false
+		return "", "", false, false
 	}
-	return content, path, true
+	return content, path, fromWorktree, true
 }
 
+// The response's "ref" echoes what was asked for; "worktree" says where the content
+// came from. They differ when the ref lacked the file and the on-disk copy stood in.
 func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
-	content, path, ok := s.readFileContent(w, r)
+	content, path, fromWorktree, ok := s.readFileContent(w, r)
 	if !ok {
 		return
 	}
-	writeJSON(w, map[string]any{"path": path, "ref": r.URL.Query().Get("ref"), "content": content})
+	writeJSON(w, map[string]any{
+		"path":     path,
+		"ref":      r.URL.Query().Get("ref"),
+		"content":  content,
+		"worktree": fromWorktree,
+	})
 }
 
 func (s *Server) handleBlob(w http.ResponseWriter, r *http.Request) {
-	content, path, ok := s.readFileContent(w, r)
+	content, path, _, ok := s.readFileContent(w, r)
 	if !ok {
 		return
 	}
@@ -967,6 +996,29 @@ func validRef(ref string) error {
 	}
 	if strings.HasPrefix(ref, "-") {
 		return errString("invalid ref")
+	}
+	return nil
+}
+
+// validPath rejects what can't name a file inside the repo: an absolute path, a
+// ".." escape, or .git itself (in any case variant — a case-insensitive filesystem
+// resolves ".GIT" to the real one). Malformed input is the caller's mistake, so it
+// answers 400 on every side rather than reaching a read and surfacing as whatever
+// that side's failure happens to be. git.WorktreeFile guards the same ground for
+// paths that reach it from elsewhere.
+func validPath(p string) error {
+	if p == "" {
+		return errString("path is required")
+	}
+	sep := string(filepath.Separator)
+	clean := filepath.Clean(p)
+	bad := filepath.IsAbs(clean) ||
+		clean == ".." || strings.HasPrefix(clean, ".."+sep)
+	if lower := strings.ToLower(clean); lower == ".git" || strings.HasPrefix(lower, ".git"+sep) {
+		bad = true
+	}
+	if bad {
+		return fmt.Errorf("invalid path %q", p)
 	}
 	return nil
 }

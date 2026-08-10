@@ -33,6 +33,7 @@ vi.mock("./api", () => {
 });
 
 import { api } from "./api";
+import { readDiffViewPref } from "./storage";
 import { useReview } from "./useReview";
 
 const branch = (name: string, o: { current?: boolean; main?: boolean; remote?: boolean } = {}) => ({
@@ -98,11 +99,11 @@ test("worktreeSide / indexedSide derive from uncommitted + unstaged", async () =
   expect(result.current.worktreeSide).toBe(false);
   expect(result.current.indexedSide).toBe(false);
 
-  act(() => result.current.setUncommitted(true));
+  act(() => result.current.changeUncommitted(true));
   expect(result.current.worktreeSide).toBe(true); // uncommitted + unstaged(default) → working tree
   expect(result.current.indexedSide).toBe(false);
 
-  act(() => result.current.setUnstaged(false));
+  act(() => result.current.changeUnstaged(false));
   expect(result.current.worktreeSide).toBe(false);
   expect(result.current.indexedSide).toBe(true); // uncommitted + !unstaged → git index
 });
@@ -154,10 +155,10 @@ test("diffOpts maps the view axes to the api.diff params", async () => {
     expect(lastOpts()).toMatchObject({ from: "all", base: "main", uncommitted: false, unstaged: true })
   );
 
-  act(() => result.current.setUncommitted(true)); // working tree (staged + unstaged)
+  act(() => result.current.changeUncommitted(true)); // working tree (staged + unstaged)
   await waitFor(() => expect(lastOpts()).toMatchObject({ from: "all", uncommitted: true, unstaged: true }));
 
-  act(() => result.current.setUnstaged(false)); // staged only → git index
+  act(() => result.current.changeUnstaged(false)); // staged only → git index
   await waitFor(() => expect(lastOpts()).toMatchObject({ uncommitted: true, unstaged: false }));
 
   act(() => result.current.setFrom("c1")); // since a commit → base dropped
@@ -181,10 +182,208 @@ test("uncommitted turns off when head isn't the checked-out branch", async () =>
   act(() => result.current.changeHead("feature")); // head=feature, current=main → not current
   await waitFor(() => expect(result.current.headIsCurrent).toBe(false));
 
-  act(() => result.current.setUncommitted(true));
+  act(() => result.current.changeUncommitted(true));
   await waitFor(() => expect(result.current.uncommitted).toBe(false)); // guard turns it back off
   expect(result.current.worktreeSide).toBe(false);
   expect(result.current.indexedSide).toBe(false);
+});
+
+// The view axes are remembered per repo, so reopening a repo lands on the side you
+// were last reviewing it from — and only that repo's (each keeps its own entry).
+test("the view axes are restored per repo", async () => {
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.head).toBe("main"));
+
+  act(() => result.current.changeUncommitted(true));
+  act(() => result.current.changeUnstaged(false));
+
+  act(() => result.current.changeRepo("B"));
+  await waitFor(() => expect(result.current.head).toBe("main"));
+  expect(result.current.uncommitted).toBe(false); // B has no pref of its own
+  expect(result.current.unstaged).toBe(true);
+
+  act(() => result.current.changeRepo("A"));
+  await waitFor(() => expect(result.current.uncommitted).toBe(true));
+  expect(result.current.unstaged).toBe(false);
+  expect(result.current.indexedSide).toBe(true);
+});
+
+// Only a reviewer's toggle is a preference: the checked-out-branch guard also moves
+// `uncommitted`, and persisting from that would erase the stored choice on a head
+// switch — so the pref survives it and the axis comes back with the branch.
+test("the checked-out-branch guard doesn't overwrite the stored axes", async () => {
+  vi.mocked(api.branches).mockResolvedValue({
+    main: "main",
+    branches: [branch("main", { current: true, main: true }), branch("feature")],
+  });
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.head).toBe("main"));
+
+  act(() => result.current.changeUncommitted(true));
+  act(() => result.current.changeHead("feature"));
+  await waitFor(() => expect(result.current.uncommitted).toBe(false)); // forced off, not chosen
+
+  expect(readDiffViewPref("A")).toEqual({ uncommitted: true, unstaged: true });
+});
+
+// The ping refetch must honour the same guard. An axis toggle keeps review.id, so the
+// SSE effect's `cancelled` flag never fires — without the seq check the ping's diff
+// (fetched under the old axes) lands after the toggle's, leaving hunks from one side
+// while worktreeSide/indexedSide tell DiffView to read file content from another. That
+// mismatch is what renders the wrong lines.
+test("a ping's diff is dropped when a view axis moved while it was in flight", async () => {
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.review).not.toBeNull());
+  await waitFor(() => expect(vi.mocked(api.diff).mock.calls.length).toBe(1)); // startReview's
+
+  // The ping's diff is slow and carries the committed-range (uncommitted=false) files.
+  let releaseStale: (() => void) | undefined;
+  vi.mocked(api.diff).mockImplementationOnce(
+    () =>
+      new Promise((res) => {
+        releaseStale = () =>
+          res({
+            base: "b",
+            head: "h",
+            files: [{ newPath: "STALE", oldPath: "STALE", status: "modified", hunks: [] }],
+          });
+      }) as ReturnType<typeof api.diff>
+  );
+  const es = (globalThis as unknown as { EventSource: { instances: { onmessage: ((e: { data: string }) => void) | null }[] } }).EventSource.instances.at(-1);
+  act(() => {
+    es?.onmessage?.({ data: "diff" });
+  });
+  await waitFor(() => expect(vi.mocked(api.diff).mock.calls.length).toBe(2)); // in flight
+
+  // The user switches to the working-tree axis; that diff resolves first.
+  vi.mocked(api.diff).mockResolvedValue({
+    base: "b",
+    head: "h",
+    files: [{ newPath: "FRESH", oldPath: "FRESH", status: "modified", hunks: [] }],
+  });
+  act(() => result.current.changeUncommitted(true));
+  await waitFor(() => expect(result.current.files.map((f) => f.newPath)).toEqual(["FRESH"]));
+  expect(result.current.worktreeSide).toBe(true);
+
+  await act(async () => {
+    releaseStale?.();
+    await Promise.resolve();
+  });
+  await new Promise((r) => setTimeout(r, 0));
+  expect(result.current.files.map((f) => f.newPath)).toEqual(["FRESH"]);
+});
+
+// The review half of a ping refetch is fetched by id, so it stays valid even when the
+// seq guard drops that ping's git state — gating it too would swallow the comment and
+// reviewed-file updates the ping was sent for.
+test("a ping still applies review state when its diff is dropped", async () => {
+  vi.mocked(api.getReview).mockImplementation(async (id: number) => ({
+    id,
+    repoPath: "A",
+    baseRef: "main",
+    headRef: "main",
+    headSha: "sha",
+    status: "draft" as const,
+    createdAt: "",
+    updatedAt: "",
+    comments: [],
+    reviewedFiles: ["reviewed.ts"],
+  }));
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.review).not.toBeNull());
+
+  let release: (() => void) | undefined;
+  vi.mocked(api.diff).mockImplementationOnce(
+    () => new Promise((res) => { release = () => res({ base: "b", head: "h", files: [] }); }) as ReturnType<typeof api.diff>
+  );
+  const es = (globalThis as unknown as { EventSource: { instances: { onmessage: ((e: { data: string }) => void) | null }[] } }).EventSource.instances.at(-1);
+  act(() => {
+    es?.onmessage?.({ data: "diff" });
+  });
+  await waitFor(() => expect(vi.mocked(api.diff).mock.calls.length).toBe(2));
+
+  act(() => result.current.changeUncommitted(true)); // supersedes the ping's git state
+  await act(async () => {
+    release?.();
+    await Promise.resolve();
+  });
+  await waitFor(() => expect([...result.current.reviewedFiles]).toEqual(["reviewed.ts"]));
+});
+
+// A review payload the create and ping reads both serve, so a ping can return
+// byte-identical state (the common case) or a changed body.
+const reviewWith = (body: string) => (id: number) => ({
+  id,
+  repoPath: "A",
+  baseRef: "main",
+  headRef: "main",
+  headSha: "sha",
+  status: "draft" as const,
+  createdAt: "",
+  updatedAt: "",
+  comments: [
+    {
+      id: 7,
+      reviewId: id,
+      filePath: "a.ts",
+      startLine: 1,
+      endLine: 1,
+      type: "suggestion" as const,
+      body,
+      snippet: "s",
+      author: "reviewer",
+      createdAt: "",
+      updatedAt: "",
+    },
+  ],
+  reviewedFiles: ["reviewed.ts"],
+});
+
+const lastEventSource = () =>
+  (globalThis as unknown as { EventSource: { instances: { onmessage: ((e: { data: string }) => void) | null }[] } })
+    .EventSource.instances.at(-1);
+
+// Pings are frequent (every comment mutation, plus the filesystem poller on any
+// on-disk edit) and most change nothing the client holds. Since parsed JSON is a
+// fresh object graph, applying it unconditionally would churn the identity of every
+// value downstream and re-render every mounted file card for nothing — the cost of
+// which grows with how many files the reviewer has scrolled past.
+test("a ping that changes nothing keeps the review state's identity", async () => {
+  const payload = reviewWith("b");
+  vi.mocked(api.createReview).mockImplementation(async () => payload(1));
+  vi.mocked(api.getReview).mockImplementation(async (id: number) => payload(id));
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.comments.length).toBe(1));
+  const before = {
+    review: result.current.review,
+    comments: result.current.comments,
+    reviewedFiles: result.current.reviewedFiles,
+  };
+
+  await act(async () => {
+    lastEventSource()?.onmessage?.({ data: "meta" });
+  });
+  await waitFor(() => expect(vi.mocked(api.getReview).mock.calls.length).toBeGreaterThan(0));
+
+  expect(result.current.review).toBe(before.review);
+  expect(result.current.comments).toBe(before.comments);
+  expect(result.current.reviewedFiles).toBe(before.reviewedFiles);
+});
+
+// ...and a ping that does change something must still land, or holding identity
+// would just be swallowing updates.
+test("a ping that changes a comment replaces it", async () => {
+  vi.mocked(api.createReview).mockImplementation(async () => reviewWith("first")(1));
+  vi.mocked(api.getReview).mockImplementation(async (id: number) => reviewWith("first")(id));
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.comments[0]?.body).toBe("first"));
+
+  vi.mocked(api.getReview).mockImplementation(async (id: number) => reviewWith("edited")(id));
+  await act(async () => {
+    lastEventSource()?.onmessage?.({ data: "meta" });
+  });
+
+  await waitFor(() => expect(result.current.comments[0]?.body).toBe("edited"));
 });
 
 // The shared reqSeq guard: a slow diff response for a selection the user has already

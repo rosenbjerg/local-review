@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -184,14 +185,33 @@ func (r *Repo) ResolveSHA(ref string) (string, error) {
 	return strings.TrimSpace(out), err
 }
 
+// ErrNotFound reports that there was nothing to read — the path, or the ref
+// itself, doesn't exist on the side asked for. Callers separate it from a real
+// git/IO failure: a vanished path is ordinary here, since a comment outlives the
+// file it was anchored to.
+var ErrNotFound = errors.New("not found")
+
 func (r *Repo) FileContent(ref, path string) (string, error) {
-	return r.run("show", ref+":"+path)
+	return r.showObject(ref + ":" + path)
 }
 
 // IndexFile reads a path's staged content — the stage-0 index blob (`git show
 // :path`) — which is the new side of the "staged" diff (index vs HEAD).
 func (r *Repo) IndexFile(path string) (string, error) {
-	return r.run("show", ":"+path)
+	return r.showObject(":" + path)
+}
+
+// showObject reads a `<ref>:<path>`-style object, reporting a missing ref or path
+// as ErrNotFound. Absence is confirmed with `cat-file -e` rather than by matching
+// git's stderr, whose wording varies across git versions and locales.
+func (r *Repo) showObject(spec string) (string, error) {
+	out, err := r.run("show", spec)
+	if err != nil {
+		if _, probe := r.run("cat-file", "-e", spec); probe != nil {
+			return "", fmt.Errorf("%w: %v", ErrNotFound, err)
+		}
+	}
+	return out, err
 }
 
 // ListFiles returns the tracked file paths at ref, for the "comment on a
@@ -271,7 +291,7 @@ func (r *Repo) WorktreeFile(path string) (string, error) {
 	}
 	resolved, err := filepath.EvalSymlinks(full)
 	if err != nil {
-		return "", err
+		return "", notFoundIfAbsent(err)
 	}
 	rel, err := filepath.Rel(root, resolved)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+sep) {
@@ -284,7 +304,17 @@ func (r *Repo) WorktreeFile(path string) (string, error) {
 		return "", fmt.Errorf("invalid path %q", path)
 	}
 	b, err := os.ReadFile(resolved)
-	return string(b), err
+	if err != nil {
+		return "", notFoundIfAbsent(err)
+	}
+	return string(b), nil
+}
+
+func notFoundIfAbsent(err error) error {
+	if os.IsNotExist(err) {
+		return fmt.Errorf("%w: %v", ErrNotFound, err)
+	}
+	return err
 }
 
 // WorktreeFingerprint is a cheap, content-free signal of whether anything the

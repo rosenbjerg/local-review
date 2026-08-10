@@ -51,7 +51,12 @@ web/src/
   App.tsx                top-level state, repo/branch pickers, 3-column resizable layout, all handlers
   api.ts                 fetch wrappers    types.ts  shared types
   highlight.ts           Shiki wrapper: all languages, lazy-loaded, JS regex engine
+  mermaid.ts             ```mermaid fences → SVG; lazy-loaded, runs after highlighting
   time.ts                relative/absolute timestamp + edited-marker helpers
+  commentSort.ts         the comments-pane sort orders (file / started / activity)
+  commentsByPath.ts      group comments per file card + the by-value compare its memo uses
+  occurrences.ts         occurrence matching: term validation, whole-word vs substring, span→text-node mapping
+  useOccurrenceHighlight.ts  select a word → light up its other occurrences in that file
   useFocusTrap.ts        modal focus hook: focus-in, Tab trap, restore on close
   storage.ts             typed, error-swallowing localStorage helpers + the lr.* keys
   components/
@@ -59,8 +64,9 @@ web/src/
     DiffView.tsx         center: per-file diff, syntax highlight, inline threads/composer,
                          drag-select ranges, Changed/Full toggle, auto-collapse large files
     LazyFile.tsx         viewport lazy-mount wrapper (IntersectionObserver) + scroll anchor
+    FindBar.tsx          occurrence-highlight bar above the diff: term, n-of-N, prev/next
     CommentThread.tsx    a comment thread: root comment (edit/delete) + replies + reply composer
-    CommentsPanel.tsx    right pane: cross-file comment overview, jump-to
+    CommentsPanel.tsx    right pane: cross-file comment overview, sort select, jump-to
     CommentComposer.tsx  type select + body textarea (reused for new/edit)
     MarkdownView.tsx     rendered (as-published) view of a .md file + file-level comments
     ExportModal.tsx      rendered-markdown preview (via Markdown) + Raw toggle + copy/download
@@ -71,8 +77,9 @@ web/src/
                          Code/Rendered, Preview/Raw)
     CopyButton.tsx       clipboard button with idle/ok/fail state (lazy text builder)
     (small shared UI primitives: Chevron, CommentCount, AnchorBadge, MetaTimestamps,
-     Markdown — markdown-it + async Shiki code-fence highlight; `softBreaks` picks
-     comment (GFM <br>) vs document (CommonMark) newline handling)
+     Markdown — markdown-it + async Shiki code-fence highlight, then async mermaid
+     render; `softBreaks` picks comment (GFM <br>) vs document (CommonMark)
+     newline handling)
 ```
 
 ## Architecture notes
@@ -171,7 +178,7 @@ web/src/
   (`origin/HEAD`) / `origin/main` / `origin/master` — so a branch worked off
   `origin/main` with no local trunk still gets an auto base. If nothing
   resolves it returns `""` and create-review/diff ask for an explicit base.
-- **The diff view is two orthogonal transient axes**, *not* part of review identity —
+- **The diff view is two orthogonal axes**, *not* part of review identity —
   the review still resumes by `(repo, base_ref, head_ref)` and comments still anchor
   to whichever side they were added on, regardless of the view on screen. `/api/diff`
   takes `from` + `uncommitted` + `unstaged` and maps them to a `(from → to)` git range:
@@ -195,6 +202,14 @@ web/src/
   && headIsCurrent`) plus `worktreeSide` (`effectiveUncommitted && unstaged`) and
   `indexedSide` (`effectiveUncommitted && !unstaged`), which pick the anchor side
   threaded into add-comment / set-reviewed / file / blob calls.
+  **`uncommitted`/`unstaged` are remembered per repo** (`lr.diffViewByRepo`, keyed by
+  repo alone — they describe how you look at a repo, not at a branch or review);
+  `from` stays per-session, since a sha belongs to one head's history. The restore
+  happens in the *branch-load* `.then`, in the same update as `head`: the guard above
+  clears `uncommitted` whenever head isn't the checked-out branch, and while branches
+  are loading it never is. And only the reviewer's toggles write
+  (`changeUncommitted`/`changeUnstaged`) — persisting from an effect on the state
+  would let that guard, or the `unstaged` reset, erase the stored choice.
 - **DB lives in `~/.local-review/`** by default; override the directory with the
   `-data-dir` flag (a leading `~` is expanded, relative paths are made absolute).
   One DB serves many repos, keyed by abs path.
@@ -239,7 +254,12 @@ web/src/
   handler clears it with `Swap`, so a dropped (coalesced) wakeup never loses the
   fact that the diff moved. The refetch params (repo + head/base/from + the resolved
   diff-view opts) come from a ref in `useReview`, since the SSE effect is keyed only
-  on `review.id`. The
+  on `review.id`. **A ping's git-derived results (diff/branches/commits) are gated on
+  the shared `reqSeq`** — a view-axis toggle keeps `review.id`, so the effect's
+  `cancelled` flag never fires, and an older in-flight ping would otherwise land hunks
+  from the side you just left (see *Diff/source consistency* below). The review half
+  is deliberately **not** gated: it's fetched by id, so gating it would swallow the
+  comment/reviewed updates the ping was sent to deliver. The
   hub (`internal/api/events.go`) is in-memory with non-blocking coalescing sends, so
   a stalled tab never blocks a handler; empty review entries are pruned on the last
   unsubscribe. A 25s keepalive comment keeps the stream warm and turns a half-open
@@ -271,6 +291,34 @@ web/src/
   exported and labelled as `file`, not `L0`). `/api/blob` shares `/api/file`'s
   ref/worktree/index resolution (a `indexed=true` param reads `git show :path`) and
   working-tree fallback.
+- **A path can outlive its file**, so absence is a **404, never a 500**. A comment
+  anchored before a rename or delete keeps asking for the old path (and the frontend
+  synthesizes a file card for it), so `/api/file` and `/api/blob` answer 404 —
+  `"<path> does not exist in <side>"` — when the path, or the ref itself, is gone
+  from the side asked for; only a genuine git/IO failure is a 500. A ref read that
+  `git.ErrNotFound` says the ref can't satisfy falls back to the **on-disk copy** —
+  a file can exist in the working tree without existing at the ref (an uncommitted
+  new file a reviewer commented on). That fallback is gated on `ErrNotFound`
+  *precisely*: catching every error would answer a git failure with working-tree
+  content against ref-computed hunks, i.e. the wrong-lines mismatch with no visible
+  cause. And because a ref read can't promise the ref supplied it, `/api/file`
+  returns **`worktree`** — the side the content actually came from, as opposed to the
+  echoed `ref` it was asked for. `DiffView` compares the two and notes the
+  substitution on the card, so on-disk text is never rendered as the ref's.
+  `git.ErrNotFound`
+  marks the case, wrapped by `FileContent`/`IndexFile`/`WorktreeFile`; the git reads
+  confirm absence with `git cat-file -e` instead of matching stderr, whose wording
+  varies by git version and locale. A path that can't name a repo file at all —
+  absolute, `..`-escaping, or `.git` in any case variant — is instead a **400** from
+  `validPath` (next to `validRef`), which runs before any side is read so the answer
+  doesn't depend on which side happened to reject it; `git.WorktreeFile` keeps its
+  own equivalent guard for paths reaching it from elsewhere. The frontend's `req`
+  throws an `ApiError` carrying the status, and `DiffView` turns a 404 into a
+  "No longer in `<side>`" note on the card (falling back out of Rendered view) so
+  the stranded comments render against an explanation, not a blank card. `MediaView`'s
+  before/after sides can't read that status (they're `<img src>`), so each falls
+  back to the same note via `onError`, keyed on src + `file.status` so a view-axis
+  toggle or the file reappearing retries the load.
 - **Markdown files** (`.md`/`.markdown` with a new side) get a per-file
   **Code/Rendered** toggle, mirroring SVG's Text/Image. Rendered mode swaps the
   diff table for `MarkdownView` — the new-side content run through the shared
@@ -283,18 +331,151 @@ web/src/
   to language ids via Shiki's own alias metadata (+ a tiny extras map). `DiffView`
   tokenizes the whole file once and renders tokens per line (avoids per-line
   breakage on multi-line constructs); deleted lines are highlighted per-line.
+- **Mermaid diagrams** (`mermaid.ts`): a second enhancement pass over rendered
+  markdown, same `(html) => Promise<string | null>` shape as `highlightBlocks`
+  and chained after it in `Markdown`, so it applies **everywhere** `Markdown`
+  renders non-inline (markdown files, comment/reply bodies, the export preview);
+  the comments-pane inline preview bails before either pass. Only the
+  `language-mermaid` fence tag is matched (Shiki registers no aliases for it),
+  and `import("mermaid")` sits behind that check, so a review with no diagrams
+  never fetches the ~635KB chunk. Running *after* highlighting is what makes the
+  failure path free — a fence mermaid can't parse is left as the colored source
+  Shiki produced, so the `catch` needs no fallback of its own. Three settings are
+  load-bearing: **`htmlLabels: false`** (the HTML-label path keeps `<img>` through
+  sanitization and then *awaits its load* — an outbound fetch from a
+  localhost-only tool, on diagram source an API agent can author),
+  **`securityLevel: 'strict'`** (same untrusted-source reason; strips
+  `javascript:` click URLs), and **`suppressErrorRendering: true`** (else a bad
+  diagram injects mermaid's error graphic into `document.body`, outside the
+  container we render into). Diagrams draw at natural size (`useMaxWidth: false`,
+  which has to be set per diagram type — there's no root-level equivalent) and
+  scroll inside `.mermaid-diagram`. Renders are cached by source; ids come from a
+  counter because each SVG's internal `<style>` selects on its own id.
+- **Occurrence highlighting** (`useOccurrenceHighlight.ts`): select a word in a diff
+  line and every other occurrence of it in that file lights up, so a variable's uses
+  read at a glance. Painted with the **CSS Custom Highlight API** — `Range`s over the
+  existing text nodes registered as `CSS.highlights.set("occ", …)` and styled by
+  `::highlight(occ)` — so it creates no DOM and can't disturb the per-token spans
+  `highlight.ts` renders. That also makes it **uncapped**: no elements per match, so a
+  common word costs nothing to mark. The matching rules are pure (`occurrences.ts`,
+  covered by `occurrences.test.ts`): case-sensitive, **whole-word only when the
+  term is identifier-shaped** (an arbitrary selection like `foo.bar` or `x + 1` has no
+  boundary to respect), plus a span→text-node mapping, since tokenizing splits one
+  line's text across many nodes. A selection counts only when it starts **and ends**
+  in the same `tr:not(.row-hunk) > td.line-content` — one check that rules out
+  multi-line drags, the gutters, hunk-header metadata, and comment-thread text; the
+  `.sign` (+/-/space) text node is excluded from the walk, or every offset in the line
+  would shift by one. Triple-click is ignored (via `e.detail`) since it selects a whole
+  line. **The `MutationObserver` repaint is load-bearing:** Shiki swaps a line's single
+  text node for per-token spans when its grammar resolves, detaching every range built
+  before that — without it the highlight would vanish moments after appearing (it also
+  covers the Changed/Full toggle and a refetched diff). Three ways out: click away (an
+  empty selection), scrolling the origin file card out of view (`IntersectionObserver`,
+  so a long file stays lit while you scan down it), and Escape — which **must also
+  `removeAllRanges()`**, or the next mouseup/keyup re-derives the same term and the
+  highlight returns.
+  The **find bar** (`FindBar.tsx`) sits below the diff scroller, in flow inside a
+  `.diff-pane` wrapper: it can't be sticky inside `.diff-column` (the file headers
+  already own `top: 0` there), and it has to go **below** rather than above, or the
+  bar entering would push the scroller's top edge down and jump the whole diff every
+  time a highlight appears. It shows the term, `n of N`, and prev/next. The
+  current match carries a second registration (`occ-active`, `priority: 1`), and the
+  counter **starts on the occurrence you selected** rather than the file's first, so
+  `Enter`/`Shift+Enter` step forward from where you were reading (wrapping at the
+  ends). Every control in the bar **must `preventDefault` on mousedown**
+  (`keepSelection`): a plain click collapses the text selection, which *is* the
+  dismiss gesture, so the buttons would otherwise destroy the highlight they act on.
+  Since only rendered rows can be searched, a file in **Changed** view also offers a
+  *Search full file* button — the card publishes its mode as `data-view-mode` (only
+  when the Changed/Full toggle applies) and the bar signals `DiffView` via a
+  `showFullSignal` prop, following `expandTarget`'s pattern; the repaint recounts.
+  Line-based diff rows only: not `MarkdownView`, `MediaView`, or comment bodies.
+- **Diff/source consistency — the "wrong lines" class of bug.** A file card renders
+  two independently-fetched things that must describe the same side: the **hunks**
+  (from `/api/diff`) and the **full-file source** (from `/api/file`). Full view
+  renders `source` and marks adds from the hunks; Changed view renders hunk rows but
+  takes each add/context line's *syntax tokens* from `source`, keyed by new-side line
+  number — so a `source` that disagrees with the hunks silently prints the wrong text
+  against the current line numbers, in whichever of the two views is highlighted.
+  Anything that lets them drift shows up as "wrong lines that a reload fixes", so two
+  rules hold. (1) Nothing may write `files` for a selection the user has moved past —
+  hence the `reqSeq` gate on the ping refetch above. (2) `DiffView`'s `contentKey`
+  (which drops the cached `source`) must name **which side** is being read — `repo` +
+  `headRef` + the worktree/index flags — not just fingerprint the hunks. Hunks proxy
+  the content of a file the diff *touched*; a synthetic `unchanged` card has none, so
+  a hunks-only key is constant for it and it would keep another branch's text forever.
+  Cards are keyed by path in `App.tsx` and `LazyFile` never unmounts them, so nothing
+  else resets that state. Covered by `web/src/diffView.test.tsx` — including that a
+  no-op diff refetch still *keeps* the source, or every ping would refetch every
+  expanded file.
 - **Large change-sets stay responsive** via: `LazyFile` viewport-mounting (only
   near-viewport files fetch/tokenize/render), files > `LARGE_FILE_LINES` (500)
   auto-collapse, files > 2000 lines skip highlighting, and panel resize writes
   `grid-template-columns` to the DOM via ref (no per-mousemove re-render). Export
   markdown preview is rendered with `markdown-it` (`html:false`, so safe);
   Copy/Download always emit the raw markdown.
-- **Keyboard shortcuts** live in one window `keydown` effect in `App.tsx`:
-  `j`/`k` next/prev file, `n`/`p` next/prev comment (reading order via
-  `orderedCommentIds`, stepping from `activeComment`), `e` export, `r` reload,
-  `?` help overlay. The handler bails when the target is an input/textarea/select
+- **Nothing may cost O(files scrolled past).** `LazyFile` mounts a card once and
+  never unmounts it, so a long scroll leaves every file visited mounted — a `tr`
+  and a syntax-token `span` per line. That is deliberate (unmounting would refetch
+  and re-tokenize on every pass), and it makes any per-frame or per-render work
+  that scales with the mounted set degrade the further into a review you get,
+  which reads as "it gets slow around file 70". Four things hold that line, and
+  each is easy to undo by accident:
+  - **The scroll-spy stays off the diff's DOM.** `useActiveFile` scans
+    `root.children` for the `#file-<path>` anchors, which are always direct
+    children of `.diff-column`. A `[id^="file-"]` subtree query (what it used to
+    do) has no fast path and walks every element under the column, once per
+    scroll frame.
+  - **`.file-body` carries `content-visibility: auto`** (+ `contain-intrinsic-size:
+    auto`), so the browser skips style/layout/paint for off-screen cards while
+    React keeps them mounted — the half that makes mounting-forever affordable.
+    It belongs on `.file-body`, not `.file`: the containment would clip the sticky
+    `.file-header`, and `.file-body` already excludes it (that's what its
+    `overflow: hidden` is for).
+  - **A no-op SSE ping must not churn state identity.** Pings are frequent (every
+    comment/reply/reviewed mutation, plus the ~1.5s filesystem poller) and mostly
+    carry no news, but parsed JSON is a fresh object graph every time. `useReview`'s
+    refresh keeps the previous value when the new one is structurally the same
+    (`keepIfSame`/`keepIfSameSet`), because identity is what the whole memo graph
+    downstream is keyed on. The diff's file list is deliberately exempt — a `diff`
+    ping means the git state actually moved.
+  - **`DiffView` is `memo`ised with a custom comparator** (`samePropsExceptComments`),
+    since the React Compiler can't cache per-iteration inside `App`'s file map.
+    Every prop compares by identity except `comments`, which compares by value
+    (a review read always rebuilds it). That rests on the props actually being
+    stable: `commentsByPath.ts` groups comments once (one shared empty array for
+    the many files with none), `useCommentActions` reads the live list through a
+    ref so its handler bag doesn't churn, and `onToggleReviewed` takes the path so
+    `App` can pass one shared handler instead of a per-card closure. **Adding a
+    prop that takes a new identity each render silently disables the whole thing.**
+    Covered by `web/src/diffViewMemo.test.tsx`.
+- **The comments pane is sortable** — `web/src/commentSort.ts` is the single
+  ordering authority, and `App.tsx` feeds its output to *both* the pane and
+  `orderedCommentIds`, so `n`/`p` always steps in the order on screen. Comments
+  **group by file in every sort**; only the keys change: `file` (default) — file-tree
+  index then line, `started` — `createdAt` ascending, `activity` — the thread's last
+  change (comment `createdAt`/`updatedAt` and every reply's) descending. Two rules
+  hold across all three: **resolved sinks within its file** (never out of its group,
+  so group order ignores `resolved` — an all-resolved file keeps its natural slot),
+  and **a file sits where its first-listed comment would sit in a flat sort**, so the
+  grouped list reads as that flat order with each file hoisted to its first
+  appearance. The group key is therefore read *after* the within-file sort — else a
+  bumped resolved thread would hoist its file while sitting at the bottom of it.
+  Timestamps are second-granular (`store.go` writes RFC3339), so batch-created
+  comments tie constantly and `id` is the mandatory tie-break. Resolving doesn't
+  count as activity, since `SetCommentResolved` deliberately doesn't bump
+  `updated_at`. The time sorts show the sorted-on timestamp on each item so the
+  order explains itself. Purely client-side over data the pane already has.
+- **Keyboard shortcuts** live in one window `keydown` effect in
+  `useKeyboardShortcuts.ts`: `j`/`k` next/prev file, `n`/`p` next/prev comment (pane
+  order via `orderedCommentIds`, stepping from `activeComment`), `e` export, `r`
+  reload, `/` focus the file search, `?` help overlay, `Enter`/`Shift+Enter` next/prev
+  occurrence match (only while a highlight is live, and never from a focused
+  button/link, so it can't steal the key from a control), `Escape` clear an occurrence
+  highlight. The handler bails when the target is an input/textarea/select
   or a modifier is held, and while a modal is open, so it never fights the
-  composer or the browser. The `?` header button opens the same overlay.
+  composer or the browser — which is also what leaves `Escape` to the `Modal` shell
+  and the comment composer. The `?` header button opens the same overlay.
 
 ## Conventions
 
@@ -316,7 +497,10 @@ web/src/
   chips — status labels, code, kbd, thumbnails), `--radius-md` (controls & cards
   — buttons, inputs, threads, code blocks), `--radius-lg` (large surfaces — file
   cards, modals), `--radius-pill` (count/type badges).
-- Persisted UI prefs (panel widths) go in `localStorage` under `lr.*` keys.
+- Persisted UI prefs (panel widths, comment sort, and the per-repo base branch and
+  diff-view axes) go in `localStorage` under `lr.*` keys, via `storage.ts`. Validate
+  a stored value on read (`isCommentSort`, `normalizeDiffView`) so a stale or
+  impossible one falls back to the default rather than reaching the app.
 - Modals (`.modal` inside a `.modal-backdrop`) close on Escape and backdrop
   click, and use `useFocusTrap` for focus-in / Tab-trap / restore-on-close —
   give a new modal the same treatment (mark its safe default control

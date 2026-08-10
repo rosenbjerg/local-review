@@ -28,6 +28,21 @@ func TestValidRef(t *testing.T) {
 	}
 }
 
+func TestValidPath(t *testing.T) {
+	for _, ok := range []string{"a.txt", "dir/a.txt", "./a.txt", "a/../b.txt", "-dash.txt", "git/x", ".gitignore"} {
+		if err := validPath(ok); err != nil {
+			t.Errorf("validPath(%q) = %v, want nil", ok, err)
+		}
+	}
+	// Case variants of .git matter: a case-insensitive filesystem resolves them all
+	// to the real .git directory.
+	for _, bad := range []string{"", "..", "../escape", "a/../../escape", "/etc/passwd", ".git", ".git/config", ".GIT/config", ".Git/HEAD"} {
+		if err := validPath(bad); err == nil {
+			t.Errorf("validPath(%q) should be rejected", bad)
+		}
+	}
+}
+
 func TestValidCommentType(t *testing.T) {
 	for _, ok := range []store.CommentType{store.CommentBug, store.CommentSuggestion, store.CommentQuestion, store.CommentNit} {
 		if !validCommentType(ok) {
@@ -221,6 +236,157 @@ func TestHandleDiffBadParams(t *testing.T) {
 	}
 	if code, _ := getDiff(t, s, "head=feature"); code != http.StatusBadRequest {
 		t.Errorf("missing repo: status %d, want 400", code)
+	}
+}
+
+// --- file/blob handlers ---
+
+func getFile(t *testing.T, s *Server, path, query string) (int, string) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path+"?"+query, nil)
+	rec := httptest.NewRecorder()
+	if strings.HasSuffix(path, "/blob") {
+		s.handleBlob(rec, req)
+	} else {
+		s.handleFile(rec, req)
+	}
+	return rec.Code, rec.Body.String()
+}
+
+// A comment can outlive its file: after a rename the old path is still requested,
+// on whichever side the view is showing. That's a 404 about the file, not a 500 —
+// the reviewer sees an explanation and the log stays free of false server faults.
+func TestHandleFileMissingPathIsNotFound(t *testing.T) {
+	r := newRepo(t)
+	r.write("old.ts", "one\ntwo\n")
+	r.commitAll("c1")
+	r.git("checkout", "-q", "-b", "feature")
+	r.git("mv", "old.ts", "new.ts")
+	r.commitAll("rename")
+	s := r.server()
+
+	gone := []struct {
+		name  string
+		path  string
+		query string
+	}{
+		{"head ref", "/api/file", "repo=" + r.name + "&path=old.ts&ref=feature"},
+		{"working tree", "/api/file", "repo=" + r.name + "&path=old.ts&ref=feature&worktree=true"},
+		{"index", "/api/file", "repo=" + r.name + "&path=old.ts&ref=feature&indexed=true"},
+		{"unknown ref", "/api/file", "repo=" + r.name + "&path=old.ts&ref=no-such-branch"},
+		{"blob", "/api/blob", "repo=" + r.name + "&path=old.ts&ref=feature"},
+	}
+	for _, c := range gone {
+		code, body := getFile(t, s, c.path, c.query)
+		if code != http.StatusNotFound {
+			t.Errorf("%s: status %d, want 404 (body %s)", c.name, code, body)
+		}
+		if !strings.Contains(body, "old.ts") {
+			t.Errorf("%s: body %s should name the missing path", c.name, body)
+		}
+	}
+
+	if code, body := getFile(t, s, "/api/file", "repo="+r.name+"&path=new.ts&ref=feature"); code != http.StatusOK {
+		t.Errorf("surviving path: status %d, want 200 (body %s)", code, body)
+	}
+
+	// An untracked file is absent from the ref but present on disk: the working-tree
+	// fallback must still serve it rather than 404.
+	r.write("fresh.ts", "x\n")
+	if code, body := getFile(t, s, "/api/file", "repo="+r.name+"&path=fresh.ts&ref=feature"); code != http.StatusOK {
+		t.Errorf("untracked file: status %d, want 200 (body %s)", code, body)
+	}
+}
+
+// The response has to say which side it read, because a ref read can't promise the
+// ref supplied it. Without that the client renders an uncommitted file as the ref's
+// content, against hunks the ref produced, and the mismatch has nothing to explain it.
+func TestHandleFileReportsTheSideItServed(t *testing.T) {
+	r := newRepo(t)
+	r.write("tracked.ts", "x\n")
+	r.commitAll("c1")
+	r.write("fresh.ts", "y\n") // on disk, not at the ref
+	s := r.server()
+
+	served := func(query string) bool {
+		t.Helper()
+		code, body := getFile(t, s, "/api/file", query)
+		if code != http.StatusOK {
+			t.Fatalf("status %d, want 200 (body %s)", code, body)
+		}
+		var got struct {
+			Worktree bool `json:"worktree"`
+		}
+		if err := json.Unmarshal([]byte(body), &got); err != nil {
+			t.Fatalf("unmarshal %s: %v", body, err)
+		}
+		return got.Worktree
+	}
+
+	if served("repo=" + r.name + "&path=tracked.ts&ref=main") {
+		t.Error("a ref read the ref satisfied must not claim the working tree")
+	}
+	if !served("repo=" + r.name + "&path=fresh.ts&ref=main") {
+		t.Error("a ref read served from disk must say so")
+	}
+	if !served("repo=" + r.name + "&path=tracked.ts&ref=main&worktree=true") {
+		t.Error("an explicit working-tree read must say so")
+	}
+	if served("repo=" + r.name + "&path=tracked.ts&ref=main&indexed=true") {
+		t.Error("an index read is not the working tree")
+	}
+}
+
+// The working-tree fallback covers *absence* only. A git failure on an object the
+// ref genuinely has must surface, not be answered with the on-disk copy: that serves
+// uncommitted content as if it were the ref's, against a diff computed from the ref,
+// so the view renders the wrong lines with nothing to explain it. Corrupting the blob
+// produces exactly that split — `cat-file -e` still confirms the object exists, so it
+// isn't ErrNotFound, while `git show` fails to inflate it.
+func TestHandleFileGitErrorIsNotMaskedByWorktree(t *testing.T) {
+	r := newRepo(t)
+	r.write("a.txt", "committed\n")
+	r.commitAll("c1")
+	r.write("a.txt", "WORKTREE-ONLY\n") // differs, so a fallback would show in the body
+
+	sha := strings.TrimSpace(r.git("rev-parse", "HEAD:a.txt"))
+	obj := filepath.Join(r.dir, ".git", "objects", sha[:2], sha[2:])
+	if err := os.Chmod(obj, 0o644); err != nil { // loose objects are written read-only
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(obj, []byte("not-a-valid-object"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := r.server()
+
+	code, body := getFile(t, s, "/api/file", "repo="+r.name+"&path=a.txt&ref=main")
+	if code != http.StatusInternalServerError {
+		t.Errorf("status %d, want 500 (body %s)", code, body)
+	}
+	if strings.Contains(body, "WORKTREE-ONLY") {
+		t.Errorf("served the working-tree copy in place of the failed ref read: %s", body)
+	}
+}
+
+// A path that can't name a repo file is the caller's mistake, so it must be a 400
+// on every side — not a 500 from the working-tree guard or a 404 pretending the
+// path was merely absent.
+func TestHandleFileRejectsInvalidPath(t *testing.T) {
+	r := newRepo(t)
+	r.write("a.txt", "x\n")
+	r.commitAll("c1")
+	s := r.server()
+
+	for _, bad := range []string{"", "..%2Fescape", ".git%2Fconfig", ".GIT%2Fconfig", "%2Fetc%2Fpasswd"} {
+		for _, side := range []string{"", "&worktree=true", "&indexed=true"} {
+			q := "repo=" + r.name + "&path=" + bad + "&ref=main" + side
+			if code, body := getFile(t, s, "/api/file", q); code != http.StatusBadRequest {
+				t.Errorf("file %q%s: status %d, want 400 (body %s)", bad, side, code, body)
+			}
+			if code, body := getFile(t, s, "/api/blob", q); code != http.StatusBadRequest {
+				t.Errorf("blob %q%s: status %d, want 400 (body %s)", bad, side, code, body)
+			}
+		}
 	}
 }
 

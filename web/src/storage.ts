@@ -4,8 +4,10 @@ export const LS = {
   leftWidth: "lr.leftWidth",
   rightWidth: "lr.rightWidth",
   baseByRepo: "lr.baseByRepo",
+  diffViewByRepo: "lr.diffViewByRepo",
   repo: "lr.repo",
   exportInstructions: "lr.exportInstructions",
+  commentSort: "lr.commentSort",
 } as const;
 
 export function getString(key: string, def = ""): string {
@@ -71,4 +73,31 @@ export function writeBasePref(repo: string, base: string): void {
   const map = getJSON<Record<string, string>>(LS.baseByRepo, {});
   map[repo] = base;
   setJSON(LS.baseByRepo, map);
+}
+
+// Per-repo remembered diff-view axes, under lr.diffViewByRepo (a { repo: pref } map).
+// Keyed by repo alone: the axes describe how you like to look at a repo, not a
+// property of the branch or review being read.
+export interface DiffViewPref {
+  uncommitted: boolean;
+  unstaged: boolean;
+}
+
+// `unstaged` is only meaningful while `uncommitted` is on, and the hook resets it to
+// true whenever that goes off — normalize on both sides so a stored (or hand-edited)
+// pref can't restore a combination the app itself would never hold.
+function normalizeDiffView(v: unknown): DiffViewPref {
+  const o = (v ?? {}) as Partial<DiffViewPref>;
+  const uncommitted = o.uncommitted === true;
+  return { uncommitted, unstaged: uncommitted ? o.unstaged !== false : true };
+}
+
+export function readDiffViewPref(repo: string): DiffViewPref {
+  return normalizeDiffView(getJSON<Record<string, unknown>>(LS.diffViewByRepo, {})[repo]);
+}
+
+export function writeDiffViewPref(repo: string, pref: DiffViewPref): void {
+  const map = getJSON<Record<string, DiffViewPref>>(LS.diffViewByRepo, {});
+  map[repo] = normalizeDiffView(pref);
+  setJSON(LS.diffViewByRepo, map);
 }

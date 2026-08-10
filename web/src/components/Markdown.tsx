@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import MarkdownIt from "markdown-it";
 import { highlightBlocks } from "../highlight";
+import { renderMermaid } from "../mermaid";
 import { commentRefPlugin } from "../commentRef";
 
 // html:false — bodies are injected via dangerouslySetInnerHTML, so raw HTML must
@@ -45,8 +46,11 @@ export function Markdown({
     setHtml(base);
     if (inline) return;
     let cancelled = false;
-    highlightBlocks(base).then((enhanced) => {
-      if (!cancelled && enhanced) setHtml(enhanced);
+    highlightBlocks(base).then(async (enhanced) => {
+      if (cancelled) return;
+      if (enhanced) setHtml(enhanced);
+      const drawn = await renderMermaid(enhanced ?? base);
+      if (!cancelled && drawn) setHtml(drawn);
     });
     return () => {
       cancelled = true;
