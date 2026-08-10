@@ -92,6 +92,10 @@ func main() {
 	srv := &http.Server{
 		Handler:     api.WithErrorLogging(mux),
 		BaseContext: func(net.Listener) context.Context { return baseCtx },
+		// Bound the header read so a stalled client can't hold a connection open
+		// indefinitely. No ReadTimeout/WriteTimeout: those would abort the long-lived
+		// SSE streams, which legitimately read nothing and write for minutes.
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- srv.Serve(ln) }()

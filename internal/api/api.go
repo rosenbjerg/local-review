@@ -66,6 +66,18 @@ func (s *Server) repoFor(name string) (*git.Repo, error) {
 	if !isGitRepo(abs) {
 		return nil, errString("not a git repository: " + name)
 	}
+	// Confine to the root even when `name` is a symlink: resolve both sides and
+	// confirm the target stays under root, so a symlink placed in the root can't
+	// point the tool at a repo outside it (isGitRepo's os.Stat follows symlinks).
+	root, rootErr := filepath.EvalSymlinks(s.Root)
+	resolved, resErr := filepath.EvalSymlinks(abs)
+	if rootErr != nil || resErr != nil {
+		return nil, errString("invalid repo name")
+	}
+	sep := string(filepath.Separator)
+	if rel, err := filepath.Rel(root, resolved); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+sep) {
+		return nil, errString("invalid repo name")
+	}
 	return git.New(abs), nil
 }
 
@@ -366,6 +378,12 @@ func (s *Server) handleBlob(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", mimeForPath(path))
 	w.Header().Set("Cache-Control", "no-cache")
+	// These are repo-controlled bytes: a malicious .svg with an inline <script> must
+	// not execute if the blob URL is opened directly. A sandbox CSP (no scripts, no
+	// network) + nosniff neutralizes it; the app only ever loads this via <img>, which
+	// runs no SVG script regardless, so rendering is unaffected.
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; sandbox")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	_, _ = w.Write([]byte(content))
 }
 
@@ -553,6 +571,26 @@ func (s *Server) handleResetReview(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// safeBaseURL turns the request Host into the base URL embedded in the exported
+// curl instructions. The Host is client-controlled and Go's server accepts spaces,
+// semicolons, and backticks in it, so a crafted value would inject shell into a
+// snippet a coding agent might run; anything outside a hostname/IP[:port] charset
+// falls back to the loopback default rather than being echoed verbatim.
+func safeBaseURL(host string) string {
+	const fallback = "http://127.0.0.1:7777"
+	if host == "" {
+		return fallback
+	}
+	for _, c := range host {
+		ok := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' ||
+			c == '.' || c == '-' || c == ':' || c == '[' || c == ']'
+		if !ok {
+			return fallback
+		}
+	}
+	return "http://" + host
+}
+
 func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
@@ -565,7 +603,7 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	}
 	s.annotateReview(review)
 	instructions := r.URL.Query().Get("instructions") == "true"
-	md := export.Render(review, instructions, "http://"+r.Host)
+	md := export.Render(review, instructions, safeBaseURL(r.Host))
 	_ = s.Store.SetStatus(id, store.StatusExported)
 
 	shortSHA := review.HeadSHA
@@ -755,7 +793,27 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, errString("invalid comment type"))
 		return
 	}
-	c, err := s.Store.UpdateComment(id, req.Body, req.Type, req.StartLine, req.EndLine)
+	// The range may have moved, so re-capture the snippet and re-resolve the anchor
+	// commit against the new range on the comment's own side — else the stored
+	// snippet/commit_sha still describe the old lines and staleness misfires. Read
+	// the existing comment for its side (worktree/index/head) and path.
+	existing, err := s.Store.GetComment(id)
+	if err != nil {
+		storeError(w, err)
+		return
+	}
+	snippet := ""
+	commitSHA := existing.CommitSHA
+	if req.StartLine > 0 {
+		if repoPath, headRef, err := s.Store.ReviewRepoHead(existing.ReviewID); err == nil {
+			repo := git.New(repoPath)
+			snippet = captureSnippet(repo, headRef, existing.FilePath, req.StartLine, req.EndLine, existing.Worktree, existing.Indexed)
+			if sha, err := repo.ResolveSHA(headRef); err == nil {
+				commitSHA = sha
+			}
+		}
+	}
+	c, err := s.Store.UpdateComment(id, req.Body, req.Type, req.StartLine, req.EndLine, snippet, commitSHA)
 	if err != nil {
 		storeError(w, err)
 		return
@@ -893,7 +951,12 @@ func (s *Server) notify(reviewID int64) {
 	s.hub.publish(reviewID, false)
 }
 
+// maxBodyBytes caps a request body: comment/reply bodies are small, so this only
+// stops a buggy/hostile client from spilling a huge payload into memory and the DB.
+const maxBodyBytes = 8 << 20 // 8 MiB
+
 func decodeBody[T any](w http.ResponseWriter, r *http.Request) (req T, ok bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpError(w, http.StatusBadRequest, err)
 		return req, false

@@ -101,6 +101,46 @@ func TestRepoForTraversal(t *testing.T) {
 	}
 }
 
+// A symlink placed in the root that resolves to a git repo *outside* the root must
+// be rejected — isGitRepo's os.Stat follows the symlink, so only the resolved-path
+// confinement stops it.
+func TestRepoForSymlinkEscape(t *testing.T) {
+	r := newRepo(t)
+	s := r.server()
+
+	outside := t.TempDir() // an external "repo" (has a .git dir) outside the served root
+	if err := os.MkdirAll(filepath.Join(outside, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(r.root, "escape")); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+	if _, err := s.repoFor("escape"); err == nil {
+		t.Error("repoFor should reject a symlink resolving outside the root")
+	}
+}
+
+// The Host header is client-controlled and feeds the exported curl instructions, so
+// anything outside a hostname/IP[:port] charset must fall back to the loopback
+// default rather than be echoed (shell-injection into a snippet an agent may run).
+func TestSafeBaseURL(t *testing.T) {
+	const fallback = "http://127.0.0.1:7777"
+	cases := map[string]string{
+		"127.0.0.1:7777":                "http://127.0.0.1:7777",
+		"localhost:7777":                "http://localhost:7777",
+		"[::1]:7777":                    "http://[::1]:7777",
+		"":                              fallback,
+		"127.0.0.1:7777/x; curl evil #": fallback, // slash + shell metachars
+		"a`b`c":                         fallback, // backticks
+		"host name":                     fallback, // whitespace
+	}
+	for in, want := range cases {
+		if got := safeBaseURL(in); got != want {
+			t.Errorf("safeBaseURL(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 // --- diff scope handler ---
 
 type diffResp struct {

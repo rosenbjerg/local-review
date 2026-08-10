@@ -246,12 +246,15 @@ export function useReview() {
         const p = diffParams.current;
         // A `diff` ping means the repo's git state moved (commit, checkout, edit), so
         // also refresh the branch list (keeps headIsCurrent honest after an out-of-band
-        // checkout) and the commit picker. Branch/commit failures are swallowed so a
-        // transient error never drops the whole refresh.
+        // checkout) and the commit picker. Diff/branch/commit failures are swallowed so
+        // a transient error never drops the whole refresh — critically, a picked `from`
+        // rebased away 400s the diff, and swallowing it lets the commit-list check below
+        // reset `from` to "all" (which refetches a valid diff) instead of the whole
+        // Promise.all rejecting and stranding the review.
         const [rev, d, br, cm] = await Promise.all([
           api.getReview(id),
           withDiff && p.repo && p.headRef
-            ? api.diff(p.repo, p.headRef, p.opts)
+            ? api.diff(p.repo, p.headRef, p.opts).catch(() => null)
             : Promise.resolve(null),
           withDiff && p.repo ? api.branches(p.repo).catch(() => null) : Promise.resolve(null),
           withDiff && p.repo && p.head

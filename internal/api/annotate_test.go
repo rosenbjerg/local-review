@@ -3,6 +3,7 @@ package api
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"local-review/internal/store"
 )
@@ -148,6 +149,36 @@ func TestAnnotateByDiffOutdated(t *testing.T) {
 	got := annotateOne(r, "main", store.Comment{FilePath: "f.txt", StartLine: 2, EndLine: 2, Snippet: "l2", CommitSHA: sha1})
 	if got.AnchorStatus != store.AnchorOutdated {
 		t.Fatalf("anchorStatus = %q, want outdated", got.AnchorStatus)
+	}
+}
+
+// An API client can send any EndLine; mapContiguous must stop at the hunks' old-side
+// extent instead of walking MapOldLine to that bound (which hung for minutes on every
+// review read). Assert it terminates promptly and still classifies the surviving,
+// shifted start as moved.
+func TestAnnotateByDiffHugeEndLineTerminates(t *testing.T) {
+	r := newRepo(t)
+	r.write("f.txt", "l1\nl2\nl3\n")
+	sha1 := r.commitAll("c1")
+	r.write("f.txt", "l0\nl1\nl2\nl3\n") // insert above the anchor → the block shifts down
+	r.commitAll("c2")
+
+	done := make(chan store.Comment, 1)
+	go func() {
+		done <- annotateOne(r, "main", store.Comment{
+			FilePath: "f.txt", StartLine: 2, EndLine: 2_000_000_000, Snippet: "l2", CommitSHA: sha1,
+		})
+	}()
+	select {
+	case got := <-done:
+		if got.AnchorStatus != store.AnchorMoved {
+			t.Fatalf("anchorStatus = %q, want moved", got.AnchorStatus)
+		}
+		if got.CurrentStartLine != 3 {
+			t.Errorf("relocated start = %d, want 3", got.CurrentStartLine)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("annotate did not terminate — mapContiguous is walking to EndLine (the bound regressed)")
 	}
 }
 
