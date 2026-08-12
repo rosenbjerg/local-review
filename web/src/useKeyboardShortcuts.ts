@@ -45,7 +45,13 @@ export function useKeyboardShortcuts(opts: Shortcuts) {
         (t.tagName === "INPUT" ||
           t.tagName === "TEXTAREA" ||
           t.tagName === "SELECT" ||
-          t.isContentEditable)
+          t.isContentEditable ||
+          // An open composer owns the keyboard for its whole subtree, not just its
+          // textarea: the type pills and Cancel/Submit are focusable, and a shortcut
+          // firing off one of them would act on the review (`v` marking the file
+          // reviewed, `e` exporting) while the reviewer is mid-comment. The composer
+          // handles its own Escape and ⌘/Ctrl+Enter.
+          !!t.closest(".composer"))
       ) {
         return;
       }

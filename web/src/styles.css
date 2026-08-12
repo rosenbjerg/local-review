@@ -264,6 +264,7 @@ select {
 .btn-icon,
 .link,
 .view-toggle button,
+.type-pill,
 .tree-dir,
 .explorer-item,
 .explorer-name,
@@ -281,6 +282,7 @@ select {
 .btn-icon:focus-visible,
 .link:focus-visible,
 .view-toggle button:focus-visible,
+.type-pill:focus-visible,
 .explorer-name:focus-visible,
 .file-toggle:focus-visible,
 .viewed-check:focus-visible,
@@ -1462,6 +1464,43 @@ textarea:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+}
+
+/* The composer's comment-type picker: the type badges above, made clickable, so
+   each pill already wears the color it will show in the thread. Deliberately
+   built on .badge/.badge-<type> rather than restated, or the two would drift.
+   The selected pill fills with that type's -border shade — the darker,
+   fill-suitable half of each semantic pair. */
+.type-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.type-pill {
+  font-family: inherit;
+  background: var(--bg);
+  cursor: pointer;
+}
+.type-pill:hover:not(.active) {
+  background: var(--bg-hover);
+}
+.type-pill.active {
+  color: var(--on-accent);
+}
+.type-pill.badge-bug.active {
+  background: var(--danger-border);
+}
+.type-pill.badge-suggestion.active {
+  background: var(--success-border);
+}
+.type-pill.badge-question.active {
+  background: var(--warn-border);
+}
+/* nit has no color of its own (it reads muted everywhere else), so its selected
+   state is a neutral fill rather than a borrowed semantic one. */
+.type-pill.badge-nit.active {
+  background: var(--border);
+  color: var(--text);
 }
 
 /* A `#<id>` reference to another comment: a subtle inline link (click to jump,

@@ -1,5 +1,64 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { COMMENT_TYPES, type CommentType } from "../types";
+
+/** One-click type picker: the type badges themselves, made selectable, so the
+ *  target is recognized by its color rather than read out of a dropdown.
+ *  Radiogroup semantics (single tab stop, arrows move the selection) keep four
+ *  pills costing the keyboard no more than the one select they replaced. */
+function TypePills({
+  value,
+  onChange,
+}: {
+  value: CommentType;
+  onChange: (type: CommentType) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    const step =
+      e.key === "ArrowRight" || e.key === "ArrowDown"
+        ? 1
+        : e.key === "ArrowLeft" || e.key === "ArrowUp"
+          ? -1
+          : 0;
+    if (!step) return;
+    e.preventDefault();
+    const i = COMMENT_TYPES.indexOf(value);
+    const next = COMMENT_TYPES[(i + step + COMMENT_TYPES.length) % COMMENT_TYPES.length];
+    onChange(next);
+    // Focus follows the selection, as it does in a native radiogroup — the
+    // unselected pills are tabIndex -1, so nothing else can hold it.
+    ref.current?.querySelector<HTMLButtonElement>(`[data-type="${next}"]`)?.focus();
+  }
+
+  return (
+    <div
+      ref={ref}
+      className="type-pills"
+      role="radiogroup"
+      aria-label="Comment type"
+      onKeyDown={onKeyDown}
+    >
+      {COMMENT_TYPES.map((t) => {
+        const active = t === value;
+        return (
+          <button
+            key={t}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            tabIndex={active ? 0 : -1}
+            data-type={t}
+            className={`badge badge-${t} type-pill${active ? " active" : ""}`}
+            onClick={() => onChange(t)}
+          >
+            {t}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 interface Props {
   initialBody?: string;
@@ -36,21 +95,22 @@ export function CommentComposer({
     }
   }
 
+  // Submit/cancel are bound on the root rather than the textarea, so they work from
+  // the pills and buttons too — the global shortcuts bail on this whole subtree
+  // (`useKeyboardShortcuts`), which would otherwise leave both keys dead there.
+  function onKeyDown(e: React.KeyboardEvent) {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      submit();
+    }
+    if (e.key === "Escape") onCancel();
+  }
+
   return (
-    <div className="composer">
+    <div className="composer" onKeyDown={onKeyDown}>
       {!hideType && (
         <div className="composer-row">
-          <select
-            aria-label="Comment type"
-            value={type}
-            onChange={(e) => setType(e.target.value as CommentType)}
-          >
-            {COMMENT_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+          <TypePills value={type} onChange={setType} />
         </div>
       )}
       <textarea
@@ -58,13 +118,6 @@ export function CommentComposer({
         value={body}
         placeholder={placeholder}
         onChange={(e) => setBody(e.target.value)}
-        onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-            e.preventDefault();
-            submit();
-          }
-          if (e.key === "Escape") onCancel();
-        }}
       />
       <div className="composer-actions">
         <span className="composer-hint">⌘/Ctrl+Enter to submit · Esc to cancel</span>

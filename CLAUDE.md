@@ -75,7 +75,8 @@ web/src/
     CommentThread.tsx    a comment thread: root comment (edit/delete) + replies + reply composer
     CommentsPanel.tsx    right pane: cross-file comment overview, sort + filter selects, jump-to
     ReviewSummary.tsx    the review's free-text summary above the comments pane (view/edit)
-    CommentComposer.tsx  type select + body textarea (reused for new/edit)
+    CommentComposer.tsx  type pills (one-click radiogroup, built on the .badge-<type>
+                         chips) + body textarea (reused for new/edit; replies hide the type)
     MarkdownView.tsx     rendered (as-published) view of a .md file + file-level comments
     ExportModal.tsx      rendered-markdown preview (via Markdown) + Raw toggle + copy/download
     AgentPromptsModal.tsx  copyable agent prompts (Address-the-review / Do-a-review),
@@ -577,7 +578,13 @@ web/src/
   highlight. The handler bails when the target is an input/textarea/select
   or a modifier is held, and while a modal is open, so it never fights the
   composer or the browser — which is also what leaves `Escape` to the `Modal` shell
-  and the comment composer. The `?` header button opens the same overlay.
+  and the comment composer. The bail covers **the whole `.composer` subtree**, not
+  just its textarea: the type pills and Cancel/Submit are focusable, and `v`/`e`
+  firing off one of them would act on the review mid-comment. That's also why
+  `CommentComposer` binds ⌘/Ctrl+Enter and Escape on its **root** rather than the
+  textarea — bound any narrower, both keys would be dead everywhere the global
+  handler has stood down. Covered by `useKeyboardShortcuts.test.ts` and
+  `commentComposer.test.tsx`. The `?` header button opens the same overlay.
 
 ## Conventions
 
