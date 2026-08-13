@@ -11,7 +11,7 @@ export function MetaTimestamps({
 }) {
   return (
     <>
-      <span className="muted">{author}</span>
+      <span className="meta-author">{author}</span>
       {createdAt && (
         <span className="muted" title={absoluteTime(createdAt)}>
           {relativeTime(createdAt)}
