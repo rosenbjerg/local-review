@@ -872,12 +872,16 @@ textarea:focus-visible {
   background: var(--bg-elev);
   font-size: 13px;
 }
+/* File-level (line-0) comments under a markdown or media view. Items stretch to
+   the pane's width — a thread sized to its own content ends up as wide as its
+   meta row happens to be, so a column of them has a ragged right edge, and a
+   composer shrunk to fit-content is a textarea at its ~20-character intrinsic
+   width. Only the add button opts out, hence its align-self below. */
 .file-comments {
   margin-top: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  align-items: flex-start;
 }
 .add-file-comment {
   align-self: flex-start;
@@ -1037,7 +1041,10 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  /* Tighter row gap than column gap: these rows wrap often in a narrow thread,
+     and now that the row is a filled band the slack shows as band height.
+     Matches .comment-meta in the panel. */
+  gap: 4px 8px;
   margin: -8px -10px 8px;
   padding: 6px 10px;
   background: var(--bg-hover);
@@ -1109,7 +1116,7 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px 8px;
   margin: -6px -8px 6px;
   padding: 5px 8px;
   background: var(--bg-hover);
