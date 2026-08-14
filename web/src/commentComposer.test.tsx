@@ -52,6 +52,18 @@ test("arrows move the selection and wrap at both ends", () => {
   expect(pill("suggestion").getAttribute("aria-checked")).toBe("true");
 });
 
+// Picking a type by click is a finished choice, so the caret goes back to the
+// body — arrow-keying isn't, and must leave focus in the group for the next arrow.
+test("a click hands focus to the textarea; an arrow keeps it on the pills", () => {
+  render(<CommentComposer onSubmit={() => {}} onCancel={() => {}} />);
+
+  fireEvent.click(pill("bug"));
+  expect(document.activeElement).toBe(screen.getByRole("textbox"));
+
+  fireEvent.keyDown(screen.getByRole("radiogroup"), { key: "ArrowRight" });
+  expect(document.activeElement).toBe(pill("suggestion"));
+});
+
 test("a reply composer has no type picker at all", () => {
   render(<CommentComposer hideType onSubmit={() => {}} onCancel={() => {}} />);
   expect(screen.queryByRole("radiogroup")).toBeNull();

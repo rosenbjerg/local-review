@@ -8,9 +8,14 @@ import { COMMENT_TYPES, type CommentType } from "../types";
 function TypePills({
   value,
   onChange,
+  onPick,
 }: {
   value: CommentType;
   onChange: (type: CommentType) => void;
+  /** A click is a finished choice, so it hands the caret back to the body.
+   *  Arrow-keying deliberately doesn't: focus has to stay in the group for the
+   *  next arrow to land, and it's the roving tabIndex's only holder. */
+  onPick: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -50,7 +55,10 @@ function TypePills({
             tabIndex={active ? 0 : -1}
             data-type={t}
             className={`badge badge-${t} type-pill${active ? " active" : ""}`}
-            onClick={() => onChange(t)}
+            onClick={() => {
+              onChange(t);
+              onPick();
+            }}
           >
             {t}
           </button>
@@ -82,6 +90,7 @@ export function CommentComposer({
   const [body, setBody] = useState(initialBody);
   const [type, setType] = useState<CommentType>(initialType);
   const [submitting, setSubmitting] = useState(false);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   // Block re-entry so a second click or ⌘+Enter mid-save can't post a duplicate.
   async function submit() {
@@ -110,10 +119,15 @@ export function CommentComposer({
     <div className="composer" onKeyDown={onKeyDown}>
       {!hideType && (
         <div className="composer-row">
-          <TypePills value={type} onChange={setType} />
+          <TypePills
+            value={type}
+            onChange={setType}
+            onPick={() => bodyRef.current?.focus()}
+          />
         </div>
       )}
       <textarea
+        ref={bodyRef}
         autoFocus
         value={body}
         placeholder={placeholder}
