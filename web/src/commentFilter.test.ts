@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Comment } from "./types";
+import type { Comment, Reply } from "./types";
 import { ANY, NO_FILTER, authorsOf, filterComments, isFiltered } from "./commentFilter";
 
 const comment = (id: number, over: Partial<Comment> = {}): Comment =>
@@ -30,6 +30,17 @@ describe("filterComments", () => {
     expect(ids(filterComments(comments, { ...NO_FILTER, status: "open" }))).toEqual([1, 3, 4]);
     expect(ids(filterComments(comments, { ...NO_FILTER, status: "resolved" }))).toEqual([2]);
     expect(ids(filterComments(comments, { ...NO_FILTER, status: "outdated" }))).toEqual([3]);
+  });
+
+  it("narrows by whose move it is, resolved counting as neither", () => {
+    const threads = [
+      comment(1, { author: "review-agent" }),
+      comment(2, { author: "reviewer" }),
+      comment(3, { author: "review-agent", resolved: true }),
+      comment(4, { author: "review-agent", replies: [{ id: 1, author: "reviewer" } as Reply] }),
+    ];
+    expect(ids(filterComments(threads, { ...NO_FILTER, status: "awaiting-you" }))).toEqual([1]);
+    expect(ids(filterComments(threads, { ...NO_FILTER, status: "awaiting-them" }))).toEqual([2, 4]);
   });
 
   it("narrows by type", () => {

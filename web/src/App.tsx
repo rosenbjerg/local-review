@@ -26,6 +26,7 @@ import type { CommentFilter } from "./commentFilter";
 import { NO_FILTER, authorsOf, filterComments } from "./commentFilter";
 import type { CommentSort } from "./commentSort";
 import { isCommentSort, sortComments } from "./commentSort";
+import { awaitingYouCount } from "./commentTurn";
 import { commentsFor, groupByPath } from "./commentsByPath";
 import { totalStat } from "./diffStats";
 import { nextUnreviewed } from "./reviewNav";
@@ -231,6 +232,9 @@ export default function App() {
     [comments, commentFilter, commentSort, orderedFilePaths]
   );
   const commentAuthors = useMemo(() => authorsOf(comments), [comments]);
+  // Off the unfiltered list on purpose — the pane's own count follows the filter,
+  // this one describes the review (like the explorer badges and the export button).
+  const awaitingYou = useMemo(() => awaitingYouCount(comments), [comments]);
   const orderedCommentIds = useMemo(() => sortedComments.map((c) => c.id), [sortedComments]);
 
   function moveFile(delta: number) {
@@ -471,6 +475,7 @@ export default function App() {
             <CommentsPanel
               comments={sortedComments}
               total={comments.length}
+              awaitingYou={awaitingYou}
               sort={commentSort}
               onSortChange={(v) => {
                 setCommentSort(v);

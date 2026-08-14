@@ -1419,6 +1419,34 @@ textarea:focus-visible {
   font-size: 14px;
   margin: 0;
 }
+/* Keeps the title and the awaiting count together on the left, so the header's
+   space-between still pushes only the sort select to the right. */
+.comments-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* The count of threads waiting on you, which is also the control that filters to
+   them. Its number is review-wide and so doesn't move when the filter is applied
+   — the point being that it's what's left to do, not what's on screen. */
+.awaiting-toggle {
+  background: none;
+  border: 1px solid var(--info-border);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+  font-size: 11px;
+  color: var(--info);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.awaiting-toggle:hover {
+  background: var(--bg-hover);
+}
+.awaiting-toggle[aria-pressed="true"] {
+  background: var(--info-border);
+  color: var(--on-accent);
+}
 .comments-filter {
   display: flex;
   align-items: center;
@@ -1615,6 +1643,17 @@ textarea:focus-visible {
 .comment-nav-resolved:hover,
 .comment-nav-outdated:hover {
   opacity: 1;
+}
+
+/* A thread whose newest comment or reply isn't the reviewer's is waiting on them.
+   Only that side is marked — one marked state is what makes "unmarked = handled"
+   readable down a long pane — and it's an edge rather than a dim, so it composes
+   with the resolved/outdated opacity above instead of fighting it. The padding
+   gives back the 2px the thicker border takes, keeping the text aligned with the
+   unmarked items above and below. */
+.comment-nav-awaiting {
+  border-left: 3px solid var(--info-border);
+  padding-left: 8px;
 }
 
 /* Modal */

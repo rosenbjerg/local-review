@@ -55,6 +55,7 @@ web/src/
   time.ts                relative/absolute timestamp + edited-marker helpers
   commentSort.ts         the comments-pane sort orders (file / started / activity)
   commentFilter.ts       the comments-pane filters (status / type / author) + the authors present
+  commentTurn.ts         whose move a thread is waiting on (who spoke last) + the awaiting-you count
   commentsByPath.ts      group comments per file card + the by-value compare its memo uses
   wordDiff.ts            intra-line diff: token LCS → changed char ranges + the segment splitter
   hunkGaps.ts            the unchanged regions a hunk view hides: their line ranges + how much is revealed
@@ -544,8 +545,32 @@ web/src/
   count as activity, since `SetCommentResolved` deliberately doesn't bump
   `updated_at`. The time sorts show the sorted-on timestamp on each item so the
   order explains itself. Purely client-side over data the pane already has.
+- **A thread has a turn** (`web/src/commentTurn.ts`): with three identities writing
+  comments, the pane is a two-way conversation, and the question a sort can't answer
+  is which threads have come back to *you*. `turnOf` derives it from who spoke last —
+  the newest reply's author, else the root's — as `you` (they spoke last), `them`
+  (you did), or `none`. Derived, never stored, like `anchorStatus`. Three rules:
+  the identity test is **reviewer vs not-reviewer**, never a list of agent names
+  (authors are open-ended, an API client sends its own — same constant and reason as
+  `useUnseenActivity`); **resolved beats turn** (`none` whatever was said last, or
+  every dismissed finding would keep asking for a reply) while **outdated doesn't**
+  (the line moved, the question didn't); and "last" is the **highest reply id**, since
+  second-granular timestamps tie constantly. It surfaces three ways, all off the one
+  predicate: a left edge on the pane item (`comment-nav-awaiting`) — only the
+  actionable side is marked, so "unmarked = handled" stays readable, and it's an edge
+  rather than a dim so it composes with the resolved/outdated opacity; the
+  `awaitingYou` count in the pane header, which **doubles as the filter for what it
+  counts** (and so stays rendered at zero while that filter is on, or answering the
+  last thread would strand you in an empty pane with the toggle gone); and the two
+  status-filter values below. The count is taken over the **whole review**, not the
+  filtered list — narrowing on another axis must not read as "nothing left to do".
 - **The comments pane is filterable** (`web/src/commentFilter.ts`) on three axes —
-  status (open / resolved / outdated), `type`, and the thread's root `author`. With
+  status (open / resolved / outdated / awaiting you / awaiting agent), `type`, and
+  the thread's root `author`. Status carries two axes in one select — how a thread
+  stands and whose move it is — because the answers are mutually exclusive in
+  practice (a resolved thread has no turn) and a fourth select would crowd the row
+  for a combination nobody wants; the two turn values need no resolved check of
+  their own, since `turnOf` already calls a resolved thread `none`. With
   three identities writing comments (see *author*, above), "only what `review-agent`
   found" is the view a sort can't give. Like the sort it feeds **both** the pane and
   `orderedCommentIds`, so `n`/`p` steps what's on screen; unlike the sort it is

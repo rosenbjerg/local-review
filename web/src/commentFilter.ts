@@ -1,3 +1,4 @@
+import { turnOf } from "./commentTurn";
 import type { Comment, CommentType } from "./types";
 import { COMMENT_TYPES } from "./types";
 
@@ -8,7 +9,17 @@ import { COMMENT_TYPES } from "./types";
 
 export const ANY = "any";
 
-export type StatusFilter = typeof ANY | "open" | "resolved" | "outdated";
+// One select, two axes: how a thread stands (open/resolved/outdated) and whose
+// move it is (see commentTurn). They're kept together because the answers are
+// mutually exclusive in practice — a resolved thread has no turn — and a fourth
+// select would crowd the filter row for a choice nobody combines.
+export type StatusFilter =
+  | typeof ANY
+  | "open"
+  | "resolved"
+  | "outdated"
+  | "awaiting-you"
+  | "awaiting-them";
 export type TypeFilter = typeof ANY | CommentType;
 
 export interface CommentFilter {
@@ -26,6 +37,8 @@ export const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "open", label: "Open" },
   { value: "resolved", label: "Resolved" },
   { value: "outdated", label: "Outdated" },
+  { value: "awaiting-you", label: "Awaiting you" },
+  { value: "awaiting-them", label: "Awaiting agent" },
 ];
 
 export const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
@@ -51,6 +64,12 @@ function matchesStatus(c: Comment, status: StatusFilter): boolean {
       return !!c.resolved;
     case "outdated":
       return c.anchorStatus === "outdated";
+    // Both turn values already exclude resolved threads — turnOf calls those
+    // "none" — so neither needs to restate it.
+    case "awaiting-you":
+      return turnOf(c) === "you";
+    case "awaiting-them":
+      return turnOf(c) === "them";
     default:
       return true;
   }

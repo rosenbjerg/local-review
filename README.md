@@ -174,6 +174,12 @@ Either way the agent posts replies back to each comment
 (`POST /api/comments/{id}/replies`), and they appear **live in the UI** — read
 them, resolve what's addressed, and hand off what's left with one more fetch.
 
+Once a review is a conversation, the comments pane keeps your side of it: a
+thread whose latest word is the agent's is marked as **awaiting you**, the header
+counts how many, and clicking that count filters the pane down to them — which
+also narrows what `n`/`p` step through, so you can walk the replies and nothing
+else.
+
 ### Flags
 
 | Flag | Default | Purpose |
