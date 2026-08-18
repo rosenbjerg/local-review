@@ -260,3 +260,27 @@ test("an unrelated -/+ pair is left unmarked", async () => {
   await waitFor(() => expect(screen.getAllByText(/logger\.debug/).length).toBeGreaterThan(0));
   expect(container.querySelectorAll(".word-diff").length).toBe(0);
 });
+
+// A file the diff *did* touch can carry no hunks at all — a pure rename, a mode-only
+// change, an empty added file — and Changed view builds its rows from the hunks, so
+// the card came out blank: a file counted in the review with nothing to show for it.
+test("a hunkless changed file says why its card is empty", async () => {
+  vi.mocked(api.file).mockResolvedValue(content("x"));
+  const renamed: FileDiff = { oldPath: "old.txt", newPath: "new.txt", status: "renamed", hunks: [] };
+
+  render(<DiffView {...props} file={renamed} headRef="feature" />);
+
+  await waitFor(() => expect(screen.getByText("Renamed with no content changes.")).toBeTruthy());
+});
+
+// The synthetic card for a file opened only to comment on is hunkless too, but it
+// lives in Full view and renders the whole file — nothing to explain there.
+test("a file opened only to comment on gets no empty-card note", async () => {
+  vi.mocked(api.file).mockResolvedValue(content("WHOLE-FILE"));
+  const opened: FileDiff = { oldPath: "a.txt", newPath: "a.txt", status: "unchanged", hunks: [] };
+
+  render(<DiffView {...props} file={opened} headRef="feature" />);
+
+  await waitFor(() => expect(screen.getByText("WHOLE-FILE")).toBeTruthy());
+  expect(screen.queryByText(/no content changes/i)).toBeNull();
+});

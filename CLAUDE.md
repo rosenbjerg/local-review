@@ -259,6 +259,15 @@ web/src/
   whole branch where a client's "changed files" lists only uncommitted work; renames
   pair into one file (`--find-renames`); and an untracked *directory* lists as its
   individual files, where `git status` collapses it to one entry.
+- **A file the diff touched can have no hunks** — a pure rename (`R100`), a mode-only
+  change (`chmod +x`), an empty file added or deleted. Changed view builds its rows
+  from the hunks, so such a card rendered *blank*: counted in the file list, with
+  nothing to show for it. `DiffView`'s `noHunksNote` states which of those it is
+  (above the table, alongside the missing/substituted notes, so the fallback rows for
+  file-level comments still render). Gated on `mode === "changed"` and `!unchanged`:
+  Full view renders the source, and the synthetic card for a file opened only to
+  comment on is hunkless by construction and lives in Full view. Covered by
+  `web/src/diffView.test.tsx`.
 - **DB lives in `~/.local-review/`** by default; override the directory with the
   `-data-dir` flag (a leading `~` is expanded, relative paths are made absolute).
   One DB serves many repos, keyed by abs path.

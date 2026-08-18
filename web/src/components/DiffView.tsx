@@ -82,6 +82,23 @@ function samePropsExceptComments(a: Props, b: Props): boolean {
   return sameComments(a.comments, b.comments);
 }
 
+// A file the diff genuinely touched can still carry no hunks: a pure rename, a
+// mode-only change, an empty file added or deleted. Changed view builds its rows
+// from the hunks, so such a card renders as a blank table — which reads as a broken
+// card, and as a file counted in the review with nothing to show for it.
+function noHunksNote(status: FileDiff["status"]): string {
+  switch (status) {
+    case "renamed":
+      return "Renamed with no content changes.";
+    case "added":
+      return "Added, with no content — the file is empty.";
+    case "deleted":
+      return "Deleted, and the file was empty.";
+    default:
+      return "No content changes — only the file's mode changed.";
+  }
+}
+
 export const DiffView = memo(function DiffView({
   file,
   repo,
@@ -660,6 +677,9 @@ export const DiffView = memo(function DiffView({
               Not in {sideLabel} — showing the working-tree copy, which the diff was
               not computed against.
             </div>
+          )}
+          {!mediaView && !docView && !unchanged && !missing && mode === "changed" && file.hunks.length === 0 && (
+            <div className="binary-note media-body">{noHunksNote(file.status)}</div>
           )}
           {mediaView ? (
             <MediaView
