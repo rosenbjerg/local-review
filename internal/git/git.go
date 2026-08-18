@@ -185,6 +185,33 @@ func (r *Repo) ResolveSHA(ref string) (string, error) {
 	return strings.TrimSpace(out), err
 }
 
+// EmptyTreeSHA is git's canonical empty tree — the before side for a root commit,
+// which has no parent to diff against, so its diff is its whole content.
+const EmptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+// ParentSHA resolves ref's first parent — the before side that makes a picked
+// commit's *own* changes part of the diff ("from this commit onwards", inclusive).
+// A merge's later parents sit behind the first, so the first is the branch's own
+// line of history; a root commit has none, so it reports the empty tree. One
+// rev-list tells the two apart, where `rev-parse <ref>^` would fail identically
+// for a root commit and for a ref that doesn't exist.
+func (r *Repo) ParentSHA(ref string) (string, error) {
+	out, err := r.run("rev-list", "--parents", "-n", "1", ref+"^{commit}")
+	if err != nil {
+		return "", err
+	}
+	// "<sha> [<parent>…]" — no parent means a root commit; no sha at all means git
+	// answered nothing, which is not something to read as "parentless".
+	f := strings.Fields(out)
+	switch len(f) {
+	case 0:
+		return "", fmt.Errorf("no commit for %q", ref)
+	case 1:
+		return EmptyTreeSHA, nil
+	}
+	return f[1], nil
+}
+
 // ErrNotFound reports that there was nothing to read — the path, or the ref
 // itself, doesn't exist on the side asked for. Callers separate it from a real
 // git/IO failure: a vanished path is ordinary here, since a comment outlives the

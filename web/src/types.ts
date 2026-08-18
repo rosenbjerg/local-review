@@ -14,8 +14,9 @@ export interface Commit {
 
 // The diff view is two orthogonal axes, both transient (not part of a review's
 // identity). `from` sets the before side; the working-tree flags set the after side:
-//   from        — "all" (merge-base(base,head), the whole branch) or a commit sha
-//                 (that commit, exclusive)
+//   from        — "all" (merge-base(base,head), the whole branch) or a commit sha:
+//                 the diff starts *at* that commit, so its own changes are included
+//                 (the server diffs from its parent)
 //   uncommitted — false: after = head commit; true: after = working tree / index
 //   unstaged    — when uncommitted: true (default) after = working tree
 //                 (staged + unstaged); false after = index (staged only)

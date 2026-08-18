@@ -210,10 +210,17 @@ web/src/
   takes `from` + `uncommitted` + `unstaged` and maps them to a `(from → to)` git range:
   - **`from`** sets the *before* side: `all` (or empty) → `merge-base(base, head)`,
     the whole branch (base defaults to the main branch); a commit sha → that commit,
-    **exclusive** — `from = ResolveSHA(picked)`, so the picked commit is the baseline
-    and is *not* shown. The commit list is `GET /api/commits` — `git log base..head`,
-    scoped to the branch's own commits (never base-branch history behind the merge
-    point) — surfaced in the UI as an always-present "from" picker with `All` on top.
+    **inclusive** — `from = ParentSHA(picked)`, so the picked commit's *own* changes
+    are part of the diff ("from this commit onwards", which is how a reviewer reads
+    the picker, and it makes `from=<the branch's oldest commit>` identical to `all`).
+    `ParentSHA` takes the **first** parent (a merge's later parents sit behind it) via
+    one `rev-list --parents -n 1`, which is what separates a legitimately parentless
+    **root commit** — reported as `git.EmptyTreeSHA`, so its diff is its whole
+    content — from a ref that doesn't resolve (a bare `rev-parse <ref>^` fails
+    identically for both). The commit list is `GET /api/commits` — `git log
+    base..head`, scoped to the branch's own commits (never base-branch history behind
+    the merge point) — surfaced in the UI as an always-present "from" picker with
+    `All` on top.
   - **`uncommitted`** (bool) sets the *after* side: `false` → `head` (committed
     range, `git diff <from> head`); `true` → the working tree or the git index.
   - **`unstaged`** (bool, default true; only meaningful when `uncommitted`) picks
@@ -221,7 +228,7 @@ web/src/
     unstaged); `false` → git index (`git diff --cached <from>`, no untracked —
     **staged only**). New side = working tree when `unstaged`, else the index.
   The response `base` is the resolved `from` ref (the merge-base, or the picked
-  commit's sha) — what `/api/blob`'s "before" image uses.
+  commit's **parent**) — what `/api/blob`'s "before" image uses.
   The `uncommitted` axis is only meaningful when head is the checked-out branch, so
   it's gated on that (the UI disables the checkbox otherwise). `useReview` holds the
   `from`/`uncommitted`/`unstaged` state, derives `effectiveUncommitted` (`uncommitted
@@ -236,6 +243,22 @@ web/src/
   are loading it never is. And only the reviewer's toggles write
   (`changeUncommitted`/`changeUnstaged`) — persisting from an effect on the state
   would let that guard, or the `unstaged` reset, erase the stored choice.
+- **The view has to say what it compares.** Four controls (repo/head/base/from plus
+  the two checkboxes) can name a range but not explain it, and a reviewer's reflex is
+  to check the result against their git client — where a mismatched file count reads
+  as a bug in this tool. So `TopBar` states the comparison outright: a **changed-file
+  count** next to the `+N -M` badge, and a `compareTitle` tooltip naming **both ends**
+  in words (which commit the before side resolved to and why — merge-base with base,
+  or the parent of the picked commit *whose own changes are included* — against head /
+  working tree / index). Two counts are deliberately different numbers and each says
+  so: the topbar counts `files` (what the diff changes, the number that matches a git
+  client), while the explorer's `N/M reviewed` denominator counts `allFiles`, which
+  also holds the synthetic cards for files opened only to comment on — its tooltip
+  splits the two apart. The usual divergences left are honest ones the readout now
+  explains: the default before side is the **merge-base**, not `HEAD`, so it lists the
+  whole branch where a client's "changed files" lists only uncommitted work; renames
+  pair into one file (`--find-renames`); and an untracked *directory* lists as its
+  individual files, where `git status` collapses it to one entry.
 - **DB lives in `~/.local-review/`** by default; override the directory with the
   `-data-dir` flag (a leading `~` is expanded, relative paths are made absolute).
   One DB serves many repos, keyed by abs path.

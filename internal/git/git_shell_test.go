@@ -94,6 +94,28 @@ func TestMainBranch(t *testing.T) {
 	})
 }
 
+// ParentSHA is the before side of an inclusive "from <commit>", so the two cases a
+// caller can't recover from on its own have to be distinguishable: a root commit
+// (legitimately parentless → the empty tree) and a ref that doesn't resolve.
+func TestParentSHA(t *testing.T) {
+	dir, r := initRepoOn(t, "main")
+	firstCommit(t, dir)
+	root := strings.TrimSpace(gitCmd(t, dir, "rev-parse", "HEAD"))
+	mustWrite(t, dir, "f.txt", "l1\nl2\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-q", "-m", "c2")
+
+	if got, err := r.ParentSHA("HEAD"); err != nil || got != root {
+		t.Errorf("ParentSHA(HEAD) = %q, %v; want %q", got, err, root)
+	}
+	if got, err := r.ParentSHA(root); err != nil || got != EmptyTreeSHA {
+		t.Errorf("ParentSHA(root) = %q, %v; want the empty tree", got, err)
+	}
+	if _, err := r.ParentSHA("deadbeef"); err == nil {
+		t.Error("ParentSHA(unknown ref): want an error")
+	}
+}
+
 // A comment outlives the file it anchors to, so reads of a vanished path must be
 // distinguishable from a real git/IO failure — the caller turns one into a 404 and
 // the other into a 500.

@@ -41,10 +41,11 @@ export function useReview() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [reviewedFiles, setReviewedFiles] = useState<Set<string>>(new Set());
   // The diff view — two orthogonal axes. `from` is the before side: "all" (the whole
-  // branch) or a picked commit sha. `uncommitted` moves the after side to the working
-  // tree/index; `unstaged` (default) keeps unstaged edits in. That pair is remembered
-  // per repo (restored on the branch load below); `from` isn't, since a picked sha
-  // belongs to one head's history.
+  // branch) or a picked commit sha, inclusive — the diff starts at that commit, so
+  // its own changes show (the server diffs from its parent). `uncommitted` moves the
+  // after side to the working tree/index; `unstaged` (default) keeps unstaged edits
+  // in. That pair is remembered per repo (restored on the branch load below); `from`
+  // isn't, since a picked sha belongs to one head's history.
   const [from, setFrom] = useState("all");
   const [uncommitted, setUncommitted] = useState(false);
   const [unstaged, setUnstaged] = useState(true);

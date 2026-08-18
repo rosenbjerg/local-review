@@ -34,8 +34,10 @@ no runtime dependencies beyond `git`.
 - **Branch-scoped diff, narrowable.** Reviews what a branch introduces (diff
   against the merge-base with `main`/`master`), with a full-file / changed-only
   toggle. Narrow it with the **from** picker to start at one of the branch's own
-  commits, or tick **uncommitted** to review your working tree — and untick
-  **unstaged** to review only what's staged.
+  commits — that commit's own changes included — or tick **uncommitted** to review
+  your working tree, and untick **unstaged** to review only what's staged. The
+  toolbar shows the changed-file count and names both ends of the comparison, so
+  what you're looking at is never a guess.
 - **A review summary.** A free-text note above the comments pane that leads the
   export — the framing a list of line comments can't carry on its own.
 - **Comment anywhere.** Any line or dragged range, on changed or unchanged lines,
@@ -132,12 +134,17 @@ It opens `http://127.0.0.1:7777` in your browser. From there:
    `main`/`master`, else the remote's default branch — and the diff runs from its
    merge-base with head. Override it with an explicit ref if you want.
 3. **Narrow the diff** (optional). Move the *from* side to one of the branch's own
-   commits with the **from** picker, or move the *to* side off the branch head with
+   commits with the **from** picker — the diff then *starts at* that commit, so its
+   own changes are part of what you review (picking the branch's oldest commit is
+   the same as **All**). Or move the *to* side off the branch head with
    **uncommitted** (available while you have that branch checked out) to review
    your working tree — plus **unstaged** to pick the tree or, unticked, only
    what's staged. These are view options, not part of the review: comments and
    reviewed marks persist as you switch between them. The **uncommitted**/
-   **unstaged** choice is remembered per repository.
+   **unstaged** choice is remembered per repository. Hover the file count in the
+   toolbar to see exactly which two ends are being compared — handy when the count
+   differs from your git client, which usually compares against `HEAD` rather than
+   the branch's merge-base.
 4. **Review the diff.** Click a line number or drag across a range to comment.
    Reply in threads, set a type, resolve threads, and mark files reviewed as you
    go. Press `?` for the keyboard shortcuts.

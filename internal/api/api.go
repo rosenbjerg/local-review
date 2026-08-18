@@ -151,14 +151,15 @@ func (s *Server) handleBranches(w http.ResponseWriter, r *http.Request) {
 // `from` sets the before side; the working-tree flags set the after side:
 //
 //	from=all|""   — merge-base(base,head) (whole branch); a commit sha → that
-//	                commit, exclusive
+//	                commit's parent, i.e. inclusive: the picked commit's own
+//	                changes are part of the diff
 //	uncommitted   — false: after = head (committed range, from..head); true: the
 //	                working tree or the git index
 //	unstaged      — when uncommitted, true (default) → working tree (from + all
 //	                uncommitted, incl. untracked); false → index (staged only)
 //
 // The returned "base" is the resolved `from` ref (the merge-base, or the picked
-// commit's sha) — the before side for the image before/after blobs.
+// commit's parent) — the before side for the image before/after blobs.
 func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 	repo, ok := s.repoParam(w, r)
 	if !ok {
@@ -170,8 +171,9 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The diff is two orthogonal axes: `from` sets the before-side (the whole
-	// branch's merge-base, or a picked commit), and the working-tree flags set the
-	// after-side (head commit, working tree, or the git index).
+	// branch's merge-base, or a picked commit — inclusive, so the before side is
+	// that commit's parent), and the working-tree flags set the after-side (head
+	// commit, working tree, or the git index).
 	//
 	//   uncommitted=false            → from .. head        (committed range)
 	//   uncommitted=true  unstaged   → from .. working tree (staged + unstaged)
@@ -211,7 +213,11 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 			httpError(w, http.StatusBadRequest, err)
 			return
 		}
-		sha, shaErr := repo.ResolveSHA(from)
+		// Inclusive: "from <commit>" means the diff *starts at* that commit, so its
+		// own changes show. That makes the before side its parent — and picking the
+		// branch's oldest commit therefore equals `all` (its parent is the
+		// merge-base), which is what a reviewer reading the picker expects.
+		sha, shaErr := repo.ParentSHA(from)
 		if shaErr != nil {
 			httpError(w, http.StatusBadRequest, errString("unknown commit: "+from))
 			return

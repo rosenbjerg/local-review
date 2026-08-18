@@ -211,7 +211,7 @@ func TestHandleDiffScopes(t *testing.T) {
 		{"committed (whole branch)", "repo=" + r.name + "&head=feature", []string{"feat.txt"}},
 		{"uncommitted + unstaged", "repo=" + r.name + "&head=feature&uncommitted=true&unstaged=true", []string{"base.txt", "feat.txt", "unt.txt"}},
 		{"uncommitted staged-only", "repo=" + r.name + "&head=feature&uncommitted=true&unstaged=false", []string{"base.txt", "feat.txt"}},
-		{"from=featureHEAD is exclusive → empty", "repo=" + r.name + "&head=feature&from=" + featSHA, []string{}},
+		{"from=<branch's only commit> is inclusive → its own change", "repo=" + r.name + "&head=feature&from=" + featSHA, []string{"feat.txt"}},
 	}
 	for _, c := range cases {
 		code, d := getDiff(t, s, c.query)
@@ -222,6 +222,47 @@ func TestHandleDiffScopes(t *testing.T) {
 		if got := newPaths(d); !eqStrings(got, c.want) {
 			t.Errorf("%s: files = %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+// `from` is inclusive: the picked commit's own changes show, so the before side is
+// its parent — and picking the branch's oldest commit is the same as `all`.
+func TestHandleDiffFromIsInclusive(t *testing.T) {
+	r := newRepo(t)
+	r.write("base.txt", "a\n")
+	r.commitAll("init")
+	r.git("checkout", "-q", "-b", "feature")
+	r.write("one.txt", "1\n")
+	first := r.commitAll("first branch commit")
+	r.write("two.txt", "2\n")
+	second := r.commitAll("second branch commit")
+	s := r.server()
+
+	cases := []struct {
+		name string
+		from string
+		want []string
+	}{
+		{"newest commit → only its own change", second, []string{"two.txt"}},
+		{"oldest commit → same as all", first, []string{"one.txt", "two.txt"}},
+		{"all", "all", []string{"one.txt", "two.txt"}},
+	}
+	for _, c := range cases {
+		code, d := getDiff(t, s, "repo="+r.name+"&head=feature&from="+c.from)
+		if code != http.StatusOK {
+			t.Errorf("%s: status %d, want 200", c.name, code)
+			continue
+		}
+		if got := newPaths(d); !eqStrings(got, c.want) {
+			t.Errorf("%s: files = %v, want %v", c.name, got, c.want)
+		}
+	}
+
+	// The reported before side is the picked commit's parent, which is what the
+	// image before/after blobs read.
+	_, d := getDiff(t, s, "repo="+r.name+"&head=feature&from="+second)
+	if want := strings.TrimSpace(r.git("rev-parse", second+"^")); d.Base != want {
+		t.Errorf("base = %q, want the parent %q", d.Base, want)
 	}
 }
 

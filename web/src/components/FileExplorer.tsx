@@ -146,6 +146,15 @@ export function FileExplorer({
     [files]
   );
 
+  // Same reason as statByFile: this walks every file, on every scroll frame.
+  // `unchanged` is exactly App's synthetic-card marker, so it separates "files the
+  // diff changed" from "files opened only to comment on" — the denominator below
+  // holds both, and a reviewer comparing counts needs to be told which is which.
+  const openedCount = useMemo(
+    () => files.filter((f) => f.status === "unchanged").length,
+    [files]
+  );
+
   const countByFile = new Map<string, number>();
   for (const c of comments) {
     if (c.resolved) continue;
@@ -279,7 +288,16 @@ export function FileExplorer({
         <div className="explorer-head">
           <span>Files</span>
           <span className="spacer" />
-          <span className="muted">
+          <span
+            className="muted"
+            title={
+              searching
+                ? undefined
+                : openedCount > 0
+                  ? `${reviewedCount} of ${files.length} files marked reviewed — ${files.length - openedCount} changed by the diff, plus ${openedCount} opened only to comment on`
+                  : `${reviewedCount} of ${files.length} changed files marked reviewed`
+            }
+          >
             {searching
               ? `${shown.length} match${shown.length === 1 ? "" : "es"}`
               : `${reviewedCount}/${files.length} reviewed`}

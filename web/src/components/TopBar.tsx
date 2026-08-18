@@ -39,6 +39,11 @@ export interface TopBarActions {
 export interface TopBarStatus {
   review: Review | null;
   shortSha?: string;
+  baseSha: string;
+  // Files the diff itself changes — never the synthetic cards App adds for files
+  // opened only to comment on, since this is the number a reviewer compares
+  // against their git client.
+  fileCount: number;
   stat: DiffStat;
   openCommentCount: number;
   canReset: boolean;
@@ -52,11 +57,45 @@ interface Props {
 
 // A compact indicator of a non-default view, shown next to the sha. Keep it terse —
 // just the short sha for a picked "from", not the full "sha  subject" option label.
+// "from", not "since": the picked commit's own changes are part of the diff.
 function viewLabel(s: Selection): string {
   const parts: string[] = [];
-  if (s.from !== "all") parts.push(`since ${s.from.slice(0, 7)}`);
+  if (s.from !== "all") parts.push(`from ${s.from.slice(0, 7)}`);
   if (s.uncommitted && s.headIsCurrent) parts.push(s.unstaged ? "uncommitted" : "staged");
   return parts.join(" · ");
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+// Both ends of the comparison spelled out. The four controls can't say this between
+// them — least of all whether a picked "from" commit's own changes are in the diff
+// (they are, so the before side is that commit's parent) — and it's what a reviewer
+// needs to reconcile this diff with what their git client shows.
+function rangeLines(s: Selection, st: TopBarStatus): string {
+  const sha = st.baseSha ? `${st.baseSha.slice(0, 7)} — ` : "";
+  const from =
+    s.from === "all"
+      ? `${sha}the merge-base with ${s.base || "the main branch"}, so the diff is everything ${s.head} adds`
+      : `${sha}the parent of ${s.from.slice(0, 7)}, so that commit's own changes are included`;
+  const to =
+    s.uncommitted && s.headIsCurrent
+      ? s.unstaged
+        ? "your working tree — staged and unstaged edits, plus untracked files"
+        : "the git index — staged changes only"
+      : `${s.head}${st.shortSha ? ` at ${st.shortSha}` : ""}`;
+  return `From: ${from}\nTo: ${to}`;
+}
+
+function compareTitle(s: Selection, st: TopBarStatus): string {
+  return `${rangeLines(s, st)}\n${plural(st.fileCount, "file")} changed`;
+}
+
+// Same range, plus what the number does *not* count — the synthetic cards for files
+// opened only to comment on, which a reviewer comparing counts would trip over.
+function fileCountTitle(s: Selection, st: TopBarStatus): string {
+  return `${compareTitle(s, st)}\nA file opened only to comment on isn't counted`;
 }
 
 // The top toolbar: repo/head/base pickers, the diff-view controls, reload, and the
@@ -97,7 +136,7 @@ export function TopBar({ selection: s, actions, status }: Props) {
           disabled={s.loading || !s.baseRelevant}
         />
       </label>
-      <label>
+      <label title="Start the diff at one of the branch's own commits — that commit's own changes are included, so picking the oldest one is the same as All.">
         from
         <Combobox
           ariaLabel="diff from"
@@ -145,9 +184,12 @@ export function TopBar({ selection: s, actions, status }: Props) {
       <span className="spacer" />
       {status.review && (
         <>
-          <span className="muted">
+          <span className="muted" title={compareTitle(s, status)}>
             {status.shortSha}
             {viewLabel(s) && ` · ${viewLabel(s)}`}
+          </span>
+          <span className="muted" title={fileCountTitle(s, status)}>
+            {plural(status.fileCount, "file")}
           </span>
           <DiffStatBadge stat={status.stat} title="Lines added and removed in this diff" />
           <button

@@ -336,6 +336,10 @@ export default function App() {
         status={{
           review,
           shortSha,
+          baseSha,
+          // `files`, not `allFiles`: the count answers "what does this diff change",
+          // so the synthetic cards for commented-but-unchanged files stay out of it.
+          fileCount: files.length,
           stat: diffStat,
           openCommentCount: comments.filter((c) => !c.resolved).length,
           canReset: comments.length > 0 || reviewedFiles.size > 0 || !!review?.summary,
