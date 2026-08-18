@@ -144,6 +144,37 @@ test("an SSE diff ping resets a 'from' whose commit was rebased away", async () 
   await waitFor(() => expect(result.current.from).toBe("all"));
 });
 
+// The other side of that reset: the picker asks for the newest 50 commits, so on a
+// longer branch one new commit slides a still-valid pick out of the list. Treating
+// that as "rebased away" silently widened the view to the whole branch — and `diff`
+// pings are frequent, so it happened mid-review while an agent worked.
+test("an SSE diff ping keeps a 'from' that only slid out of the commit window", async () => {
+  const window50 = (offset: number) =>
+    Array.from({ length: 50 }, (_, i) => {
+      const n = offset + i;
+      return { sha: `c${n}`, shortSha: `c${n}`, subject: `s${n}`, relDate: "" };
+    });
+  // c1 is the oldest commit the picker offers.
+  vi.mocked(api.commits).mockResolvedValue({ commits: [...window50(2), { sha: "c1", shortSha: "c1", subject: "a", relDate: "" }] });
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.review).not.toBeNull()); // SSE now subscribed
+
+  act(() => result.current.setFrom("c1"));
+  expect(result.current.from).toBe("c1");
+
+  // A commit lands: the window slides and c1 falls off the end, though it still exists.
+  vi.mocked(api.commits).mockResolvedValue({ commits: window50(2) });
+  const es = (globalThis as unknown as { EventSource: { instances: { onmessage: ((e: { data: string }) => void) | null }[] } }).EventSource.instances.at(-1);
+  await act(async () => {
+    es?.onmessage?.({ data: "diff" });
+  });
+
+  await waitFor(() => expect(result.current.fromOptions.some((o) => o.hint === "picked earlier")).toBe(true));
+  expect(result.current.from).toBe("c1");
+  // And it stays labelled, or the picker would render blank on a narrowed diff.
+  expect(result.current.fromOptions.map((o) => o.value)).toContain("c1");
+});
+
 // The frontend→backend contract: each view-axis combination must map to the right
 // api.diff params, or the backend computes the wrong diff scope.
 test("diffOpts maps the view axes to the api.diff params", async () => {

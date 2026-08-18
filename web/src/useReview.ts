@@ -18,6 +18,24 @@ function keepIfSame<T>(prev: T, next: T): T {
   return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
 }
 
+// How many of base..head's commits the "from" picker asks for. Both callers pass it
+// explicitly, because the cap is what makes absence from the list inconclusive.
+const COMMIT_LIMIT = 50;
+
+// Whether a refetched commit list proves a picked `from` is gone (rebased or amended
+// away), which is the only reason to drop the reviewer's choice — the next diff would
+// 400 on it. Absence alone doesn't prove that: the list holds only the newest
+// COMMIT_LIMIT commits, so on a longer branch a single new commit slides the window
+// and drops the oldest listed one, which is still perfectly valid to diff from.
+// Resetting on that would silently widen a narrowed view to the whole branch, and
+// `diff` pings are frequent enough (every commit, plus the ~1.5s filesystem poller)
+// that it would happen while an agent works. Only a list shorter than the cap holds
+// every commit and can say the sha is gone; a branch of exactly COMMIT_LIMIT commits
+// therefore keeps its pick, which is the harmless way to be wrong.
+function fromWasRemoved(from: string, list: Commit[]): boolean {
+  return from !== "all" && list.length < COMMIT_LIMIT && !list.some((c) => c.sha === from);
+}
+
 function keepIfSameSet(prev: Set<string>, next: string[]): Set<string> {
   if (prev.size === next.length && next.every((p) => prev.has(p))) return prev;
   return new Set(next);
@@ -166,7 +184,7 @@ export function useReview() {
     if (!repo || !head) return;
     let cancelled = false;
     api
-      .commits(repo, head, base)
+      .commits(repo, head, base, COMMIT_LIMIT)
       .then((r) => {
         if (!cancelled) setCommits(r.commits ?? []);
       })
@@ -259,7 +277,7 @@ export function useReview() {
             : Promise.resolve(null),
           withDiff && p.repo ? api.branches(p.repo).catch(() => null) : Promise.resolve(null),
           withDiff && p.repo && p.head
-            ? api.commits(p.repo, p.head, p.base).catch(() => null)
+            ? api.commits(p.repo, p.head, p.base, COMMIT_LIMIT).catch(() => null)
             : Promise.resolve(null),
         ]);
         if (!cancelled) {
@@ -277,8 +295,9 @@ export function useReview() {
             if (cm) {
               const list = cm.commits ?? [];
               setCommits((prev) => keepIfSame(prev, list));
-              // A rebased/amended-away picked `from` would 400 the next diff — fall back.
-              if (p.from !== "all" && !list.some((x) => x.sha === p.from)) setFrom("all");
+              // A rebased/amended-away picked `from` would 400 the next diff — fall
+              // back. Only when the list proves it: see fromWasRemoved.
+              setFrom((cur) => (fromWasRemoved(cur, list) ? "all" : cur));
             }
           }
         }
@@ -481,13 +500,21 @@ export function useReview() {
     return opts;
   }, [branches, localBranches, mainBranch]);
   // The "from" picker: "All" (whole branch) plus head's recent commits.
-  const fromOptions = useMemo<ComboOption[]>(
-    () => [
+  const fromOptions = useMemo<ComboOption[]>(() => {
+    const opts: ComboOption[] = [
       { value: "all", label: "All (whole branch)" },
       ...commits.map((c) => ({ value: c.sha, label: `${c.shortSha}  ${c.subject}`, hint: c.relDate })),
-    ],
-    [commits]
-  );
+    ];
+    // A pick that slid out of the newest-COMMIT_LIMIT window keeps the view it was
+    // chosen for (see fromWasRemoved), and Combobox labels its value by finding it
+    // in these options — so without an entry the control would render *blank* while
+    // the diff is still narrowed to that commit. Last, since it's older than every
+    // commit the list does hold.
+    if (from !== "all" && !commits.some((c) => c.sha === from)) {
+      opts.push({ value: from, label: from.slice(0, 7), hint: "picked earlier" });
+    }
+    return opts;
+  }, [commits, from]);
 
   return {
     repos,

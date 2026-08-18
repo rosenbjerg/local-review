@@ -307,6 +307,21 @@ web/src/
   moved, so an out-of-band checkout must update `headIsCurrent` and new/rebased
   commits must reach the `from` picker; a picked `from` sha that was rebased away
   resets to `all`).
+  **That reset needs proof, not absence.** The picker asks for the newest
+  `COMMIT_LIMIT` (50) commits of `base..head` — both fetches pass it explicitly — so a
+  sha missing from the refetched list is only *gone* when the list is shorter than the
+  cap (`fromWasRemoved`). On a longer branch a single new commit slides the window and
+  drops the oldest listed commit, which is still perfectly valid to diff from;
+  resetting on that silently widened a narrowed review to the whole branch, and pings
+  are frequent enough (every commit, plus the ~1.5s poller on any edit) that it landed
+  mid-review. The other half is that a kept pick must stay **labelled**: `Combobox`
+  renders its value by finding it among the options, so `fromOptions` appends an entry
+  for a `from` the list no longer holds — without it the control goes blank while the
+  diff is still narrowed to that commit. Covered by `web/src/useReview.test.ts` (both
+  the conclusive reset and the window slide). The non-ping commits effect needs no
+  such check: the only writers of `base` reset `from` in the same update
+  (`changeRepo`/`changeHead`), and the base picker is disabled while a commit is
+  picked (`baseRelevant`), so it can't strand a selection.
   `diff` is a superset that **upgrades** a pending `meta`: a per-subscriber
   `atomic.Bool diffPending` rides alongside the coalescing wakeup channel and the
   handler clears it with `Swap`, so a dropped (coalesced) wakeup never loses the
