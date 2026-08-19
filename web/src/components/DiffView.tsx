@@ -2,11 +2,12 @@ import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMou
 import { ApiError, api } from "../api";
 import { sameComments } from "../commentsByPath";
 import { fileStat } from "../diffStats";
-import { EXPAND_STEP, gapView, hunkGaps, type Gap, type Reveal } from "../hunkGaps";
+import { buildRows, planRows, type PlannedRow, type Row } from "../diffRows";
+import { EXPAND_STEP, type Gap, type Reveal } from "../hunkGaps";
 import { hunkWordRanges, splitPieces, type Segment } from "../wordDiff";
 import { langForPath, tokenize, type Token } from "../highlight";
 import type { Comment, CommentType, FileDiff, LineKind, Side } from "../types";
-import { effectiveLines, sideLabel as labelForSide } from "../types";
+import { sideLabel as labelForSide } from "../types";
 import { CommentComposer } from "./CommentComposer";
 import { CommentThread, type CommentActions } from "./CommentThread";
 import { FileComments } from "./FileComments";
@@ -23,18 +24,6 @@ function extOf(path: string): string {
 const isRasterImage = (path: string) => IMAGE_EXTS.has(extOf(path));
 const isSvg = (path: string) => extOf(path) === "svg";
 const isMarkdown = (path: string) => extOf(path) === "md" || extOf(path) === "markdown";
-
-interface Row {
-  key: string;
-  kind: LineKind | "hunk" | "gap";
-  oldLine?: number;
-  newLine?: number;
-  content: string;
-  // On a "gap" row: the hidden region its expanders act on, and how much of that
-  // region is still hidden.
-  gap?: Gap;
-  hidden?: number;
-}
 
 interface Props {
   file: FileDiff;
@@ -272,108 +261,18 @@ export const DiffView = memo(function DiffView({
   // Full view marks the additions too even though it renders no deleted rows.
   const wordRanges = useMemo(() => hunkWordRanges(file.hunks), [file]);
 
-  const addedSet = useMemo(() => {
-    const s = new Set<number>();
-    for (const h of file.hunks) {
-      for (const l of h.lines) {
-        if (l.kind === "add" && l.newLine) s.add(l.newLine);
-      }
-    }
-    return s;
-  }, [file]);
-
-  const commentsByEndLine = useMemo(() => {
-    const m = new Map<number, Comment[]>();
-    for (const c of comments) {
-      const end = effectiveLines(c).end;
-      const arr = m.get(end) ?? [];
-      arr.push(c);
-      m.set(end, arr);
-    }
-    return m;
-  }, [comments]);
-
-  const commentedLines = useMemo(() => {
-    const s = new Set<number>();
-    for (const c of comments) {
-      const { start, end } = effectiveLines(c);
-      for (let n = start; n <= end; n++) s.add(n);
-    }
-    return s;
-  }, [comments]);
-
-  // The effective line range of the thread jumped to (n/p or the comments panel),
-  // if it lives in this file — its rows stay lit until another is picked.
-  const activeRange = useMemo(() => {
-    if (activeComment == null) return null;
-    const c = comments.find((x) => x.id === activeComment);
-    return c ? effectiveLines(c) : null;
-  }, [activeComment, comments]);
-
-  // The unchanged regions the changed-lines-only view hides. They come out of the
-  // full file, which is already fetched, so revealing one costs no request.
-  const gaps = useMemo(
-    () => (mode === "changed" && source ? hunkGaps(file.hunks, source.length) : []),
-    [mode, source, file]
+  const rows = useMemo(
+    () => buildRows({ mode, source, hunks: file.hunks, revealed }),
+    [mode, source, file, revealed]
   );
 
-  const rows: Row[] = useMemo(() => {
-    if (mode === "full" && source) {
-      return source.map((content, i) => {
-        const newLine = i + 1;
-        return {
-          key: `f${newLine}`,
-          kind: addedSet.has(newLine) ? "add" : "context",
-          newLine,
-          content,
-        } as Row;
-      });
-    }
-    const out: Row[] = [];
-    const gapByHunk = new Map(gaps.map((g) => [g.hunkIndex, g]));
-    const pushGap = (gap: Gap, header: string) => {
-      const view = gapView(gap, revealed[gap.hunkIndex]);
-      const context = (n: number) =>
-        out.push({
-          key: `g${gap.hunkIndex}c${n}`,
-          kind: "context",
-          oldLine: n + gap.delta,
-          newLine: n,
-          content: source?.[n - 1] ?? "",
-        });
-      if (view.head) for (let n = view.head.start; n <= view.head.end; n++) context(n);
-      if (view.hidden > 0) {
-        out.push({
-          key: `g${gap.hunkIndex}`,
-          kind: "gap",
-          content: header,
-          gap,
-          hidden: view.hidden,
-        });
-      }
-      if (view.tail) for (let n = view.tail.start; n <= view.tail.end; n++) context(n);
-    };
-    file.hunks.forEach((h, hi) => {
-      const gap = gapByHunk.get(hi);
-      // A hidden region's bar carries the hunk's @@ header, so the two never stack.
-      // Once the region is fully revealed the lines run continuously into the hunk
-      // and the header would be noise, so neither row is emitted.
-      if (gap) pushGap(gap, h.header);
-      else out.push({ key: `h${hi}`, kind: "hunk", content: h.header });
-      h.lines.forEach((l, li) => {
-        out.push({
-          key: `h${hi}l${li}`,
-          kind: l.kind,
-          oldLine: l.oldLine,
-          newLine: l.newLine,
-          content: l.content,
-        });
-      });
-    });
-    const trailing = gapByHunk.get(file.hunks.length);
-    if (trailing) pushGap(trailing, "");
-    return out;
-  }, [mode, source, file, addedSet, gaps, revealed]);
+  // Every decision about the table that isn't rendering — shading, thread
+  // placement, where the composer goes, what didn't fit — in one pure pass
+  // (diffRows.ts), so the rules are testable and this component only draws.
+  const plan = useMemo(
+    () => planRows({ rows, comments, selection, dragging: dragAnchor !== null, activeComment }),
+    [rows, comments, selection, dragAnchor, activeComment]
+  );
 
   function expand(gap: Gap, side: "head" | "tail", amount: number) {
     setRevealed((s) => {
@@ -539,13 +438,10 @@ export const DiffView = memo(function DiffView({
     />
   );
 
-  // Comments whose anchor line isn't rendered in this view fall back to the end
-  // (tracked via `rendered`).
-  const rendered = new Set<number>();
-  let composerPlaced = false;
+  // The plan says what goes where; this only turns it into rows.
   const body: ReactNode[] = [];
-
-  for (const r of rows) {
+  for (const p of plan.rows) {
+    const r = p.row;
     if (r.kind === "gap") {
       body.push(gapRow(r));
       continue;
@@ -560,18 +456,29 @@ export const DiffView = memo(function DiffView({
       );
       continue;
     }
-    const commentable = !!r.newLine && r.kind !== "del";
-    const selected =
-      !!r.newLine && selection != null && r.newLine >= selection.start && r.newLine <= selection.end;
-    const hasComment = !!r.newLine && commentedLines.has(r.newLine);
-    const activeHL =
-      !!r.newLine && activeRange != null && r.newLine >= activeRange.start && r.newLine <= activeRange.end;
-    body.push(
+    body.push(lineRow(p, r.kind));
+    if (p.threads.length > 0) {
+      body.push(threadRow(`t${r.newLine}`, p.threads.map(renderThread)));
+    }
+    if (p.composer) body.push(threadRow("composer", renderComposer()));
+  }
+  if (plan.leftover.length > 0) {
+    body.push(threadRow("leftover", plan.leftover.map(renderThread)));
+  }
+  if (plan.trailingComposer) {
+    body.push(threadRow("composer", renderComposer()));
+  }
+
+  function lineRow(
+    { row: r, commentable, selected, commented, active }: PlannedRow,
+    kind: LineKind
+  ) {
+    return (
       <tr
         key={r.key}
-        className={`row-${r.kind}${selected ? " row-selected" : ""}${
-          hasComment ? " row-commented" : ""
-        }${activeHL ? " row-comment-active" : ""}`}
+        className={`row-${kind}${selected ? " row-selected" : ""}${
+          commented ? " row-commented" : ""
+        }${active ? " row-comment-active" : ""}`}
       >
         <td className="gutter">{r.oldLine ?? ""}</td>
         <td
@@ -583,38 +490,11 @@ export const DiffView = memo(function DiffView({
           {r.newLine ?? ""}
         </td>
         <td className="line-content">
-          <span className="sign">
-            {r.kind === "add" ? "+" : r.kind === "del" ? "-" : " "}
-          </span>
-          {renderContent(r.kind, r.oldLine, r.newLine, r.content)}
+          <span className="sign">{kind === "add" ? "+" : kind === "del" ? "-" : " "}</span>
+          {renderContent(kind, r.oldLine, r.newLine, r.content)}
         </td>
       </tr>
     );
-
-    if (r.newLine) {
-      const threads = commentsByEndLine.get(r.newLine);
-      if (threads) {
-        for (const c of threads) rendered.add(c.id);
-        body.push(threadRow(`t${r.newLine}`, threads.map(renderThread)));
-      }
-      if (selection && dragAnchor === null && r.newLine === selection.end) {
-        composerPlaced = true;
-        body.push(threadRow("composer", renderComposer()));
-      }
-    }
-  }
-
-  // A line-0 comment is about the file, not about any row, so it renders in its own
-  // block below the table — where MediaView and MarkdownView already put theirs —
-  // rather than in the leftover bucket, which exists for comments whose *line* isn't
-  // on screen (Changed view hiding it, or an outdated anchor).
-  const fileComments = comments.filter((c) => effectiveLines(c).start === 0);
-  const leftover = comments.filter((c) => !rendered.has(c.id) && effectiveLines(c).start !== 0);
-  if (leftover.length > 0) {
-    body.push(threadRow("leftover", leftover.map(renderThread)));
-  }
-  if (selection && !composerPlaced && dragAnchor === null) {
-    body.push(threadRow("composer", renderComposer()));
   }
 
   function renderComposer() {
@@ -712,7 +592,7 @@ export const DiffView = memo(function DiffView({
                   Both are the same missing surface, which the media and markdown
                   views have had all along. */}
               <FileComments
-                comments={fileComments}
+                comments={plan.fileComments}
                 renderThread={renderThread}
                 onSubmit={submitFileComment}
               />

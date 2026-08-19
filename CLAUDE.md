@@ -72,6 +72,9 @@ web/src/
   commentsByPath.ts      group comments per file card + the by-value compare its memo uses
   wordDiff.ts            intra-line diff: token LCS → changed char ranges + the segment splitter
   hunkGaps.ts            the unchanged regions a hunk view hides: their line ranges + how much is revealed
+  diffRows.ts            what the diff table shows, as data: buildRows (source/hunks/reveals → rows)
+                         and planRows (rows + comments + selection → shading, thread and
+                         composer placement, the file-comment and leftover buckets)
   diffStats.ts           per-file / whole-review added+removed line counts, off the hunks
   occurrences.ts         occurrence matching: term validation, whole-word vs substring, span→text-node mapping
   useOccurrenceHighlight.ts  select a word → light up its other occurrences in that file
@@ -81,9 +84,9 @@ web/src/
   components/
     FileExplorer.tsx     left pane: hierarchical file tree, collapse, reviewed toggle,
                          per-file +/- counts, reviewed-progress bar (the head's bottom edge)
-    DiffView.tsx         center: per-file diff, syntax highlight, inline threads/composer,
-                         drag-select ranges, Changed/Full toggle, expandable hidden regions,
-                         auto-collapse large files
+    DiffView.tsx         center: per-file diff — fetches the source, tokenizes, owns the
+                         view/selection/reveal state, and draws the rows diffRows.ts
+                         planned; Changed/Full toggle, auto-collapse large files
     LazyFile.tsx         viewport lazy-mount wrapper (IntersectionObserver) + scroll anchor
     FindBar.tsx          occurrence-highlight bar above the diff: term, n-of-N, prev/next
     CommentThread.tsx    a comment thread: root comment (edit/delete) + replies + reply composer
@@ -461,6 +464,20 @@ web/src/
   both of which replace the row's add/del shade with `--sel-bg` — a rule that
   swaps a row shade has to clear the word marks too, or they sit on a background
   they were never picked against.
+- **The diff table is planned as data, then drawn** (`diffRows.ts`). `buildRows`
+  turns (mode, source, hunks, reveals) into rows; `planRows` decides everything about
+  those rows that isn't rendering — the shading flags, which threads hang under which
+  row, where the composer goes, and the two buckets for comments that can't sit on a
+  row. `DiffView` maps the result to `<tr>`s and nothing else. The split exists
+  because the rules are the non-obvious part and they were previously interleaved with
+  JSX in an unmemoized loop, i.e. untestable without a DOM: a thread is placed by its
+  **effective end** line (so a moved comment follows its code); `leftover` is defined
+  by what the walk actually rendered, not by any property of a comment — which is what
+  catches a Changed view hiding the line *and* an outdated anchor with one rule; the
+  composer's inline position and its trailing fallback are **mutually exclusive**; and
+  the composer waits for `dragging` to end, or it would flicker under every row a drag
+  passes over. `diffRows.test.ts` pins each of those (checked by breaking them one at
+  a time), which is the point of the module existing.
 - **Expandable hidden regions** (`hunkGaps.ts`): Changed view shows only the hunks
   and Full view the whole file, so reading the few lines around a change meant
   loading all of it. The gaps between hunks (and before the first / after the last)
