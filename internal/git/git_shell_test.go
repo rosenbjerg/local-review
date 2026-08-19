@@ -226,3 +226,82 @@ func TestListBranchesEmptyRepo(t *testing.T) {
 		t.Errorf("ListBranches = %v, want empty", branches)
 	}
 }
+
+// The batch reader replaces one `git show` per file with a single command, so it has
+// to agree with FileContent exactly — including on the payloads that make a
+// line-oriented parse wrong. Sizes come from the record header, never from scanning
+// for a delimiter, because file content can hold anything.
+func TestBatchObjects(t *testing.T) {
+	dir, r := initRepoOn(t, "main")
+	mustWrite(t, dir, "plain.txt", "l1\nl2\n")
+	mustWrite(t, dir, "noeol.txt", "no trailing newline")
+	mustWrite(t, dir, "empty.txt", "")
+	// Content that looks like the batch protocol's own framing, plus a NUL.
+	mustWrite(t, dir, "tricky.txt", "deadbeef blob 999\nnot a header\x00\nstill mine\n")
+	mustWrite(t, dir, "spaced name.txt", "spaces are fine\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-q", "-m", "c1")
+
+	paths := []string{"plain.txt", "noeol.txt", "empty.txt", "tricky.txt", "spaced name.txt"}
+	specs := make([]string, len(paths))
+	for i, p := range paths {
+		specs[i] = "HEAD:" + p
+	}
+	// A missing path in the middle must not desynchronize the ones after it.
+	specs = append(specs[:2], append([]string{"HEAD:absent.txt"}, specs[2:]...)...)
+
+	got, err := r.BatchObjects(specs)
+	if err != nil {
+		t.Fatalf("BatchObjects: %v", err)
+	}
+
+	for _, p := range paths {
+		want, fcErr := r.FileContent("HEAD", p)
+		if fcErr != nil {
+			t.Fatalf("FileContent(%q): %v", p, fcErr)
+		}
+		if got["HEAD:"+p] != want {
+			t.Errorf("BatchObjects[%q] = %q, want %q", p, got["HEAD:"+p], want)
+		}
+	}
+	if _, ok := got["HEAD:absent.txt"]; ok {
+		t.Error("a missing path must be absent from the result, not present as empty")
+	}
+	// An empty file is present-and-empty, which is a different answer from missing.
+	if v, ok := got["HEAD:empty.txt"]; !ok || v != "" {
+		t.Errorf("empty file = (%q, %v), want (\"\", true)", v, ok)
+	}
+}
+
+// The index is the other side a review read needs in bulk.
+func TestBatchObjectsIndexSide(t *testing.T) {
+	dir, r := initRepoOn(t, "main")
+	mustWrite(t, dir, "f.txt", "committed\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-q", "-m", "c1")
+	mustWrite(t, dir, "f.txt", "staged\n")
+	gitCmd(t, dir, "add", "f.txt")
+	mustWrite(t, dir, "f.txt", "working\n")
+
+	got, err := r.BatchObjects([]string{":f.txt", "HEAD:f.txt"})
+	if err != nil {
+		t.Fatalf("BatchObjects: %v", err)
+	}
+	if got[":f.txt"] != "staged\n" {
+		t.Errorf("index read = %q, want %q", got[":f.txt"], "staged\n")
+	}
+	if got["HEAD:f.txt"] != "committed\n" {
+		t.Errorf("head read = %q, want %q", got["HEAD:f.txt"], "committed\n")
+	}
+}
+
+// Degenerate inputs must not spawn a process or panic.
+func TestBatchObjectsEmptyInput(t *testing.T) {
+	_, r := initRepoOn(t, "main")
+	if got, err := r.BatchObjects(nil); err != nil || len(got) != 0 {
+		t.Errorf("BatchObjects(nil) = %v, want empty", got)
+	}
+	if got, err := r.BatchObjects([]string{"", "HEAD:with\nnewline"}); err != nil || len(got) != 0 {
+		t.Errorf("unusable specs should be skipped, got %v", got)
+	}
+}

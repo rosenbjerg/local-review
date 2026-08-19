@@ -4,22 +4,19 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 
-	"local-review/internal/git"
 	"local-review/internal/store"
 )
 
-func (s *Server) annotateReviewedFiles(review *store.Review) {
-	if len(review.ReviewedFiles) == 0 {
+// files and cache are supplied by annotateReview, which already read the rows and
+// warmed the content: both halves of a review read want the same files from the same
+// sides, so reading them here again would double the git work.
+func (s *Server) annotateReviewedFiles(review *store.Review, files []store.ReviewedFile, cache *contentCache) {
+	if len(review.ReviewedFiles) == 0 || files == nil {
 		return
 	}
-	files, err := s.Store.ListReviewedFilesFull(review.ID)
-	if err != nil {
-		return // best-effort: leave the stored marks as-is
-	}
-	repo := git.New(review.RepoPath)
 	kept := []string{}
 	for _, f := range files {
-		if reviewedMarkHolds(repo, review.HeadRef, f) {
+		if reviewedMarkHolds(cache, f) {
 			kept = append(kept, f.Path)
 		}
 	}
@@ -35,25 +32,16 @@ const absentContentHash = "absent"
 // An empty captured hash (older/unfingerprinted rows) always holds; otherwise the
 // current same-side content must re-hash equal. A deleted/unreadable file hashes to
 // the absent sentinel, so it holds only against another absent read.
-func reviewedMarkHolds(repo *git.Repo, headRef string, f store.ReviewedFile) bool {
+func reviewedMarkHolds(cache *contentCache, f store.ReviewedFile) bool {
 	if f.ContentHash == "" {
 		return true
 	}
-	return fileContentHash(repo, headRef, f.Path, f.Worktree, f.Indexed) == f.ContentHash
+	return hashSide(cache, f.Path, f.Worktree, f.Indexed) == f.ContentHash
 }
 
-func fileContentHash(repo *git.Repo, headRef, path string, worktree, indexed bool) string {
-	var content string
-	var err error
-	switch {
-	case indexed:
-		content, err = repo.IndexFile(path)
-	case worktree:
-		content, err = repo.WorktreeFile(path)
-	default:
-		content, err = repo.FileContent(headRef, path)
-	}
-	if err != nil {
+func hashSide(cache *contentCache, path string, worktree, indexed bool) string {
+	content, ok := cache.read(path, worktree, indexed)
+	if !ok {
 		// Unreadable side (deleted file, etc.) — a sentinel that reverts if the
 		// file later returns, rather than "" which would pin it reviewed forever.
 		return absentContentHash

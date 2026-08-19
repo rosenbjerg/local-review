@@ -256,6 +256,93 @@ func (r *Repo) showObject(spec string) (string, error) {
 	return out, err
 }
 
+// BatchObjects reads many `<ref>:<path>`-style objects in one `git cat-file --batch`
+// instead of one `git show` each. Process spawn is the entire cost of these reads —
+// 60 sequential `git show` calls measured 0.64s against 0.01s for one batched
+// command — and a review read needs one per commented and per reviewed file, on
+// every SSE ping. Absent specs are simply missing from the result, so a caller can
+// tell "not there" from "not asked for" without an error per path.
+//
+// The returned map is keyed by the spec as given, and holds **blobs only** — a spec
+// naming a tree or tag is left out so it falls through to the single-object path and
+// keeps whatever `git show` did for it. Specs containing a newline can't ride the
+// line-oriented protocol and are left out for the same reason.
+//
+// An error means the batch didn't run: the caller must not read a spec's absence
+// from the map as the object being absent, only as "unknown".
+func (r *Repo) BatchObjects(specs []string) (map[string]string, error) {
+	out := map[string]string{}
+	usable := make([]string, 0, len(specs))
+	seen := map[string]bool{}
+	for _, s := range specs {
+		if s == "" || strings.ContainsAny(s, "\n\r") || seen[s] {
+			continue
+		}
+		seen[s] = true
+		usable = append(usable, s)
+	}
+	if len(usable) == 0 {
+		return out, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", r.Path, "cat-file", "--batch")
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	// Same reason the poller passes it: this runs on every review read, and must
+	// never take index.lock out from under a concurrent `git commit`.
+	cmd.Env = append(cmd.Env, optionalLocksOff...)
+	cmd.Stdin = strings.NewReader(strings.Join(usable, "\n") + "\n")
+	var buf, errb bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &errb
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("git cat-file --batch: %w: %s", err, errb.String())
+	}
+	parseBatch(buf.Bytes(), usable, out)
+	return out, nil
+}
+
+// parseBatch walks cat-file --batch's output, which answers each input in order:
+//
+//	<oid> SP <type> SP <size> LF <size bytes> LF     — found
+//	<spec> SP missing LF                             — not found (also "ambiguous")
+//
+// Records are correlated to inputs by position, since a found record reports the
+// resolved oid rather than echoing the spec. The payload is taken by its declared
+// size and never by scanning for a delimiter: file content is arbitrary bytes and
+// may hold newlines, NULs, or something that looks exactly like a header.
+func parseBatch(data []byte, specs []string, out map[string]string) {
+	pos, i := 0, 0
+	for pos < len(data) && i < len(specs) {
+		nl := bytes.IndexByte(data[pos:], '\n')
+		if nl < 0 {
+			return
+		}
+		header := string(data[pos : pos+nl])
+		pos += nl + 1
+
+		fields := strings.Fields(header)
+		if len(fields) != 3 {
+			i++ // "missing"/"ambiguous": no payload follows, so just advance
+			continue
+		}
+		size, err := strconv.Atoi(fields[2])
+		if err != nil || size < 0 || pos+size > len(data) {
+			return // truncated or unparseable: keep what we have rather than guess
+		}
+		// Blobs only. `git show <ref>:<dir>` prints a formatted tree listing where
+		// the raw tree object is binary, so recording one here would quietly change
+		// what such a spec resolves to; leaving it out sends the caller to the
+		// single-object path that produced the old answer.
+		if fields[1] == "blob" {
+			out[specs[i]] = string(data[pos : pos+size])
+		}
+		pos += size + 1 // payload plus git's trailing newline
+		i++
+	}
+}
+
 // ListFiles returns the tracked file paths at ref, for the "comment on a
 // non-changed file" picker. quotePath=false keeps non-ASCII paths verbatim, to
 // match the diff parser (see diffArgs).

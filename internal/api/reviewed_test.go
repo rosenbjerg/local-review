@@ -7,7 +7,13 @@ import (
 	"local-review/internal/store"
 )
 
-// fileContentHash must hash the content of the side named by the flags, so the same
+// sideHash is fileContentHash's old shape: build the per-read cache these helpers
+// now take, then hash one path on one side.
+func sideHash(r *testRepo, headRef, path string, worktree, indexed bool) string {
+	return hashSide(newContentCache(r.repo, headRef), path, worktree, indexed)
+}
+
+// hashSide must hash the content of the side named by the flags, so the same
 // path yields distinct hashes for head / working tree / index when they differ.
 func TestFileContentHashPerSide(t *testing.T) {
 	r := newRepo(t)
@@ -27,8 +33,8 @@ func TestFileContentHashPerSide(t *testing.T) {
 		{"index", false, true, hashOf("staged\n")},
 	}
 	for _, c := range cases {
-		if got := fileContentHash(r.repo, "main", "f.txt", c.worktree, c.indexed); got != c.want {
-			t.Errorf("fileContentHash[%s] = %q, want %q", c.name, got, c.want)
+		if got := sideHash(r, "main", "f.txt", c.worktree, c.indexed); got != c.want {
+			t.Errorf("hashSide[%s] = %q, want %q", c.name, got, c.want)
 		}
 	}
 }
@@ -40,12 +46,20 @@ func TestFileContentHashAbsentSentinel(t *testing.T) {
 	r.write("f.txt", "x\n")
 	r.commitAll("c1")
 
-	if got := fileContentHash(r.repo, "main", "gone.txt", false, false); got != absentContentHash {
+	if got := sideHash(r, "main", "gone.txt", false, false); got != absentContentHash {
 		t.Errorf("missing head file = %q, want %q", got, absentContentHash)
 	}
-	if got := fileContentHash(r.repo, "main", "gone.txt", true, false); got != absentContentHash {
+	if got := sideHash(r, "main", "gone.txt", true, false); got != absentContentHash {
 		t.Errorf("missing worktree file = %q, want %q", got, absentContentHash)
 	}
+}
+
+// markHolds builds a **fresh** cache per call, which is the production lifetime: one
+// contentCache serves one review read, so content edited between reads is seen. A
+// cache shared across these calls would memoise the pre-edit content and the
+// drop-after-change assertions below would pass for the wrong reason.
+func markHolds(r *testRepo, headRef string, f store.ReviewedFile) bool {
+	return reviewedMarkHolds(newContentCache(r.repo, headRef), f)
 }
 
 func TestReviewedMarkHolds(t *testing.T) {
@@ -54,19 +68,19 @@ func TestReviewedMarkHolds(t *testing.T) {
 	r.commitAll("c1")
 
 	// Legacy pre-fingerprint rows (empty hash) always hold.
-	if !reviewedMarkHolds(r.repo, "main", store.ReviewedFile{Path: "f.txt", ContentHash: ""}) {
+	if !markHolds(r, "main", store.ReviewedFile{Path: "f.txt", ContentHash: ""}) {
 		t.Error("empty-hash (legacy) mark should hold")
 	}
 
 	// A worktree mark holds while the on-disk content is unchanged, and drops once
 	// it changes — the derive-don't-trust behavior.
-	h := fileContentHash(r.repo, "main", "f.txt", true, false)
+	h := sideHash(r, "main", "f.txt", true, false)
 	mark := store.ReviewedFile{Path: "f.txt", ContentHash: h, Worktree: true}
-	if !reviewedMarkHolds(r.repo, "main", mark) {
+	if !markHolds(r, "main", mark) {
 		t.Error("worktree mark should hold before any edit")
 	}
 	r.write("f.txt", "hello-edited\n")
-	if reviewedMarkHolds(r.repo, "main", mark) {
+	if markHolds(r, "main", mark) {
 		t.Error("worktree mark should drop after the file changes")
 	}
 }
@@ -79,12 +93,12 @@ func TestReviewedMarkAbsentSentinel(t *testing.T) {
 	r.commitAll("c1")
 
 	mark := store.ReviewedFile{Path: "gone.txt", ContentHash: absentContentHash}
-	if !reviewedMarkHolds(r.repo, "main", mark) {
+	if !markHolds(r, "main", mark) {
 		t.Error("absent mark should hold while the file is still missing")
 	}
 	r.write("gone.txt", "back\n") // file reappears on disk
 	markWT := store.ReviewedFile{Path: "gone.txt", ContentHash: absentContentHash, Worktree: true}
-	if reviewedMarkHolds(r.repo, "main", markWT) {
+	if markHolds(r, "main", markWT) {
 		t.Error("absent mark should drop once the file returns with content")
 	}
 }

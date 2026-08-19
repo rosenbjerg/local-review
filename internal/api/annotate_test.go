@@ -101,7 +101,7 @@ func TestCaptureSnippetPerSide(t *testing.T) {
 // comment for assertions.
 func annotateOne(r *testRepo, headRef string, c store.Comment) store.Comment {
 	cs := []store.Comment{c}
-	annotateComments(r.repo, headRef, cs)
+	annotateComments(r.repo, headRef, cs, newContentCache(r.repo, headRef))
 	return cs[0]
 }
 
@@ -392,5 +392,85 @@ func TestAnnotateMissingFileOutdated(t *testing.T) {
 	got := annotateOne(r, "main", store.Comment{FilePath: "gone.txt", StartLine: 1, EndLine: 1, Snippet: "l1"})
 	if got.AnchorStatus != store.AnchorOutdated {
 		t.Fatalf("missing-file anchor: anchorStatus = %q, want outdated", got.AnchorStatus)
+	}
+}
+
+// A review with several comments on one commit takes the whole-tree diff instead of
+// one path-scoped diff per file, because the scoped variant costs a git process each
+// and after any new commit *every* comment takes that path at once. The two must
+// agree on every verdict, so this drives the same fixtures through the whole-diff
+// branch that the single-comment tests above drive through the scoped one.
+func TestAnnotateByDiffWholeTreeAgreesWithScoped(t *testing.T) {
+	r := newRepo(t)
+	// Every file gets distinct content: --find-renames pairs by similarity, so
+	// identical files let git pair a deletion with an unrelated rename target and the
+	// fixture would be testing git's coin flip rather than this code.
+	r.write("untouched.txt", "untouched one\ntwo\nthree\n")
+	r.write("edited-elsewhere.txt", "elsewhere one\ntwo\nthree\n")
+	r.write("edited-here.txt", "here one\ntwo\nthree\n")
+	r.write("shifted.txt", "shifted one\ntwo\nthree\n")
+	r.write("renamed.txt", "renamed one\ntwo\nthree\n")
+	r.write("deleted.txt", "deleted one\ntwo\nthree\n")
+	sha1 := r.commitAll("c1")
+
+	r.write("edited-elsewhere.txt", "elsewhere one\ntwo\nCHANGED\n") // line 3; comment is on 1
+	r.write("edited-here.txt", "here one\nCHANGED\nthree\n")         // line 2; comment is on 2
+	r.write("shifted.txt", "prelude\nshifted one\ntwo\nthree\n")     // pushes the comment down one
+	r.git("mv", "renamed.txt", "moved.txt")
+	r.remove("deleted.txt")
+	r.commitAll("c2")
+
+	at := func(path string, line int, snippet string) store.Comment {
+		return store.Comment{FilePath: path, StartLine: line, EndLine: line, Snippet: snippet, CommitSHA: sha1}
+	}
+	cs := []store.Comment{
+		at("untouched.txt", 1, "untouched one"),
+		at("edited-elsewhere.txt", 1, "elsewhere one"),
+		at("edited-here.txt", 2, "two"),
+		at("shifted.txt", 1, "shifted one"),
+		at("renamed.txt", 1, "renamed one"),
+		at("deleted.txt", 1, "deleted one"),
+	}
+	// More than one comment on sha1, so this takes the whole-tree branch.
+	if !shasWithSeveralComments(cs, "head-sha")[sha1] {
+		t.Fatal("fixture should select the whole-tree diff")
+	}
+	annotateComments(r.repo, "main", cs, newContentCache(r.repo, "main"))
+
+	byPath := map[string]store.Comment{}
+	for _, c := range cs {
+		byPath[c.FilePath] = c
+	}
+	want := map[string]store.AnchorStatus{
+		"untouched.txt":        store.AnchorCurrent,
+		"edited-elsewhere.txt": store.AnchorCurrent,
+		"edited-here.txt":      store.AnchorOutdated,
+		"shifted.txt":          store.AnchorMoved,
+		"renamed.txt":          store.AnchorMoved,
+		"deleted.txt":          store.AnchorOutdated,
+	}
+	for path, wantStatus := range want {
+		if got := byPath[path].AnchorStatus; got != wantStatus {
+			t.Errorf("%s: anchorStatus = %q, want %q", path, got, wantStatus)
+		}
+	}
+	if got := byPath["shifted.txt"].CurrentStartLine; got != 2 {
+		t.Errorf("shifted.txt: currentStartLine = %d, want 2", got)
+	}
+	// A rename must relocate the comment to the file's new home, not just shift it.
+	if got := byPath["renamed.txt"].CurrentFilePath; got != "moved.txt" {
+		t.Errorf("renamed.txt: currentFilePath = %q, want moved.txt", got)
+	}
+
+	// The same comments one at a time take the scoped path; the verdicts must match.
+	for path, wantStatus := range want {
+		one := annotateOne(r, "main", at(path, byPath[path].StartLine, byPath[path].Snippet))
+		if one.AnchorStatus != wantStatus {
+			t.Errorf("scoped path disagrees for %s: %q, want %q", path, one.AnchorStatus, wantStatus)
+		}
+		if one.CurrentFilePath != byPath[path].CurrentFilePath {
+			t.Errorf("scoped path disagrees on relocation for %s: %q vs %q",
+				path, one.CurrentFilePath, byPath[path].CurrentFilePath)
+		}
 	}
 }

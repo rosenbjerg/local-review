@@ -644,12 +644,13 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Capture the fingerprint of each file's on-screen side — dropped later if the
-	// content changes (see reviewed.go).
-	var repo *git.Repo
-	var headRef string
+	// content changes (see reviewed.go). A folder-level toggle arrives as one batch,
+	// so the reads are warmed in a single git command rather than one per file.
+	var cache *contentCache
 	if req.Reviewed {
 		if repoPath, hr, err := s.Store.ReviewRepoHead(id); err == nil {
-			repo, headRef = git.New(repoPath), hr
+			cache = newContentCache(git.New(repoPath), hr)
+			cache.warm(req.FilePaths, bool2{indexed: req.Indexed, worktree: req.Worktree})
 		}
 	}
 	marks := make([]store.FileReviewMark, 0, len(req.FilePaths))
@@ -658,8 +659,8 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		hash := ""
-		if req.Reviewed && repo != nil {
-			hash = fileContentHash(repo, headRef, p, req.Worktree, req.Indexed)
+		if req.Reviewed && cache != nil {
+			hash = hashSide(cache, p, req.Worktree, req.Indexed)
 		}
 		marks = append(marks, store.FileReviewMark{Path: p, ContentHash: hash})
 	}
@@ -764,7 +765,8 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 	}
 	if repo != nil {
 		cs := []store.Comment{*c}
-		annotateComments(repo, headRef, cs)
+		// One comment, so a warm-up would cost more than it saves.
+		annotateComments(repo, headRef, cs, newContentCache(repo, headRef))
 		c = &cs[0]
 	}
 	s.notify(id)
