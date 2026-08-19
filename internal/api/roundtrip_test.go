@@ -143,3 +143,84 @@ func TestReviewedRoundTripStagedSide(t *testing.T) {
 		t.Errorf("re-staging should drop the reviewed mark: %v", rv.ReviewedFiles)
 	}
 }
+
+// The write side must enforce the same path rule the read side does, and refuse a
+// body with nothing in it. Both used to be accepted, and the export then rendered
+// the result as a nonsense or empty "## " file heading — a thread that says nothing
+// yet still counts toward the review.
+func TestAddCommentRejectsUnusableInput(t *testing.T) {
+	r := newRepo(t)
+	r.write("f.txt", "l1\nl2\n")
+	head := r.commitAll("c1")
+	s := r.server()
+	rev, err := s.Store.CreateOrGetReview(r.dir, "main", "main", head)
+	if err != nil {
+		t.Fatalf("CreateOrGetReview: %v", err)
+	}
+
+	bad := []struct {
+		name string
+		body map[string]any
+	}{
+		{"traversal path", map[string]any{"filePath": "../../../../etc/passwd", "startLine": 1, "endLine": 1, "body": "x"}},
+		{"empty path", map[string]any{"filePath": "", "startLine": 1, "endLine": 1, "body": "x"}},
+		{"absolute path", map[string]any{"filePath": "/etc/passwd", "startLine": 1, "endLine": 1, "body": "x"}},
+		{"dotgit path", map[string]any{"filePath": ".git/config", "startLine": 1, "endLine": 1, "body": "x"}},
+		{"empty body", map[string]any{"filePath": "f.txt", "startLine": 1, "endLine": 1, "body": ""}},
+		{"whitespace body", map[string]any{"filePath": "f.txt", "startLine": 1, "endLine": 1, "body": "  \n\t "}},
+		{"both anchor sides", map[string]any{"filePath": "f.txt", "startLine": 1, "endLine": 1, "body": "x", "worktree": true, "indexed": true}},
+	}
+	for _, c := range bad {
+		t.Run(c.name, func(t *testing.T) {
+			rec := postJSON(t, s.handleAddComment, rev.ID, c.body)
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want 400 (body: %s)", rec.Code, rec.Body.String())
+			}
+		})
+	}
+
+	// The guard must not narrow what's legitimate — including the line-0 file
+	// comment, whose path is the *only* thing anchoring it.
+	for _, ok := range []struct {
+		name string
+		body map[string]any
+	}{
+		{"line comment", map[string]any{"filePath": "f.txt", "startLine": 1, "endLine": 2, "body": "x"}},
+		{"file comment", map[string]any{"filePath": "f.txt", "startLine": 0, "endLine": 0, "body": "whole file"}},
+		{"nested path", map[string]any{"filePath": "dir/sub/f.txt", "startLine": 0, "endLine": 0, "body": "x"}},
+	} {
+		t.Run(ok.name, func(t *testing.T) {
+			rec := postJSON(t, s.handleAddComment, rev.ID, ok.body)
+			if rec.Code != http.StatusOK {
+				t.Errorf("status = %d, want 200 (body: %s)", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+// A reply with no text is the same defect one level down: it renders in the export
+// as an author line with nothing after it.
+func TestReplyRejectsEmptyBody(t *testing.T) {
+	r := newRepo(t)
+	r.write("f.txt", "l1\n")
+	head := r.commitAll("c1")
+	s := r.server()
+	rev, err := s.Store.CreateOrGetReview(r.dir, "main", "main", head)
+	if err != nil {
+		t.Fatalf("CreateOrGetReview: %v", err)
+	}
+	c, err := s.Store.AddComment(store.Comment{ReviewID: rev.ID, FilePath: "f.txt", StartLine: 1, EndLine: 1, Body: "root"})
+	if err != nil {
+		t.Fatalf("AddComment: %v", err)
+	}
+
+	for _, body := range []string{"", "   "} {
+		rec := postJSON(t, s.handleAddReply, c.ID, map[string]any{"body": body})
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("reply body %q: status = %d, want 400", body, rec.Code)
+		}
+	}
+	if rec := postJSON(t, s.handleAddReply, c.ID, map[string]any{"body": "real"}); rec.Code != http.StatusOK {
+		t.Errorf("valid reply: status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+	}
+}

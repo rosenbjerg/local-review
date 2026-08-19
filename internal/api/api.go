@@ -694,6 +694,22 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, errString("startLine must be >= 0"))
 		return
 	}
+	// The same path rule every read endpoint enforces. Without it the store accepted
+	// paths no file can have — "" and "../../etc/passwd" — which the export then
+	// rendered as an empty or nonsense "## " file heading.
+	if err := validPath(req.FilePath); err != nil {
+		httpError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := validBody(req.Body); err != nil {
+		httpError(w, http.StatusBadRequest, err)
+		return
+	}
+	// Three-valued anchor side carried by two flags, so both set names no side.
+	if req.Worktree && req.Indexed {
+		httpError(w, http.StatusBadRequest, errString("worktree and indexed are mutually exclusive"))
+		return
+	}
 	if req.EndLine < req.StartLine {
 		req.EndLine = req.StartLine
 	}
@@ -790,6 +806,10 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.StartLine < 0 {
 		httpError(w, http.StatusBadRequest, errString("startLine must be >= 0"))
+		return
+	}
+	if err := validBody(req.Body); err != nil {
+		httpError(w, http.StatusBadRequest, err)
 		return
 	}
 	if req.EndLine < req.StartLine {
@@ -901,6 +921,10 @@ func (s *Server) handleAddReply(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if err := validBody(req.Body); err != nil {
+		httpError(w, http.StatusBadRequest, err)
+		return
+	}
 	if req.Author == "" {
 		// An omitted author is the coding agent addressing the review; the browser
 		// sends "reviewer" and the adversarial reviewer sends "review-agent".
@@ -922,6 +946,10 @@ func (s *Server) handleUpdateReply(w http.ResponseWriter, r *http.Request) {
 	}
 	req, ok := decodeBody[replyReq](w, r)
 	if !ok {
+		return
+	}
+	if err := validBody(req.Body); err != nil {
+		httpError(w, http.StatusBadRequest, err)
 		return
 	}
 	rep, reviewID, err := s.Store.UpdateReply(id, req.Body)
@@ -1047,6 +1075,17 @@ func validPath(p string) error {
 	}
 	if bad {
 		return fmt.Errorf("invalid path %q", p)
+	}
+	return nil
+}
+
+// validBody rejects a comment/reply body with no text in it. An empty body reaches
+// the export as a heading with nothing under it — a thread that says nothing but
+// still counts toward the review — and the browser already refuses to submit one
+// (CommentComposer trims and disables), so this only closes the raw API path.
+func validBody(body string) error {
+	if strings.TrimSpace(body) == "" {
+		return errString("body is required")
 	}
 	return nil
 }
