@@ -148,12 +148,15 @@ export function FileExplorer({
 
   // Same reason as statByFile: this walks every file, on every scroll frame.
   // `unchanged` is exactly App's synthetic-card marker, so it separates "files the
-  // diff changed" from "files opened only to comment on" — the denominator below
-  // holds both, and a reviewer comparing counts needs to be told which is which.
-  const openedCount = useMemo(
-    () => files.filter((f) => f.status === "unchanged").length,
+  // diff changed" from "files opened only to comment on". The progress counts only
+  // the former — it answers "how far through the diff am I", the same population the
+  // topbar's file count names, so the two agree; a file opened purely to comment on
+  // is listed and markable, but it isn't work the branch asked for.
+  const changedFiles = useMemo(
+    () => files.filter((f) => f.status !== "unchanged"),
     [files]
   );
+  const openedCount = files.length - changedFiles.length;
 
   const countByFile = new Map<string, number>();
   for (const c of comments) {
@@ -173,7 +176,7 @@ export function FileExplorer({
     ? files.filter((f) => (f.newPath || f.oldPath).toLowerCase().includes(q))
     : files;
   const tree = buildTree(shown);
-  const reviewedCount = files.filter((f) => reviewed.has(f.newPath || f.oldPath)).length;
+  const reviewedCount = changedFiles.filter((f) => reviewed.has(f.newPath || f.oldPath)).length;
 
   function toggle(path: string) {
     setCollapsed((s) => {
@@ -294,13 +297,13 @@ export function FileExplorer({
               searching
                 ? undefined
                 : openedCount > 0
-                  ? `${reviewedCount} of ${files.length} files marked reviewed — ${files.length - openedCount} changed by the diff, plus ${openedCount} opened only to comment on`
-                  : `${reviewedCount} of ${files.length} changed files marked reviewed`
+                  ? `${reviewedCount} of ${changedFiles.length} changed files marked reviewed — ${openedCount} more listed below were opened only to comment on and aren't counted`
+                  : `${reviewedCount} of ${changedFiles.length} changed files marked reviewed`
             }
           >
             {searching
               ? `${shown.length} match${shown.length === 1 ? "" : "es"}`
-              : `${reviewedCount}/${files.length} reviewed`}
+              : `${reviewedCount}/${changedFiles.length} reviewed`}
           </span>
           <button
             className="btn btn-icon explorer-add"
@@ -315,13 +318,17 @@ export function FileExplorer({
           className="explorer-progress"
           role="progressbar"
           aria-valuemin={0}
-          aria-valuemax={files.length}
+          aria-valuemax={changedFiles.length}
           aria-valuenow={reviewedCount}
-          aria-label="Files reviewed"
+          aria-label="Changed files reviewed"
         >
           <div
             className="explorer-progress-fill"
-            style={{ width: files.length ? `${(reviewedCount / files.length) * 100}%` : "0%" }}
+            style={{
+              width: changedFiles.length
+                ? `${(reviewedCount / changedFiles.length) * 100}%`
+                : "0%",
+            }}
           />
         </div>
         <div className="explorer-search-row">

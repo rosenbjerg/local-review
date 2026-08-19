@@ -250,15 +250,18 @@ web/src/
   count** next to the `+N -M` badge, and a `compareTitle` tooltip naming **both ends**
   in words (which commit the before side resolved to and why — merge-base with base,
   or the parent of the picked commit *whose own changes are included* — against head /
-  working tree / index). Two counts are deliberately different numbers and each says
-  so: the topbar counts `files` (what the diff changes, the number that matches a git
-  client), while the explorer's `N/M reviewed` denominator counts `allFiles`, which
-  also holds the synthetic cards for files opened only to comment on — its tooltip
-  splits the two apart. The usual divergences left are honest ones the readout now
-  explains: the default before side is the **merge-base**, not `HEAD`, so it lists the
-  whole branch where a client's "changed files" lists only uncommitted work; renames
-  pair into one file (`--find-renames`); and an untracked *directory* lists as its
-  individual files, where `git status` collapses it to one entry.
+  working tree / index). **Both counts name the same population:** the topbar counts
+  `files` (what the diff changes, the number that matches a git client), and the
+  explorer's `N/M reviewed` progress counts only those too — `changedFiles`, i.e.
+  `allFiles` minus the synthetic `unchanged` cards for files opened only to comment
+  on. Those cards stay listed and markable, but they aren't work the branch asked
+  for, so counting them would put a denominator on screen that no git client agrees
+  with; the tooltip says how many are excluded. The usual divergences left are honest
+  ones the readout now explains: the default before side is the **merge-base**, not
+  `HEAD`, so it lists the whole branch where a client's "changed files" lists only
+  uncommitted work; renames pair into one file (`--find-renames`); and an untracked
+  *directory* lists as its individual files, where `git status` collapses it to one
+  entry.
 - **A file the diff touched can have no hunks** — a pure rename (`R100`), a mode-only
   change (`chmod +x`), an empty file added or deleted. Changed view builds its rows
   from the hunks, so such a card rendered *blank*: counted in the file list, with
