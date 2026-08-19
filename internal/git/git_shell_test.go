@@ -209,3 +209,20 @@ func TestWorktreeFingerprint(t *testing.T) {
 		t.Error("deleting a tracked file should change the fingerprint")
 	}
 }
+
+// A repo with no commits has no branches, and the endpoint's contract is [] rather
+// than null: a null reaches the browser as `branches: null`, which the client stores
+// and then crashes on. Guard the shape, not just the length.
+func TestListBranchesEmptyRepo(t *testing.T) {
+	_, r := initRepoOn(t, "main")
+	branches, err := r.ListBranches()
+	if err != nil {
+		t.Fatalf("ListBranches: %v", err)
+	}
+	if branches == nil {
+		t.Fatal("ListBranches returned nil for a commit-less repo; must be an empty slice")
+	}
+	if len(branches) != 0 {
+		t.Errorf("ListBranches = %v, want empty", branches)
+	}
+}

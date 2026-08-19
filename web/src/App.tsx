@@ -41,6 +41,8 @@ export default function App() {
     reposLoaded,
     repo,
     changeRepo,
+    branches,
+    branchesLoaded,
     head,
     changeHead,
     base,
@@ -369,6 +371,10 @@ export default function App() {
             </>
           ) : repos.length === 0 ? (
             "No git repositories found under the served folder."
+          ) : branchesLoaded && branches.length === 0 ? (
+            // A repo with no commits has no branches to pick, so "select a branch"
+            // would send the reviewer looking for a control that can't be filled.
+            `${repo} has no commits yet — there is nothing to review.`
           ) : (
             "Select a branch to start a review."
           )}

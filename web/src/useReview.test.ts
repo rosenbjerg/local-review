@@ -500,3 +500,23 @@ test("a superseded (slow) diff response is discarded", async () => {
   await new Promise((r) => setTimeout(r, 0));
   expect(result.current.files.some((f) => f.newPath === "STALE")).toBe(false);
 });
+
+// A repo with no commits: `git branch` lists nothing, so the API answers
+// `{"branches": null}`. Storing that null and then reading `.find` on it threw
+// during render — and with no error boundary the whole app went blank, on every
+// reload, because the repo selection is remembered. Normalizing at every ingest
+// point is what keeps a null from ever reaching state.
+test("a repo with no commits (branches: null) does not crash the hook", async () => {
+  vi.mocked(api.repos).mockResolvedValue({ repos: ["empty"] });
+  vi.mocked(api.branches).mockResolvedValue({ branches: null, main: "" } as never);
+
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.repo).toBe("empty"));
+  await waitFor(() => expect(result.current.branchesLoaded).toBe(true));
+
+  expect(result.current.branches).toEqual([]);
+  expect(result.current.headOptions).toEqual([]);
+  expect(result.current.head).toBe("");
+  // No head means no review was attempted, so nothing to show and nothing to error.
+  expect(result.current.review).toBeNull();
+});

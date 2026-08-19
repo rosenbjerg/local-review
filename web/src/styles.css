@@ -1922,3 +1922,28 @@ kbd {
 .banner-dismiss:hover {
   color: var(--text);
 }
+
+/* The last-resort crash screen (ErrorBoundary). Deliberately plain: it renders
+   when the app itself failed, so it leans only on the base tokens. */
+.crash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: var(--text);
+}
+.crash-detail {
+  max-width: 720px;
+  margin: 0;
+  padding: 10px 16px;
+  overflow-x: auto;
+  text-align: left;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-md);
+}
+.crash-actions {
+  display: flex;
+  gap: 8px;
+}

@@ -51,6 +51,10 @@ export function useReview() {
   const [reposLoaded, setReposLoaded] = useState(false);
   const [repo, setRepo] = useState("");
   const [branches, setBranches] = useState<Branch[]>([]);
+  // Whether the branch fetch for the current repo has settled. An empty `branches`
+  // means two different things — still loading, or a repo with no commits — and the
+  // empty state has to tell them apart to say the second one out loud.
+  const [branchesLoaded, setBranchesLoaded] = useState(false);
   const [head, setHead] = useState("");
   const [base, setBase] = useState("");
   const [review, setReview] = useState<Review | null>(null);
@@ -111,6 +115,7 @@ export function useReview() {
     const seq = reqSeq.current;
     setLoading(false);
     setBranches([]);
+    setBranchesLoaded(false);
     setHead("");
     if (!repo) return;
     setReview(null);
@@ -126,9 +131,12 @@ export function useReview() {
       .branches(repo)
       .then((r) => {
         if (reqSeq.current !== seq) return; // superseded by another repo switch
-        setBranches(r.branches);
-        const current = r.branches.find((b) => b.isCurrent);
-        const firstLocal = r.branches.find((b) => !b.isRemote);
+        // A repo with no commits has no branches at all; normalize before anything
+        // reads it, since a null reaching `branches` state throws on the next render.
+        const list = r.branches ?? [];
+        setBranches(list);
+        const current = list.find((b) => b.isCurrent);
+        const firstLocal = list.find((b) => !b.isRemote);
         // Head is a local-only picker, so never default it to a remote.
         setHead(current?.name ?? firstLocal?.name ?? "");
         // Restore the remembered view axes here rather than above, in the same update
@@ -141,12 +149,15 @@ export function useReview() {
           setUnstaged(view.unstaged);
         }
         const savedBase = readBasePref(repo);
-        if (savedBase === "" || r.branches.some((b) => b.name === savedBase)) {
+        if (savedBase === "" || list.some((b) => b.name === savedBase)) {
           setBase(savedBase);
         }
       })
       .catch((e) => {
         if (reqSeq.current === seq) setError((e as Error).message);
+      })
+      .finally(() => {
+        if (reqSeq.current === seq) setBranchesLoaded(true);
       });
   }, [repo]);
 
@@ -291,7 +302,7 @@ export function useReview() {
               setFiles(d.files ?? []);
               setBaseSha(d.base ?? "");
             }
-            if (br) setBranches((prev) => keepIfSame(prev, br.branches));
+            if (br) setBranches((prev) => keepIfSame(prev, br.branches ?? []));
             if (cm) {
               const list = cm.commits ?? [];
               setCommits((prev) => keepIfSame(prev, list));
@@ -405,10 +416,11 @@ export function useReview() {
       let recovered = false;
       try {
         const r = await api.branches(repo);
-        if (reqSeq.current === seq && !r.branches.some((b) => b.name === head)) {
-          setBranches(r.branches);
-          const current = r.branches.find((b) => b.isCurrent);
-          const firstLocal = r.branches.find((b) => !b.isRemote);
+        const list = r.branches ?? [];
+        if (reqSeq.current === seq && !list.some((b) => b.name === head)) {
+          setBranches(list);
+          const current = list.find((b) => b.isCurrent);
+          const firstLocal = list.find((b) => !b.isRemote);
           changeHead(current?.name ?? firstLocal?.name ?? "");
           recovered = true;
         }
@@ -522,6 +534,7 @@ export function useReview() {
     repo,
     changeRepo,
     branches,
+    branchesLoaded,
     head,
     changeHead,
     base,

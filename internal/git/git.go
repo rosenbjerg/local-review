@@ -71,7 +71,7 @@ func (r *Repo) ListBranches() ([]Branch, error) {
 		return nil, err
 	}
 	main := r.MainBranch()
-	var branches []Branch
+	branches := []Branch{} // never nil: the endpoint promises [], and a null crashes the client
 	sc := bufio.NewScanner(strings.NewReader(out))
 	for sc.Scan() {
 		line := sc.Text()
