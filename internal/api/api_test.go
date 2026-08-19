@@ -567,3 +567,69 @@ func TestCreateReviewStaleBaseStoresResolvable(t *testing.T) {
 		t.Errorf("stored baseRef = %q, want origin/main (stale main resolved away)", rev.BaseRef)
 	}
 }
+
+// An orphan branch shares no ancestor with main, which git reports as a bare
+// "exit status 1" with empty stderr. That reached the reviewer as
+// `{"error":"git merge-base main orphan: exit status 1: "}` — a 500 naming a git
+// command instead of the thing they can act on, which is their base selection.
+func TestNoCommonHistoryIsAReadable400(t *testing.T) {
+	r := newRepo(t)
+	r.write("f.txt", "l1\n")
+	r.commitAll("c1")
+	// A second, unrelated root: --orphan starts history over.
+	r.git("checkout", "-q", "--orphan", "orphan")
+	r.git("rm", "-rqf", "--cached", ".")
+	r.remove("f.txt")
+	r.write("o.txt", "other\n")
+	r.commitAll("unrelated root")
+	r.git("checkout", "-q", "main")
+	s := r.server()
+
+	t.Run("diff", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/diff?repo="+r.name+"&head=orphan&base=main", nil)
+		rec := httptest.NewRecorder()
+		s.handleDiff(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400 (%s)", rec.Code, rec.Body.String())
+		}
+		body := rec.Body.String()
+		for _, want := range []string{"orphan", "main", "no common history"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("error %q should mention %q", body, want)
+			}
+		}
+		if strings.Contains(body, "exit status") {
+			t.Errorf("error %q leaks git's exit status", body)
+		}
+	})
+
+	// Creating the review first and only then failing the diff left the reviewer
+	// holding a review that could never render, so the probe moves the failure
+	// ahead of the row.
+	t.Run("create review", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/reviews", strings.NewReader(
+			`{"repo":"`+r.name+`","head":"orphan","base":"main"}`))
+		rec := httptest.NewRecorder()
+		s.handleCreateReview(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400 (%s)", rec.Code, rec.Body.String())
+		}
+		reviews, err := s.Store.ListReviews()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(reviews) != 0 {
+			t.Errorf("a review row was created for an uncomparable selection: %+v", reviews)
+		}
+	})
+
+	// The head sha is unaffected: a normal selection must still work afterwards.
+	t.Run("unrelated selection still works", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/diff?repo="+r.name+"&head=main&base=main", nil)
+		rec := httptest.NewRecorder()
+		s.handleDiff(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+		}
+	})
+}

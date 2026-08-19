@@ -173,9 +173,24 @@ func (r *Repo) MainBranch() string {
 	return ""
 }
 
+// ErrNoMergeBase reports that two refs share no common ancestor — an orphan branch,
+// or two histories grafted into one repo. That's a legitimate answer about the
+// refs, not a failure, and it needs its own error: the raw one is
+// "exit status 1" with empty stderr, which tells a reviewer nothing.
+var ErrNoMergeBase = errors.New("no common history")
+
 func (r *Repo) MergeBase(a, b string) (string, error) {
 	out, err := r.run("merge-base", a, b)
-	return strings.TrimSpace(out), err
+	if err != nil {
+		// git merge-base exits 1 specifically for "no merge base found"; a bad ref or
+		// a broken repo exits 128. Only the former is this case.
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && ee.ExitCode() == 1 {
+			return "", fmt.Errorf("%w: %s and %s", ErrNoMergeBase, a, b)
+		}
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
 }
 
 // --verify + ^{commit} fails cleanly on a missing ref, instead of the confusing

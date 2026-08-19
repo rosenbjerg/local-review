@@ -204,7 +204,7 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		}
 		mb, mbErr := repo.MergeBase(baseRef, head)
 		if mbErr != nil {
-			httpError(w, http.StatusInternalServerError, mbErr)
+			httpError(w, mergeBaseStatus(mbErr), mergeBaseError(mbErr, baseRef, head))
 			return
 		}
 		fromRef = mb
@@ -458,6 +458,13 @@ func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httpError(w, http.StatusBadRequest, fmt.Errorf(
 			"could not resolve branch %q — it may have been deleted, renamed, or is mid-rebase; reload to refresh the branch list", req.Head))
+		return
+	}
+	// Probe the merge-base the diff will need, so a base that can't be compared to
+	// head fails here rather than after a review row exists. Without it the reviewer
+	// lands holding a review, an empty file list and an error about neither.
+	if _, err := repo.MergeBase(base, req.Head); err != nil {
+		httpError(w, mergeBaseStatus(err), mergeBaseError(err, base, req.Head))
 		return
 	}
 	review, err := s.Store.CreateOrGetReview(repo.Path, base, req.Head, sha)
@@ -1029,6 +1036,23 @@ func storeError(w http.ResponseWriter, err error) {
 type errString string
 
 func (e errString) Error() string { return string(e) }
+
+// Two refs with no common ancestor are a bad *selection*, not a server fault, so
+// they answer 400 with prose naming both ends. Anything else stays a 500 carrying
+// git's own message.
+func mergeBaseStatus(err error) int {
+	if errors.Is(err, git.ErrNoMergeBase) {
+		return http.StatusBadRequest
+	}
+	return http.StatusInternalServerError
+}
+
+func mergeBaseError(err error, base, head string) error {
+	if errors.Is(err, git.ErrNoMergeBase) {
+		return fmt.Errorf("%s and %s share no common history — pick a base branch the work was started from", head, base)
+	}
+	return err
+}
 
 // resolveBase returns a base ref that actually resolves in repo: the given base if
 // it does, else the repo's main branch (else ""). This tolerates a stale base —
