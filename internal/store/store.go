@@ -40,6 +40,11 @@ type Review struct {
 	UpdatedAt     time.Time    `json:"updatedAt"`
 	Comments      []Comment    `json:"comments"`
 	ReviewedFiles []string     `json:"reviewedFiles"`
+
+	// Computed by the API layer, never persisted (like Comment.AnchorStatus). Set
+	// when the repo or head couldn't be read at all, so comment staleness and
+	// reviewed marks were left unchecked rather than reported as universally stale.
+	AnnotationError string `json:"annotationError,omitempty"`
 }
 
 type CommentType string

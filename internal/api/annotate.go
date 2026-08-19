@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"strings"
 
 	"local-review/internal/git"
@@ -8,10 +9,36 @@ import (
 )
 
 func (s *Server) annotateReview(review *store.Review) {
+	repo := git.New(review.RepoPath)
+	// Both halves below derive their answer from *reading the repo*, and both read
+	// absence as staleness: a comment whose side won't open is "outdated", a reviewed
+	// file whose content won't hash reverts to unread. That inference only holds when
+	// the repo itself is readable. Move the repo directory — an ordinary thing to do
+	// — and every per-file read fails at once, so the reviewer is shown a review where
+	// every comment is stale and nothing is reviewed, at HTTP 200, with nothing
+	// saying why. Probe once and decline to annotate instead, so the state on screen
+	// is the stored one and the banner explains that it isn't being checked.
+	if err := annotationBlocker(repo, review); err != nil {
+		review.AnnotationError = err.Error()
+		return
+	}
 	if len(review.Comments) > 0 {
-		annotateComments(git.New(review.RepoPath), review.HeadRef, review.Comments)
+		annotateComments(repo, review.HeadRef, review.Comments)
 	}
 	s.annotateReviewedFiles(review)
+}
+
+// annotationBlocker reports why staleness can't be judged, or nil when it can.
+func annotationBlocker(repo *git.Repo, review *store.Review) error {
+	if !isGitRepo(review.RepoPath) {
+		return fmt.Errorf("%s can no longer be read — the repository may have been moved, renamed, or deleted", review.RepoPath)
+	}
+	// A head that won't resolve fails every head-side read identically, so it's the
+	// same defect wearing a different hat (a deleted branch, or a rebase in flight).
+	if _, err := repo.ResolveSHA(review.HeadRef); err != nil {
+		return fmt.Errorf("branch %s no longer resolves — it may have been deleted, renamed, or is mid-rebase", review.HeadRef)
+	}
+	return nil
 }
 
 // A comment's staleness is checked against the side it was anchored to: the index

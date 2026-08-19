@@ -362,6 +362,18 @@ export default function App() {
         </div>
       )}
 
+      {/* Not dismissible, and deliberately not an error: nothing failed, the server
+          simply declined to judge staleness because it couldn't read the repo. It
+          clears itself on the next read once the repo is back. */}
+      {review?.annotationError && (
+        <div className="warn banner" role="status">
+          <span>
+            {review.annotationError}. Comment staleness and reviewed marks aren’t being
+            checked — what you see is the last saved state.
+          </span>
+        </div>
+      )}
+
       {!review && !error && (
         <div className="empty">
           {!reposLoaded ? (

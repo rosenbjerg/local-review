@@ -122,6 +122,9 @@ export interface Review {
   updatedAt: string;
   comments: Comment[] | null;
   reviewedFiles: string[] | null;
+  // Set when the server could not read the repo or head, so staleness and reviewed
+  // marks were left unchecked. Derived per read, never stored.
+  annotationError?: string;
 }
 
 export interface DiffResponse {

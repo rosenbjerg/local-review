@@ -1897,6 +1897,13 @@ kbd {
   border: 1px solid var(--danger-border);
   border-radius: var(--radius-md);
 }
+.warn {
+  color: var(--warn);
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius-md);
+}
 .banner {
   display: flex;
   align-items: center;
