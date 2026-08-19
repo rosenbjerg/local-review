@@ -56,9 +56,10 @@ jobs:
 
       # Gate the release on the test suite — a failing test must never tag or
       # publish. Runs after the frontend build so the go:embed of web/dist
-      # (pulled in by the root package) compiles.
+      # (pulled in by the root package) compiles. The package list excludes
+      # web/node_modules, where npm ships a vendored Go package of its own.
       - name: Test
-        run: go test ./...
+        run: go test $(go list ./... | grep -v '/web/node_modules/')
 
       # Pure-Go build (modernc.org/sqlite needs no cgo), so all targets
       # cross-compile from this one Linux runner.

@@ -42,9 +42,18 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # `./...` walks web/node_modules, where npm ships a vendored Go package
+      # (flatted). Checking a dependency's Go file is wasted work, and it puts
+      # someone else's formatting in the path of our gofmt gate — a dependency
+      # bump could fail CI for a file we don't own. Resolve the package list once,
+      # minus that tree, and let every Go step below use it.
+      - name: go package list
+        run: echo "GOPKGS=$(go list ./... | grep -v '/web/node_modules/' | tr '\n' ' ')" >> "$GITHUB_ENV"
+
+      # Tracked files only, for the same reason — and it's exactly the set we own.
       - name: gofmt
         run: |
-          unformatted=$(gofmt -l .)
+          unformatted=$(gofmt -l $(git ls-files '*.go'))
           if [ -n "$unformatted" ]; then
             echo "These files are not gofmt-clean; run 'gofmt -w':"
             echo "$unformatted"
@@ -52,12 +61,12 @@ jobs:
           fi
 
       - name: go vet
-        run: go vet ./...
+        run: go vet $GOPKGS
 
       - name: go build
-        run: go build ./...
+        run: go build $GOPKGS
 
       # -race needs cgo (default-on for this native build) and catches data
       # races in the SSE hub and store under concurrent access.
       - name: go test
-        run: go test -race ./...
+        run: go test -race $GOPKGS
