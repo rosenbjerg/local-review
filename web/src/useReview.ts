@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { type ComboOption } from "./components/Combobox";
-import type { Branch, Comment, Commit, DiffOpts, FileDiff, Review } from "./types";
+import type { Branch, Comment, Commit, DiffOpts, FileDiff, Review, Side } from "./types";
 import { LS, getString, readBasePref, readDiffViewPref, writeDiffViewPref } from "./storage";
 
 // A ping refetches whether or not anything the client holds actually changed —
@@ -83,11 +83,9 @@ export function useReview() {
   const currentBranch = branches.find((b) => b.isCurrent)?.name;
   const headIsCurrent = !!head && head === currentBranch;
   const effectiveUncommitted = uncommitted && headIsCurrent;
-  // The new side comments/reviewed anchor to: the working tree (uncommitted incl.
-  // unstaged) or the git index (uncommitted, staged only). Mutually exclusive;
-  // neither ⇒ head_ref.
-  const worktreeSide = effectiveUncommitted && unstaged;
-  const indexedSide = effectiveUncommitted && !unstaged;
+  // The new side comments/reviewed marks anchor to: the working tree (uncommitted
+  // incl. unstaged), the git index (uncommitted, staged only), else head_ref.
+  const side: Side = !effectiveUncommitted ? "head" : unstaged ? "worktree" : "index";
 
   function diffOpts(baseRef: string): DiffOpts {
     return {
@@ -468,7 +466,7 @@ export function useReview() {
     apply(reviewed); // optimistic
     try {
       // Fingerprint the side on screen (working tree / index), like addComment.
-      await api.setReviewed(review.id, paths, reviewed, worktreeSide, indexedSide);
+      await api.setReviewed(review.id, paths, reviewed, side);
     } catch (e) {
       apply(!reviewed); // rollback the whole batch
       setError((e as Error).message);
@@ -555,8 +553,7 @@ export function useReview() {
     error,
     setError,
     headIsCurrent,
-    worktreeSide,
-    indexedSide,
+    side,
     shortSha,
     repoOptions,
     headOptions,

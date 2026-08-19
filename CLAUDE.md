@@ -29,7 +29,8 @@ go build -o local-review .
 npm --prefix web run dev                 # terminal 2 → :5173
 ```
 
-Checks: `go build ./...`, `go vet ./...`, `npm --prefix web run build` (runs `tsc`),
+Checks: `go build ./...`, `go vet ./...`, `go test ./...`, `npm --prefix web run build`
+(runs `tsc`),
 `npm --prefix web run lint` (ESLint: rules-of-hooks + React Compiler rule; see `COMPILER.md`),
 `npm --prefix web run test` (vitest; jsdom + Testing Library — `web/vitest.config.ts`,
 `web/vitest.setup.ts`). Frontend hook logic (the `useReview` selection/refetch races)
@@ -37,13 +38,25 @@ is tested via `renderHook` with a mocked `api`; test files are excluded from the
 tsconfig and lint. There is no browser automation here — verify backend changes with
 `curl` against a throwaway git repo; verify pure UI/DOM behavior manually.
 
+**`./...` is wrong in CI**, though it's fine locally: it walks `web/node_modules`,
+where npm ships a vendored Go package of its own (`flatted`). `.github/workflows/ci.yml`
+resolves the package list once as `GOPKGS=$(go list ./... | grep -v /web/node_modules/)`
+and gofmt-checks `git ls-files '*.go'` — otherwise a dependency bump could fail our
+gofmt gate on a file we don't own.
+
 ## Layout
 
 ```
 main.go                  server: embeds web/dist, resolves DB path, prunes drafts, opens browser
 internal/git/git.go      git service (shells out to `git`): branches, merge-base, recent commits, diff parser (committed-range / working-tree / index variants), file content (ref/worktree/index), worktree fingerprint
 internal/store/store.go  SQLite (modernc.org/sqlite, WAL): reviews, comments, replies, reviewed_files
-internal/api/api.go      HTTP handlers (net/http, Go 1.22+ method+path routing)
+internal/api/api.go      Server, repo resolution (repoFor: root-confined, traversal-safe), route table
+internal/api/handlers_git.go       read-only git endpoints: repos, branches, diff, files, commits, file, blob (+ mergeBase/resolveBase helpers)
+internal/api/handlers_reviews.go   create/resume, read, reset, delete, summary, reviewed marks, export
+internal/api/handlers_comments.go  comments + replies
+internal/api/respond.go            decodeBody / pathID / writeJSON / httpError / storeError / notify
+internal/api/validate.go           what the API refuses: validRef / validPath / validBody / validCommentType
+internal/api/side.go               the anchor side: readSide (the one side→git-read map), sideLabel, sideOf
 internal/api/events.go   in-memory SSE hub: per-review subscriber channels, publish/prune
 internal/api/watch.go    per-review filesystem poller: fingerprints the repo while subscribed, pings on out-of-band change
 internal/export/export.go  renders a review → canonical markdown
@@ -78,6 +91,9 @@ web/src/
     ReviewSummary.tsx    the review's free-text summary above the comments pane (view/edit)
     CommentComposer.tsx  type pills (one-click radiogroup, built on the .badge-<type>
                          chips) + body textarea (reused for new/edit; replies hide the type)
+    FileComments.tsx     a file's own threads + the "+ Add file comment" control; owns
+                         the composer's open state (shared by the diff, media and
+                         rendered-markdown views, which each held that flag before)
     MarkdownView.tsx     rendered (as-published) view of a .md file + file-level comments
     ExportModal.tsx      rendered-markdown preview (via Markdown) + Raw toggle + copy/download
     AgentPromptsModal.tsx  copyable agent prompts (Address-the-review / Do-a-review),
@@ -106,18 +122,27 @@ web/src/
 - **Comments anchor to the new side** (HEAD path + line) and store a captured
   `snippet` so feedback survives line drift. The **server** captures that snippet
   from the anchored range at add time (`captureSnippet` in `annotate.go`, reading
-  the same side the staleness check will — the git index for an `indexed` anchor,
-  the working tree for a `worktree` anchor, else `head_ref`), so every client — the
+  the same side the staleness check will — see `readSide`), so every client — the
   browser and API agents alike — sends only the line range; a bogus client-supplied
   snippet can't drift the record and the stored text always matches the file. Line-0
   file comments keep an empty snippet. Each comment also records the
   `commit_sha` it was anchored against (resolved live at add time; best-effort,
   may be empty) — an immutable record of the original position and when it held.
-  **The anchor side is three-valued**, carried by two mutually-exclusive flags:
-  `worktree` (anchored against the on-disk working tree) and `indexed` (against the
-  git index / staged content); neither set ⇒ `head_ref`. They come from the active
-  diff view's `uncommitted`/`unstaged` axes (see below) and drive the snippet-capture
-  and staleness sides.
+  **The anchor side is one three-valued `store.Side`** — `head` | `worktree` |
+  `index` — on the wire (`"side"` on add-comment and set-reviewed; `?side=` on
+  `/api/file` and `/api/blob`), in every signature that carries it, and back out to
+  the schema's two boolean columns only inside `store/side.go`. It comes from the
+  active diff view's `uncommitted`/`unstaged` axes (see below) and drives the
+  snippet-capture and staleness sides. Three rules it exists to hold:
+  `internal/api/side.go`'s **`readSide` is the only place** a side maps to a git
+  read — the capture and the staleness check must read the same side or a comment
+  reads as drifted the moment it's written, and that switch was previously written
+  out three times; **`sideOf` is the only place** a wire value is validated, so the
+  check can't be present on one endpoint and missing on another (it was: add-comment
+  refused the impossible "both flags", set-reviewed accepted it); and **test
+  `Side.IsHead()`, never `== SideHead`** — the zero value is `""`, so an equality
+  test silently demotes any `Comment` built in Go without a side from precise
+  diff-tracking to snippet matching. `side_test.go` pins all three.
 - **Comment staleness is derived, never persisted.** The stored line numbers are
   the *original* anchor; the branch keeps moving, so `internal/api/annotate.go`
   recomputes a live `anchorStatus` (`current` | `moved` | `outdated`) on every
@@ -134,13 +159,11 @@ web/src/
   carries no hunks, so lines map 1:1) — while a rename whose anchored block was also
   edited still falls to `outdated` via the same contiguity check. This beats snippet
   matching, which can't tell a real move from a coincidental reappearance of the same
-  lines. Diff-tracking is head-anchored only — `worktree`/`indexed` comments always
+  lines. Diff-tracking is head-anchored only — worktree/index comments always
   snippet-match, since their side has no commit to diff against.
   **Fallback: snippet matching** — used for worktree/index comments, comments
   without a `commit_sha`, and binary files — compares the captured `snippet`
-  against the current file (the git index for `indexed` comments via `repo.IndexFile`
-  / `git show :path`, the working tree for `worktree` comments via
-  `repo.WorktreeFile`, else `head_ref` via `git show head:path`): match at the stored
+  against the current file on the comment's own side (`readSide`): match at the stored
   range → `current`; a unique match elsewhere → `moved`; gone/ambiguous/unreadable →
   `outdated`.
   The frontend renders the effective (relocated) line **and path** — a rename-moved
@@ -164,7 +187,9 @@ web/src/
   guard. **`ResetReview` clears it** alongside the comments and reviewed marks —
   it's review-level feedback like they are, so leaving it would carry one pass's
   framing into the next; it also counts toward `canReset`, so a review holding
-  only a summary is still resettable.
+  only a summary is still resettable. `App`'s `hasReviewState` is the single
+  predicate behind both `canReset` and `requestReset`'s no-op guard, so the toolbar
+  control can't enable a dialog that then declines to do anything.
 - **Threads are two levels.** A comment is a thread root; the `replies` table
   holds follow-ups (body + timestamps only — anchor and `type` stay on the root).
   A reply's `comment_id` FK cascade-deletes it with its comment (and the comment
@@ -173,8 +198,10 @@ web/src/
 - **A thread can be resolved** — a `resolved` flag on the root comment (toggled
   via `POST /api/comments/{id}/resolved`). Resolved threads are dimmed in the UI
   and **excluded from the export** (the artifact carries only open, actionable
-  feedback). The column is backfilled onto older DBs by `store.ensureColumn`,
-  the idempotent add-column helper to reuse when adding future columns.
+  feedback). The column is backfilled onto older DBs by the `added` table in
+  `store.migrate` — one row per post-initial-schema column, applied through the
+  idempotent `ensureColumn`; a new column needs a row there *and* an entry in the
+  `CREATE TABLE` above, so a fresh DB gets it without the migration.
   **Resolving deliberately does not bump `updated_at`** — that column tracks the
   last body/type edit, which the UI surfaces as an `(edited)` marker (`time.ts`
   `wasEdited`), and resolving isn't an edit (it has its own flag). Keep it that
@@ -231,10 +258,10 @@ web/src/
   commit's **parent**) — what `/api/blob`'s "before" image uses.
   The `uncommitted` axis is only meaningful when head is the checked-out branch, so
   it's gated on that (the UI disables the checkbox otherwise). `useReview` holds the
-  `from`/`uncommitted`/`unstaged` state, derives `effectiveUncommitted` (`uncommitted
-  && headIsCurrent`) plus `worktreeSide` (`effectiveUncommitted && unstaged`) and
-  `indexedSide` (`effectiveUncommitted && !unstaged`), which pick the anchor side
-  threaded into add-comment / set-reviewed / file / blob calls.
+  `from`/`uncommitted`/`unstaged` state and derives `effectiveUncommitted`
+  (`uncommitted && headIsCurrent`) plus the single `side: Side` (`"head"` unless
+  uncommitted, then `"worktree"`/`"index"` by `unstaged`) threaded into add-comment /
+  set-reviewed / file / blob calls and into `DiffView`/`MediaView` as one prop.
   **`uncommitted`/`unstaged` are remembered per repo** (`lr.diffViewByRepo`, keyed by
   repo alone — they describe how you look at a repo, not at a branch or review);
   `from` stays per-session, since a sha belongs to one head's history. The restore
@@ -278,9 +305,8 @@ web/src/
   exporting (which sets status `exported`) never orphans an in-progress review.
 - `reviewed_files` persists per-file "reviewed" state, keyed by path within a
   review. Each mark also captures a **content fingerprint** (SHA-256 of the
-  file's new-side content) and the side it was seen on (`worktree`/`indexed` flags:
-  on-disk working tree, git index, or `head_ref`), mirroring how comments record
-  their three-valued anchor side.
+  file's new-side content) and the `store.Side` it was seen on, exactly as comments
+  record their anchor side.
   Like comment staleness, "still reviewed" is **derived, never trusted from the
   flag alone**: on every review read `internal/api/reviewed.go` re-hashes the
   current content of that side and drops any file whose fingerprint no longer
@@ -372,7 +398,7 @@ web/src/
   with a per-file Text/Image toggle. These media files have no lines, so they take
   **file-level comments anchored at line 0** (empty snippet ⇒ always `current`;
   exported and labelled as `file`, not `L0`). `/api/blob` shares `/api/file`'s
-  ref/worktree/index resolution (a `indexed=true` param reads `git show :path`) and
+  side resolution (`?side=index` reads `git show :path`) and
   working-tree fallback.
 - **A path can outlive its file**, so absence is a **404, never a 500**. A comment
   anchored before a rename or delete keeps asking for the old path (and the frontend
@@ -525,7 +551,7 @@ web/src/
   rules hold. (1) Nothing may write `files` for a selection the user has moved past —
   hence the `reqSeq` gate on the ping refetch above. (2) `DiffView`'s `contentKey`
   (which drops the cached `source`) must name **which side** is being read — `repo` +
-  `headRef` + the worktree/index flags — not just fingerprint the hunks. Hunks proxy
+  `headRef` + the `side` — not just fingerprint the hunks. Hunks proxy
   the content of a file the diff *touched*; a synthetic `unchanged` card has none, so
   a hunks-only key is constant for it and it would keep another branch's text forever.
   Cards are keyed by path in `App.tsx` and `LazyFile` never unmounts them, so nothing
@@ -591,7 +617,10 @@ web/src/
   appearance. The group key is therefore read *after* the within-file sort — else a
   bumped resolved thread would hoist its file while sitting at the bottom of it.
   Timestamps are second-granular (`store.go` writes RFC3339), so batch-created
-  comments tie constantly and `id` is the mandatory tie-break. Resolving doesn't
+  comments tie constantly and `id` is the mandatory tie-break. All of the above is
+  pinned by `web/src/commentSort.test.ts` — each rule there was checked to fail if
+  the rule is removed, the group-key ordering one included, since none of them are
+  visible from reading the comparator alone. Resolving doesn't
   count as activity, since `SetCommentResolved` deliberately doesn't bump
   `updated_at`. The time sorts show the sorted-on timestamp on each item so the
   order explains itself. Purely client-side over data the pane already has.

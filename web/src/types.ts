@@ -27,6 +27,21 @@ export type DiffOpts = {
   unstaged: boolean;
 };
 
+// Which version of a file a comment or reviewed mark is anchored to — the side
+// its snippet was captured from and its staleness is judged against. One value
+// rather than the pair of mutually-exclusive booleans this used to be, so the
+// impossible "both" state can't be expressed on either side of the wire.
+export type Side = "head" | "worktree" | "index";
+
+// How a side reads in prose, for the notes naming which version of a file is on
+// screen ("No longer in the working tree"). The server has the same function for
+// its 404s (api.sideLabel), so the two surfaces name a side the same way.
+export function sideLabel(side: Side, headRef: string): string {
+  if (side === "index") return "the index";
+  if (side === "worktree") return "the working tree";
+  return headRef;
+}
+
 export type LineKind = "context" | "add" | "del";
 
 // "unchanged" is a synthetic status for a file the diff didn't touch, opened so
@@ -80,7 +95,7 @@ export interface Comment {
   author: string;
   resolved: boolean;
   commitSha: string;
-  worktree: boolean;
+  side: Side;
   anchorStatus?: AnchorStatus;
   currentStartLine?: number;
   currentEndLine?: number;

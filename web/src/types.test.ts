@@ -16,7 +16,7 @@ const c = (o: Partial<Comment>): Comment =>
     author: "reviewer",
     resolved: false,
     commitSha: "",
-    worktree: false,
+    side: "head",
     createdAt: "",
     updatedAt: "",
     replies: [],

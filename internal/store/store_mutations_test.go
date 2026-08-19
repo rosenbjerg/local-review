@@ -101,7 +101,7 @@ func TestSetFilesReviewedRoundTripAndUpsert(t *testing.T) {
 	rev := addReview(t, s)
 
 	// Mark on the index side.
-	if err := s.SetFilesReviewed(rev.ID, []FileReviewMark{{Path: "a.txt", ContentHash: "h1"}}, true, false, true); err != nil {
+	if err := s.SetFilesReviewed(rev.ID, []FileReviewMark{{Path: "a.txt", ContentHash: "h1"}}, true, SideIndex); err != nil {
 		t.Fatalf("SetFilesReviewed(index): %v", err)
 	}
 	full, err := s.ListReviewedFilesFull(rev.ID)
@@ -111,28 +111,28 @@ func TestSetFilesReviewedRoundTripAndUpsert(t *testing.T) {
 	if len(full) != 1 {
 		t.Fatalf("want 1 reviewed row, got %d", len(full))
 	}
-	if f := full[0]; f.Path != "a.txt" || f.ContentHash != "h1" || f.Worktree || !f.Indexed {
-		t.Errorf("index-side row = %+v, want {a.txt h1 worktree=false indexed=true}", f)
+	if f := full[0]; f.Path != "a.txt" || f.ContentHash != "h1" || f.Side != SideIndex {
+		t.Errorf("index-side row = %+v, want {a.txt h1 side=index}", f)
 	}
 
 	// Re-review the same file on the worktree side: upsert in place (still one row),
 	// with the side flipped and the fingerprint refreshed.
-	if err := s.SetFilesReviewed(rev.ID, []FileReviewMark{{Path: "a.txt", ContentHash: "h2"}}, true, true, false); err != nil {
+	if err := s.SetFilesReviewed(rev.ID, []FileReviewMark{{Path: "a.txt", ContentHash: "h2"}}, true, SideWorktree); err != nil {
 		t.Fatalf("SetFilesReviewed(re-review): %v", err)
 	}
 	full, _ = s.ListReviewedFilesFull(rev.ID)
 	if len(full) != 1 {
 		t.Fatalf("re-review should upsert, got %d rows", len(full))
 	}
-	if f := full[0]; f.ContentHash != "h2" || !f.Worktree || f.Indexed {
-		t.Errorf("after re-review row = %+v, want {h2 worktree=true indexed=false}", f)
+	if f := full[0]; f.ContentHash != "h2" || f.Side != SideWorktree {
+		t.Errorf("after re-review row = %+v, want {h2 side=worktree}", f)
 	}
 
 	// Batch mark, then unmark a subset in one call → unmarked rows are deleted.
-	if err := s.SetFilesReviewed(rev.ID, []FileReviewMark{{Path: "a.txt"}, {Path: "b.txt"}}, true, false, false); err != nil {
+	if err := s.SetFilesReviewed(rev.ID, []FileReviewMark{{Path: "a.txt"}, {Path: "b.txt"}}, true, SideHead); err != nil {
 		t.Fatalf("batch mark: %v", err)
 	}
-	if err := s.SetFilesReviewed(rev.ID, []FileReviewMark{{Path: "a.txt"}}, false, false, false); err != nil {
+	if err := s.SetFilesReviewed(rev.ID, []FileReviewMark{{Path: "a.txt"}}, false, SideHead); err != nil {
 		t.Fatalf("unmark: %v", err)
 	}
 	full, _ = s.ListReviewedFilesFull(rev.ID)
@@ -228,7 +228,7 @@ func TestResetReviewClearsButKeepsReview(t *testing.T) {
 	s := openTemp(t)
 	rev := addReview(t, s)
 	addComment(t, s, rev.ID)
-	if err := s.SetFilesReviewed(rev.ID, []FileReviewMark{{Path: "a.txt", ContentHash: "h"}}, true, false, false); err != nil {
+	if err := s.SetFilesReviewed(rev.ID, []FileReviewMark{{Path: "a.txt", ContentHash: "h"}}, true, SideHead); err != nil {
 		t.Fatal(err)
 	}
 

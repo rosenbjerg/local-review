@@ -34,8 +34,7 @@ import type { FileDiff } from "./types";
 const props = {
   repo: "A",
   baseRef: "base",
-  worktree: false,
-  indexed: false,
+  side: "head" as const,
   comments: [],
   onAddComment: async () => true,
   actions: {} as never,
@@ -111,7 +110,7 @@ test("an explicit working-tree read is not labelled a substitution", async () =>
   const file = (): FileDiff => ({ oldPath: "a.txt", newPath: "a.txt", status: "unchanged", hunks: [] });
   vi.mocked(api.file).mockResolvedValue(content("ON-DISK", true));
 
-  render(<DiffView {...props} file={file()} headRef="main" worktree={true} />);
+  render(<DiffView {...props} file={file()} headRef="main" side="worktree" />);
   await waitFor(() => expect(screen.getByText("ON-DISK")).toBeTruthy());
   expect(screen.queryByText(/showing the working-tree copy/)).toBeNull();
 });

@@ -7,6 +7,7 @@ import type {
   DiffResponse,
   Reply,
   Review,
+  Side,
 } from "./types";
 
 // The API defaults author to "agent", so the browser tags its own writes explicitly.
@@ -42,12 +43,21 @@ async function req<T>(url: string, opts?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// /api/file and /api/blob read the same bytes from the same side and differ only
+// in how they return them, so they share one param build. `ref` matters only to
+// the head side; the server ignores it for the other two.
+function sideParams(repo: string, path: string, ref: string, side: Side): string {
+  const p = new URLSearchParams({ repo, path, ref });
+  if (side !== "head") p.set("side", side);
+  return p.toString();
+}
+
 export const api = {
   repos: () => req<{ repos: string[] }>("/api/repos"),
 
   branches: (repo: string) => {
     const p = new URLSearchParams({ repo });
-    return req<{ branches: Branch[]; main: string }>(`/api/branches?${p.toString()}`);
+    return req<{ branches: Branch[] }>(`/api/branches?${p.toString()}`);
   },
 
   diff: (repo: string, head: string, opts: DiffOpts) => {
@@ -72,24 +82,17 @@ export const api = {
     return req<{ commits: Commit[] }>(`/api/commits?${p.toString()}`);
   },
 
-  file: (repo: string, path: string, ref: string, worktree?: boolean, indexed?: boolean) => {
-    const p = new URLSearchParams({ repo, path, ref });
-    if (indexed) p.set("indexed", "true");
-    else if (worktree) p.set("worktree", "true");
-    // `worktree` is where the content came from, not what was asked for: a ref read
-    // that the ref can't satisfy is served from disk instead, and the caller has to
-    // label that rather than render it as the ref's content.
+  file: (repo: string, path: string, ref: string, side: Side = "head") => {
+    // `worktree` in the response is where the content came *from*, not what was
+    // asked for: a ref read that the ref can't satisfy is served from disk instead,
+    // and the caller has to label that rather than render it as the ref's content.
     return req<{ path: string; ref: string; content: string; worktree: boolean }>(
-      `/api/file?${p.toString()}`
+      `/api/file?${sideParams(repo, path, ref, side)}`
     );
   },
 
-  blobURL: (repo: string, path: string, ref: string, worktree?: boolean, indexed?: boolean) => {
-    const p = new URLSearchParams({ repo, path, ref });
-    if (indexed) p.set("indexed", "true");
-    else if (worktree) p.set("worktree", "true");
-    return `/api/blob?${p.toString()}`;
-  },
+  blobURL: (repo: string, path: string, ref: string, side: Side = "head") =>
+    `/api/blob?${sideParams(repo, path, ref, side)}`,
 
   createReview: (repo: string, head: string, base?: string) =>
     req<Review>("/api/reviews", {
@@ -109,8 +112,7 @@ export const api = {
       endLine: number;
       type: CommentType;
       body: string;
-      worktree: boolean;
-      indexed: boolean;
+      side: Side;
     }
   ) =>
     req<Comment>(`/api/reviews/${reviewId}/comments`, {
@@ -155,16 +157,10 @@ export const api = {
       body: JSON.stringify({ summary }),
     }),
 
-  setReviewed: (
-    reviewId: number,
-    filePaths: string[],
-    reviewed: boolean,
-    worktree: boolean,
-    indexed: boolean
-  ) =>
+  setReviewed: (reviewId: number, filePaths: string[], reviewed: boolean, side: Side) =>
     req<void>(`/api/reviews/${reviewId}/reviewed`, {
       method: "POST",
-      body: JSON.stringify({ filePaths, reviewed, worktree, indexed }),
+      body: JSON.stringify({ filePaths, reviewed, side }),
     }),
 
   export: (reviewId: number, instructions?: boolean) => {

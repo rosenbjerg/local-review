@@ -181,6 +181,14 @@ Either way the agent posts replies back to each comment
 (`POST /api/comments/{id}/replies`), and they appear **live in the UI** — read
 them, resolve what's addressed, and hand off what's left with one more fetch.
 
+Two more endpoints exist for scripting the loop rather than participating in it:
+`GET /api/reviews` lists every stored review (id, repo, base/head, status) so a
+script can find the one it wants without being handed an id, and
+`DELETE /api/reviews/{id}` discards one outright — comments, replies and reviewed
+marks with it. There is no undo, and the UI offers no button for it; use
+**Reset** (which keeps the review and clears its contents) unless you really mean
+to remove the row.
+
 Once a review is a conversation, the comments pane keeps your side of it: a
 thread whose latest word is the agent's is marked as **awaiting you**, the header
 counts how many, and clicking that count filters the pane down to them — which

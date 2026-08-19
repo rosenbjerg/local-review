@@ -57,8 +57,7 @@ const props = {
   repo: "A",
   headRef: "main",
   baseRef: "base",
-  worktree: false,
-  indexed: false,
+  side: "head" as const,
   onAddComment: async () => true,
   actions: {} as never,
   reviewed: false,
@@ -101,7 +100,7 @@ test("a card re-renders when a non-comment prop changes", () => {
   const { rerender } = render(<DiffView {...props} comments={comments} />);
   const after = headerRenders;
 
-  rerender(<DiffView {...props} comments={comments} worktree={true} />);
+  rerender(<DiffView {...props} comments={comments} side="worktree" />);
 
   expect(headerRenders).toBeGreaterThan(after);
 });

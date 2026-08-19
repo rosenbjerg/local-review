@@ -42,27 +42,26 @@ func (s *Server) annotateReview(review *store.Review) {
 // to snippet matching, so their paths are included: over-fetching a path costs
 // nothing extra in a batch, while missing one costs a whole process.
 func warmCache(cache *contentCache, comments []store.Comment, reviewed []store.ReviewedFile) {
-	byside := map[bool2][]string{}
-	add := func(path string, worktree, indexed bool) {
+	byside := map[store.Side][]string{}
+	add := func(path string, side store.Side) {
 		if path == "" {
 			return
 		}
-		k := bool2{indexed: indexed, worktree: worktree}
-		byside[k] = append(byside[k], path)
+		byside[side] = append(byside[side], path)
 	}
 	for i := range comments {
 		c := &comments[i]
 		if c.StartLine > 0 { // a line-0 comment has no snippet to check
-			add(c.FilePath, c.Worktree, c.Indexed)
+			add(c.FilePath, c.Side)
 		}
 	}
 	for _, f := range reviewed {
 		if f.ContentHash != "" { // a legacy unfingerprinted row is never re-read
-			add(f.Path, f.Worktree, f.Indexed)
+			add(f.Path, f.Side)
 		}
 	}
-	for k, paths := range byside {
-		cache.warm(paths, k)
+	for side, paths := range byside {
+		cache.warm(paths, side)
 	}
 }
 
@@ -104,7 +103,7 @@ func annotateComments(repo *git.Repo, headRef string, comments []store.Comment, 
 			}
 		}
 		read := func(path string) ([]string, bool) {
-			return cache.lines(path, c.Worktree, c.Indexed)
+			return cache.lines(path, c.Side)
 		}
 		annotateComment(c, read)
 	}
@@ -114,7 +113,7 @@ func annotateComments(repo *git.Repo, headRef string, comments []store.Comment, 
 // diffing that commit against head, which snippet matching can't do (it can't tell a
 // real move from the same lines reappearing elsewhere).
 func diffTrackable(c *store.Comment, headSHA string) bool {
-	return !c.Worktree && !c.Indexed && c.StartLine > 0 && c.CommitSHA != "" && c.CommitSHA != headSHA
+	return c.Side.IsHead() && c.StartLine > 0 && c.CommitSHA != "" && c.CommitSHA != headSHA
 }
 
 // shasWithSeveralComments reports the commit shas that more than one diff-trackable
@@ -343,11 +342,8 @@ func mapContiguous(c *store.Comment, hunks []git.Hunk, newPath string) bool {
 type contentCache struct {
 	repo    *git.Repo
 	headRef string
-	sides   map[bool2]map[string]*contentEntry
+	sides   map[store.Side]map[string]*contentEntry
 }
-
-// The anchor side as a comparable key: (indexed, worktree), neither ⇒ head_ref.
-type bool2 struct{ indexed, worktree bool }
 
 type contentEntry struct {
 	content string
@@ -359,21 +355,21 @@ type contentEntry struct {
 }
 
 func newContentCache(repo *git.Repo, headRef string) *contentCache {
-	return &contentCache{repo: repo, headRef: headRef, sides: map[bool2]map[string]*contentEntry{}}
+	return &contentCache{repo: repo, headRef: headRef, sides: map[store.Side]map[string]*contentEntry{}}
 }
 
-func (c *contentCache) side(k bool2) map[string]*contentEntry {
-	if c.sides[k] == nil {
-		c.sides[k] = map[string]*contentEntry{}
+func (c *contentCache) side(s store.Side) map[string]*contentEntry {
+	if c.sides[s] == nil {
+		c.sides[s] = map[string]*contentEntry{}
 	}
-	return c.sides[k]
+	return c.sides[s]
 }
 
 // spec is the `<ref>:<path>` form cat-file and `git show` share. The working tree has
 // no such form — it isn't in the object database — so it reads per file, which costs
 // no process anyway.
-func (c *contentCache) spec(path string, k bool2) string {
-	if k.indexed {
+func (c *contentCache) spec(path string, s store.Side) string {
+	if s == store.SideIndex {
 		return ":" + path
 	}
 	return c.headRef + ":" + path
@@ -382,19 +378,19 @@ func (c *contentCache) spec(path string, k bool2) string {
 // warm prefetches paths for one object-database side in a single command. A batch
 // that fails leaves the cache cold rather than poisoned: read() then falls back to
 // the per-file call, so correctness never depends on the batch parser.
-func (c *contentCache) warm(paths []string, k bool2) {
-	if k.worktree || len(paths) == 0 {
+func (c *contentCache) warm(paths []string, s store.Side) {
+	if s == store.SideWorktree || len(paths) == 0 {
 		return
 	}
 	specs := make([]string, 0, len(paths))
 	for _, p := range paths {
-		specs = append(specs, c.spec(p, k))
+		specs = append(specs, c.spec(p, s))
 	}
 	objs, err := c.repo.BatchObjects(specs)
 	if err != nil {
 		return
 	}
-	side := c.side(k)
+	side := c.side(s)
 	for _, p := range paths {
 		if _, seeded := side[p]; seeded {
 			continue
@@ -403,7 +399,7 @@ func (c *contentCache) warm(paths []string, k bool2) {
 		// that too, or every missing file would still cost a process to rediscover.
 		// Except a non-blob, which BatchObjects deliberately omits; those are rare
 		// enough to let fall through to the single-object path.
-		if content, found := objs[c.spec(p, k)]; found {
+		if content, found := objs[c.spec(p, s)]; found {
 			side[p] = &contentEntry{content: content, ok: true}
 		} else {
 			side[p] = &contentEntry{ok: false}
@@ -411,22 +407,12 @@ func (c *contentCache) warm(paths []string, k bool2) {
 	}
 }
 
-func (c *contentCache) entry(path string, worktree, indexed bool) *contentEntry {
-	k := bool2{indexed: indexed, worktree: worktree}
-	side := c.side(k)
+func (c *contentCache) entry(path string, s store.Side) *contentEntry {
+	side := c.side(s)
 	if e, ok := side[path]; ok {
 		return e
 	}
-	var content string
-	var err error
-	switch {
-	case indexed:
-		content, err = c.repo.IndexFile(path)
-	case worktree:
-		content, err = c.repo.WorktreeFile(path)
-	default:
-		content, err = c.repo.FileContent(c.headRef, path)
-	}
+	content, err := readSide(c.repo, c.headRef, path, s)
 	e := &contentEntry{content: content, ok: err == nil}
 	if err != nil {
 		e.content = ""
@@ -435,15 +421,15 @@ func (c *contentCache) entry(path string, worktree, indexed bool) *contentEntry 
 	return e
 }
 
-func (c *contentCache) read(path string, worktree, indexed bool) (string, bool) {
-	e := c.entry(path, worktree, indexed)
+func (c *contentCache) read(path string, s store.Side) (string, bool) {
+	e := c.entry(path, s)
 	return e.content, e.ok
 }
 
 // lines is read() split for snippet matching, memoised on the entry so a file
 // carrying several comments is split once.
-func (c *contentCache) lines(path string, worktree, indexed bool) ([]string, bool) {
-	e := c.entry(path, worktree, indexed)
+func (c *contentCache) lines(path string, s store.Side) ([]string, bool) {
+	e := c.entry(path, s)
 	if !e.ok {
 		return nil, false
 	}
@@ -513,20 +499,11 @@ func splitLines(content string) []string {
 // index for a staged anchor, the working tree for an uncommitted anchor, else
 // headRef — so the stored snippet matches. Best-effort: an unreadable file or
 // out-of-range start yields "".
-func captureSnippet(repo *git.Repo, headRef, path string, start, end int, worktree, indexed bool) string {
+func captureSnippet(repo *git.Repo, headRef, path string, start, end int, side store.Side) string {
 	if repo == nil || start <= 0 {
 		return ""
 	}
-	var content string
-	var err error
-	switch {
-	case indexed:
-		content, err = repo.IndexFile(path)
-	case worktree:
-		content, err = repo.WorktreeFile(path)
-	default:
-		content, err = repo.FileContent(headRef, path)
-	}
+	content, err := readSide(repo, headRef, path, side)
 	if err != nil {
 		return ""
 	}

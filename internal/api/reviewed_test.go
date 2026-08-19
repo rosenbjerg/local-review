@@ -9,11 +9,11 @@ import (
 
 // sideHash is fileContentHash's old shape: build the per-read cache these helpers
 // now take, then hash one path on one side.
-func sideHash(r *testRepo, headRef, path string, worktree, indexed bool) string {
-	return hashSide(newContentCache(r.repo, headRef), path, worktree, indexed)
+func sideHash(r *testRepo, headRef, path string, side store.Side) string {
+	return hashSide(newContentCache(r.repo, headRef), path, side)
 }
 
-// hashSide must hash the content of the side named by the flags, so the same
+// hashSide must hash the content of the side it is given, so the same
 // path yields distinct hashes for head / working tree / index when they differ.
 func TestFileContentHashPerSide(t *testing.T) {
 	r := newRepo(t)
@@ -24,17 +24,16 @@ func TestFileContentHashPerSide(t *testing.T) {
 	r.write("f.txt", "work\n") // unstaged on top
 
 	cases := []struct {
-		name              string
-		worktree, indexed bool
-		want              string
+		side store.Side
+		want string
 	}{
-		{"head", false, false, hashOf("head\n")},
-		{"worktree", true, false, hashOf("work\n")},
-		{"index", false, true, hashOf("staged\n")},
+		{store.SideHead, hashOf("head\n")},
+		{store.SideWorktree, hashOf("work\n")},
+		{store.SideIndex, hashOf("staged\n")},
 	}
 	for _, c := range cases {
-		if got := sideHash(r, "main", "f.txt", c.worktree, c.indexed); got != c.want {
-			t.Errorf("hashSide[%s] = %q, want %q", c.name, got, c.want)
+		if got := sideHash(r, "main", "f.txt", c.side); got != c.want {
+			t.Errorf("hashSide[%s] = %q, want %q", c.side, got, c.want)
 		}
 	}
 }
@@ -46,10 +45,10 @@ func TestFileContentHashAbsentSentinel(t *testing.T) {
 	r.write("f.txt", "x\n")
 	r.commitAll("c1")
 
-	if got := sideHash(r, "main", "gone.txt", false, false); got != absentContentHash {
+	if got := sideHash(r, "main", "gone.txt", store.SideHead); got != absentContentHash {
 		t.Errorf("missing head file = %q, want %q", got, absentContentHash)
 	}
-	if got := sideHash(r, "main", "gone.txt", true, false); got != absentContentHash {
+	if got := sideHash(r, "main", "gone.txt", store.SideWorktree); got != absentContentHash {
 		t.Errorf("missing worktree file = %q, want %q", got, absentContentHash)
 	}
 }
@@ -74,8 +73,8 @@ func TestReviewedMarkHolds(t *testing.T) {
 
 	// A worktree mark holds while the on-disk content is unchanged, and drops once
 	// it changes — the derive-don't-trust behavior.
-	h := sideHash(r, "main", "f.txt", true, false)
-	mark := store.ReviewedFile{Path: "f.txt", ContentHash: h, Worktree: true}
+	h := sideHash(r, "main", "f.txt", store.SideWorktree)
+	mark := store.ReviewedFile{Path: "f.txt", ContentHash: h, Side: store.SideWorktree}
 	if !markHolds(r, "main", mark) {
 		t.Error("worktree mark should hold before any edit")
 	}
@@ -97,7 +96,7 @@ func TestReviewedMarkAbsentSentinel(t *testing.T) {
 		t.Error("absent mark should hold while the file is still missing")
 	}
 	r.write("gone.txt", "back\n") // file reappears on disk
-	markWT := store.ReviewedFile{Path: "gone.txt", ContentHash: absentContentHash, Worktree: true}
+	markWT := store.ReviewedFile{Path: "gone.txt", ContentHash: absentContentHash, Side: store.SideWorktree}
 	if markHolds(r, "main", markWT) {
 		t.Error("absent mark should drop once the file returns with content")
 	}
@@ -126,7 +125,7 @@ func TestUnreadableRepoDoesNotMarkEverythingStale(t *testing.T) {
 		t.Fatalf("AddComment: %v", err)
 	}
 	marks := []store.FileReviewMark{{Path: "g.txt", ContentHash: hashOf("x\n")}}
-	if err := s.Store.SetFilesReviewed(rev.ID, marks, true, false, false); err != nil {
+	if err := s.Store.SetFilesReviewed(rev.ID, marks, true, store.SideHead); err != nil {
 		t.Fatalf("SetFilesReviewed: %v", err)
 	}
 

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { api } from "../api";
-import type { Comment, CommentType, FileDiff } from "../types";
-import { CommentComposer } from "./CommentComposer";
+import { sideLabel, type Comment, type CommentType, type FileDiff, type Side } from "../types";
+import { FileComments } from "./FileComments";
 
 // One side of the before/after pair. The blob can 404 — the path may not exist on
 // that side, e.g. a comment outliving a renamed image — which the browser would
@@ -37,14 +37,11 @@ interface Props {
   repo: string;
   headRef: string;
   baseRef: string;
-  worktree: boolean;
-  indexed: boolean;
+  side: Side;
   asImage: boolean;
   comments: Comment[];
   renderThread: (c: Comment) => ReactNode;
-  fileComposer: boolean;
-  onSetFileComposer: (open: boolean) => void;
-  onSubmitFileComment: (body: string, type: CommentType) => void;
+  onSubmitFileComment: (body: string, type: CommentType) => Promise<boolean>;
 }
 
 // The media (raster image / non-image binary) view of a file: a before/after
@@ -54,20 +51,17 @@ export function MediaView({
   repo,
   headRef,
   baseRef,
-  worktree,
-  indexed,
+  side,
   asImage,
   comments,
   renderThread,
-  fileComposer,
-  onSetFileComposer,
   onSubmitFileComment,
 }: Props) {
   const showBefore = file.status !== "added" && file.oldPath && baseRef;
   const showAfter = file.status !== "deleted" && file.newPath;
   const beforeSrc = api.blobURL(repo, file.oldPath, baseRef);
-  const afterSrc = api.blobURL(repo, file.newPath, headRef, worktree, indexed);
-  const afterSide = indexed ? "the index" : worktree ? "the working tree" : headRef;
+  const afterSrc = api.blobURL(repo, file.newPath, headRef, side);
+  const afterSide = sideLabel(side, headRef);
   return (
     <div className="media-body">
       {asImage ? (
@@ -94,20 +88,7 @@ export function MediaView({
       ) : (
         <div className="binary-note">Binary file — no preview</div>
       )}
-      <div className="file-comments">
-        {comments.map(renderThread)}
-        {fileComposer ? (
-          <CommentComposer
-            submitLabel="Add comment"
-            onSubmit={onSubmitFileComment}
-            onCancel={() => onSetFileComposer(false)}
-          />
-        ) : (
-          <button className="btn add-file-comment" onClick={() => onSetFileComposer(true)}>
-            + Add file comment
-          </button>
-        )}
-      </div>
+      <FileComments comments={comments} renderThread={renderThread} onSubmit={onSubmitFileComment} />
     </div>
   );
 }

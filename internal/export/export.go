@@ -22,15 +22,20 @@ func inlineField(s string) string {
 	}, s))
 }
 
+// ShortSHA is the abbreviated form used in the artifact's title and in the export
+// filename the API builds — one definition, so the two can't disagree about how
+// many characters "short" is.
+func ShortSHA(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
+}
+
 func Render(r *store.Review, agentInstructions bool, baseURL string) string {
 	var b strings.Builder
 
-	shortSHA := r.HeadSHA
-	if len(shortSHA) > 7 {
-		shortSHA = shortSHA[:7]
-	}
-
-	fmt.Fprintf(&b, "# Review: %s → %s @ %s\n\n", r.HeadRef, r.BaseRef, shortSHA)
+	fmt.Fprintf(&b, "# Review: %s → %s @ %s\n\n", r.HeadRef, r.BaseRef, ShortSHA(r.HeadSHA))
 
 	// Deliberately not a "## Summary" heading: files are the h2 level, so one here
 	// would read as a file named Summary to anything parsing the artifact by

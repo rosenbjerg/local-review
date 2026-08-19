@@ -57,7 +57,7 @@ func TestFindMatches(t *testing.T) {
 // --- captureSnippet: reads the range from the anchored side ---
 
 // The three anchor sides read distinct content for the same line, so the captured
-// snippet must come from the side the flags name (index / worktree / head_ref).
+// snippet must come from the side the comment names (index / worktree / head_ref).
 func TestCaptureSnippetPerSide(t *testing.T) {
 	r := newRepo(t)
 	r.write("f.txt", "a\nb\nc\n")
@@ -67,32 +67,31 @@ func TestCaptureSnippetPerSide(t *testing.T) {
 	r.write("f.txt", "a\nWORK\nc\n") // worktree: line 2 == "WORK"
 
 	cases := []struct {
-		name              string
-		worktree, indexed bool
-		want              string
+		side store.Side
+		want string
 	}{
-		{"head", false, false, "b"},
-		{"worktree", true, false, "WORK"},
-		{"index", false, true, "STAGED"},
+		{store.SideHead, "b"},
+		{store.SideWorktree, "WORK"},
+		{store.SideIndex, "STAGED"},
 	}
 	for _, c := range cases {
-		if got := captureSnippet(r.repo, "main", "f.txt", 2, 2, c.worktree, c.indexed); got != c.want {
-			t.Errorf("captureSnippet[%s] = %q, want %q", c.name, got, c.want)
+		if got := captureSnippet(r.repo, "main", "f.txt", 2, 2, c.side); got != c.want {
+			t.Errorf("captureSnippet[%s] = %q, want %q", c.side, got, c.want)
 		}
 	}
 
 	// Multi-line range, and the best-effort edge cases.
-	if got := captureSnippet(r.repo, "main", "f.txt", 1, 3, false, false); got != "a\nb\nc" {
+	if got := captureSnippet(r.repo, "main", "f.txt", 1, 3, store.SideHead); got != "a\nb\nc" {
 		t.Errorf("multi-line head snippet = %q, want %q", got, "a\nb\nc")
 	}
-	if got := captureSnippet(r.repo, "main", "f.txt", 0, 0, false, false); got != "" {
+	if got := captureSnippet(r.repo, "main", "f.txt", 0, 0, store.SideHead); got != "" {
 		t.Errorf("start<=0 should yield %q, got %q", "", got)
 	}
-	if got := captureSnippet(r.repo, "main", "f.txt", 99, 99, false, false); got != "" {
+	if got := captureSnippet(r.repo, "main", "f.txt", 99, 99, store.SideHead); got != "" {
 		t.Errorf("out-of-range start should yield %q, got %q", "", got)
 	}
 	// End past EOF clamps to the last line rather than erroring.
-	if got := captureSnippet(r.repo, "main", "f.txt", 3, 99, false, false); got != "c" {
+	if got := captureSnippet(r.repo, "main", "f.txt", 3, 99, store.SideHead); got != "c" {
 		t.Errorf("clamped-end snippet = %q, want %q", got, "c")
 	}
 }
@@ -192,13 +191,13 @@ func TestAnnotateWorktreeSnippet(t *testing.T) {
 	sha := r.commitAll("c1")
 	r.write("f.txt", "l1\nl2\nl3-wt\n") // worktree edit leaves l2 in place
 
-	got := annotateOne(r, "main", store.Comment{FilePath: "f.txt", StartLine: 2, EndLine: 2, Snippet: "l2", CommitSHA: sha, Worktree: true})
+	got := annotateOne(r, "main", store.Comment{FilePath: "f.txt", StartLine: 2, EndLine: 2, Snippet: "l2", CommitSHA: sha, Side: store.SideWorktree})
 	if got.AnchorStatus != store.AnchorCurrent {
 		t.Fatalf("worktree anchor with unchanged line: anchorStatus = %q, want current", got.AnchorStatus)
 	}
 
 	r.write("f.txt", "l1\nl2-wt\nl3\n") // now the anchored line changes on disk
-	got = annotateOne(r, "main", store.Comment{FilePath: "f.txt", StartLine: 2, EndLine: 2, Snippet: "l2", CommitSHA: sha, Worktree: true})
+	got = annotateOne(r, "main", store.Comment{FilePath: "f.txt", StartLine: 2, EndLine: 2, Snippet: "l2", CommitSHA: sha, Side: store.SideWorktree})
 	if got.AnchorStatus != store.AnchorOutdated {
 		t.Fatalf("worktree anchor with changed line: anchorStatus = %q, want outdated", got.AnchorStatus)
 	}
@@ -214,7 +213,7 @@ func TestAnnotateIndexSnippetReadsIndexNotWorktree(t *testing.T) {
 	r.git("add", "f.txt")                      // index: l2 intact
 	r.write("f.txt", "l1\nl2-wt\nl3-staged\n") // worktree: l2 changed (unstaged)
 
-	got := annotateOne(r, "main", store.Comment{FilePath: "f.txt", StartLine: 2, EndLine: 2, Snippet: "l2", Indexed: true})
+	got := annotateOne(r, "main", store.Comment{FilePath: "f.txt", StartLine: 2, EndLine: 2, Snippet: "l2", Side: store.SideIndex})
 	if got.AnchorStatus != store.AnchorCurrent {
 		t.Fatalf("index anchor: anchorStatus = %q, want current (index still has l2)", got.AnchorStatus)
 	}
@@ -228,7 +227,7 @@ func TestAnnotateSnippetRelocatesMoved(t *testing.T) {
 	// Worktree gains two lines above the anchor; l2 still appears exactly once.
 	r.write("f.txt", "x\ny\nl1\nl2\nl3\n")
 
-	got := annotateOne(r, "main", store.Comment{FilePath: "f.txt", StartLine: 2, EndLine: 2, Snippet: "l2", CommitSHA: sha, Worktree: true})
+	got := annotateOne(r, "main", store.Comment{FilePath: "f.txt", StartLine: 2, EndLine: 2, Snippet: "l2", CommitSHA: sha, Side: store.SideWorktree})
 	if got.AnchorStatus != store.AnchorMoved || got.CurrentStartLine != 4 {
 		t.Fatalf("relocated snippet = %q @ %d, want moved @ 4", got.AnchorStatus, got.CurrentStartLine)
 	}

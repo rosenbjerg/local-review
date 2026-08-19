@@ -63,8 +63,7 @@ export default function App() {
     loading,
     error,
     setError,
-    worktreeSide,
-    indexedSide,
+    side,
     shortSha,
     repoOptions,
     headOptions,
@@ -117,8 +116,7 @@ export default function App() {
     comments,
     setComments,
     setError,
-    worktree: worktreeSide,
-    indexed: indexedSide,
+    side,
   });
 
 
@@ -152,9 +150,13 @@ export default function App() {
     if (path) setShowFullSignal((s) => ({ path, n: (s?.n ?? 0) + 1 }));
   }
 
+  // What a reset would actually clear. Read twice — to enable the toolbar control
+  // and to refuse a no-op confirm — so the two can't drift into a button that
+  // opens a dialog which then declines to do anything.
+  const hasReviewState = comments.length > 0 || reviewedFiles.size > 0 || !!review?.summary;
+
   function requestReset() {
-    if (!review) return;
-    if (comments.length === 0 && reviewedFiles.size === 0 && !review.summary) return;
+    if (!review || !hasReviewState) return;
     setConfirmingReset(true);
   }
 
@@ -344,7 +346,7 @@ export default function App() {
           fileCount: files.length,
           stat: diffStat,
           openCommentCount: comments.filter((c) => !c.resolved).length,
-          canReset: comments.length > 0 || reviewedFiles.size > 0 || !!review?.summary,
+          canReset: hasReviewState,
         }}
       />
 
@@ -450,8 +452,7 @@ export default function App() {
                       repo={repo}
                       headRef={review.headRef}
                       baseRef={baseSha}
-                      worktree={worktreeSide}
-                      indexed={indexedSide}
+                      side={side}
                       comments={commentsFor(commentsByPath, path)}
                       onAddComment={handleAddComment}
                       actions={commentActions}

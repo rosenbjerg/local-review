@@ -370,11 +370,17 @@ func TestHandleFileReportsTheSideItServed(t *testing.T) {
 	if !served("repo=" + r.name + "&path=fresh.ts&ref=main") {
 		t.Error("a ref read served from disk must say so")
 	}
-	if !served("repo=" + r.name + "&path=tracked.ts&ref=main&worktree=true") {
+	if !served("repo=" + r.name + "&path=tracked.ts&ref=main&side=worktree") {
 		t.Error("an explicit working-tree read must say so")
 	}
-	if served("repo=" + r.name + "&path=tracked.ts&ref=main&indexed=true") {
+	if served("repo=" + r.name + "&path=tracked.ts&ref=main&side=index") {
 		t.Error("an index read is not the working tree")
+	}
+
+	// An unrecognized side is a 400, not a silent fall back to head: a typo would
+	// otherwise read the wrong side and surface later as a comment that drifted.
+	if code, body := getFile(t, s, "/api/file", "repo="+r.name+"&path=tracked.ts&ref=main&side=staged"); code != http.StatusBadRequest {
+		t.Errorf("unknown side: status %d, want 400 (body %s)", code, body)
 	}
 }
 

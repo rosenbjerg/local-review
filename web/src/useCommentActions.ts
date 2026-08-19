@@ -1,7 +1,7 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import { api } from "./api";
 import type { CommentActions } from "./components/CommentThread";
-import type { Comment, CommentType, Reply, Review } from "./types";
+import type { Comment, CommentType, Reply, Review, Side } from "./types";
 
 interface Params {
   review: Review | null;
@@ -11,14 +11,13 @@ interface Params {
   // The anchor side for new comments, from the active diff scope: the working tree
   // or the git index (staged), else head_ref. The server captures the snippet from
   // that side so the stored text matches what the staleness check reads.
-  worktree: boolean;
-  indexed: boolean;
+  side: Side;
 }
 
 // The comment/reply CRUD handlers, as optimistic mutations over the comments
 // state. Returns the CommentActions bag (for CommentThread) plus the add/delete
 // handlers used directly by DiffView and CommentsPanel.
-export function useCommentActions({ review, comments, setComments, setError, worktree, indexed }: Params) {
+export function useCommentActions({ review, comments, setComments, setError, side }: Params) {
   // These handlers reach every memoized file card, so they must not take a new
   // identity each time the comment list does — that alone would re-render every
   // mounted card whenever a comment lands anywhere. Only handleUpdate needs the
@@ -38,7 +37,7 @@ export function useCommentActions({ review, comments, setComments, setError, wor
     if (!review) return false;
     setError(null);
     try {
-      const c = await api.addComment(review.id, { ...args, worktree, indexed });
+      const c = await api.addComment(review.id, { ...args, side });
       setComments((cs) => [...cs, c]);
       return true;
     } catch (e) {

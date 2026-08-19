@@ -51,8 +51,8 @@ func contains(xs []string, want string) bool {
 // End-to-end: adding a comment on the staged (index) side must capture its snippet
 // from the index — not the working tree, not head, not a client copy — persist the
 // index anchor, and track staleness against the index. Exercises handleAddComment →
-// captureSnippet → AddComment(indexed) → scanComment → annotateComments as one path,
-// so a break in any link (e.g. the `indexed` column not round-tripping, or a side
+// captureSnippet → AddComment(index side) → scanComment → annotateComments as one path,
+// so a break in any link (e.g. the side not round-tripping through its columns, or a side
 // read from the wrong place) fails here.
 func TestCommentRoundTripStagedSide(t *testing.T) {
 	r := newRepo(t)
@@ -69,7 +69,7 @@ func TestCommentRoundTripStagedSide(t *testing.T) {
 	}
 
 	rec := postJSON(t, s.handleAddComment, rev.ID, map[string]any{
-		"filePath": "f.txt", "startLine": 2, "endLine": 2, "type": "bug", "body": "x", "indexed": true,
+		"filePath": "f.txt", "startLine": 2, "endLine": 2, "type": "bug", "body": "x", "side": "index",
 	})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("handleAddComment status %d: %s", rec.Code, rec.Body.String())
@@ -81,8 +81,8 @@ func TestCommentRoundTripStagedSide(t *testing.T) {
 	if c.Snippet != "STAGED" {
 		t.Errorf("captured snippet = %q, want %q (from the index, not worktree/head)", c.Snippet, "STAGED")
 	}
-	if !c.Indexed {
-		t.Error("comment should persist the index anchor side")
+	if c.Side != store.SideIndex {
+		t.Errorf("comment side = %q, want %q", c.Side, store.SideIndex)
 	}
 	if c.AnchorStatus != store.AnchorCurrent {
 		t.Errorf("fresh comment anchorStatus = %q, want current", c.AnchorStatus)
@@ -103,7 +103,7 @@ func TestCommentRoundTripStagedSide(t *testing.T) {
 
 // End-to-end: a reviewed mark taken on the staged side must be fingerprinted against
 // the index, so a working-tree-only edit leaves it reviewed while a re-stage drops
-// it. Exercises handleSetReviewed → fileContentHash(index) → SetFilesReviewed(indexed)
+// it. Exercises handleSetReviewed → hashSide(index) → SetFilesReviewed(index side)
 // → annotateReviewedFiles. A regression where the side flag isn't persisted would
 // wrongly drop the mark on the worktree edit.
 func TestReviewedRoundTripStagedSide(t *testing.T) {
@@ -121,7 +121,7 @@ func TestReviewedRoundTripStagedSide(t *testing.T) {
 	}
 
 	rec := postJSON(t, s.handleSetReviewed, rev.ID, map[string]any{
-		"filePaths": []string{"f.txt"}, "reviewed": true, "indexed": true,
+		"filePaths": []string{"f.txt"}, "reviewed": true, "side": "index",
 	})
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("handleSetReviewed status %d: %s", rec.Code, rec.Body.String())
@@ -168,7 +168,7 @@ func TestAddCommentRejectsUnusableInput(t *testing.T) {
 		{"dotgit path", map[string]any{"filePath": ".git/config", "startLine": 1, "endLine": 1, "body": "x"}},
 		{"empty body", map[string]any{"filePath": "f.txt", "startLine": 1, "endLine": 1, "body": ""}},
 		{"whitespace body", map[string]any{"filePath": "f.txt", "startLine": 1, "endLine": 1, "body": "  \n\t "}},
-		{"both anchor sides", map[string]any{"filePath": "f.txt", "startLine": 1, "endLine": 1, "body": "x", "worktree": true, "indexed": true}},
+		{"unknown side", map[string]any{"filePath": "f.txt", "startLine": 1, "endLine": 1, "body": "x", "side": "staged"}},
 	}
 	for _, c := range bad {
 		t.Run(c.name, func(t *testing.T) {

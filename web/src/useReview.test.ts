@@ -90,23 +90,20 @@ test("changing head resets the 'from' picker to all", async () => {
   expect(result.current.from).toBe("all");
 });
 
-// worktreeSide/indexedSide are the anchor side sent with comments/reviewed marks; they
-// must derive from uncommitted + unstaged (and be mutually exclusive) when head is the
-// checked-out branch.
-test("worktreeSide / indexedSide derive from uncommitted + unstaged", async () => {
+// `side` is the anchor side sent with comments/reviewed marks; it must derive from
+// uncommitted + unstaged when head is the checked-out branch. One value, so the
+// mutually-exclusive pair it replaced can no longer disagree with itself.
+test("side derives from uncommitted + unstaged", async () => {
   const { result } = renderHook(() => useReview());
   await waitFor(() => expect(result.current.head).toBe("main")); // headIsCurrent
 
-  expect(result.current.worktreeSide).toBe(false);
-  expect(result.current.indexedSide).toBe(false);
+  expect(result.current.side).toBe("head");
 
   act(() => result.current.changeUncommitted(true));
-  expect(result.current.worktreeSide).toBe(true); // uncommitted + unstaged(default) → working tree
-  expect(result.current.indexedSide).toBe(false);
+  expect(result.current.side).toBe("worktree"); // uncommitted + unstaged(default)
 
   act(() => result.current.changeUnstaged(false));
-  expect(result.current.worktreeSide).toBe(false);
-  expect(result.current.indexedSide).toBe(true); // uncommitted + !unstaged → git index
+  expect(result.current.side).toBe("index"); // uncommitted + !unstaged
 });
 
 // Regression for the stale 'from' after an out-of-band rebase (commit 464d949): an SSE
@@ -216,8 +213,7 @@ test("uncommitted turns off when head isn't the checked-out branch", async () =>
 
   act(() => result.current.changeUncommitted(true));
   await waitFor(() => expect(result.current.uncommitted).toBe(false)); // guard turns it back off
-  expect(result.current.worktreeSide).toBe(false);
-  expect(result.current.indexedSide).toBe(false);
+  expect(result.current.side).toBe("head");
 });
 
 // The view axes are remembered per repo, so reopening a repo lands on the side you
@@ -237,7 +233,7 @@ test("the view axes are restored per repo", async () => {
   act(() => result.current.changeRepo("A"));
   await waitFor(() => expect(result.current.uncommitted).toBe(true));
   expect(result.current.unstaged).toBe(false);
-  expect(result.current.indexedSide).toBe(true);
+  expect(result.current.side).toBe("index");
 });
 
 // Only a reviewer's toggle is a preference: the checked-out-branch guard also moves
@@ -261,7 +257,7 @@ test("the checked-out-branch guard doesn't overwrite the stored axes", async () 
 // The ping refetch must honour the same guard. An axis toggle keeps review.id, so the
 // SSE effect's `cancelled` flag never fires — without the seq check the ping's diff
 // (fetched under the old axes) lands after the toggle's, leaving hunks from one side
-// while worktreeSide/indexedSide tell DiffView to read file content from another. That
+// while `side` tells DiffView to read file content from another. That
 // mismatch is what renders the wrong lines.
 test("a ping's diff is dropped when a view axis moved while it was in flight", async () => {
   const { result } = renderHook(() => useReview());
@@ -295,7 +291,7 @@ test("a ping's diff is dropped when a view axis moved while it was in flight", a
   });
   act(() => result.current.changeUncommitted(true));
   await waitFor(() => expect(result.current.files.map((f) => f.newPath)).toEqual(["FRESH"]));
-  expect(result.current.worktreeSide).toBe(true);
+  expect(result.current.side).toBe("worktree");
 
   await act(async () => {
     releaseStale?.();

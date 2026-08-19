@@ -36,11 +36,11 @@ func reviewedMarkHolds(cache *contentCache, f store.ReviewedFile) bool {
 	if f.ContentHash == "" {
 		return true
 	}
-	return hashSide(cache, f.Path, f.Worktree, f.Indexed) == f.ContentHash
+	return hashSide(cache, f.Path, f.Side) == f.ContentHash
 }
 
-func hashSide(cache *contentCache, path string, worktree, indexed bool) string {
-	content, ok := cache.read(path, worktree, indexed)
+func hashSide(cache *contentCache, path string, side store.Side) string {
+	content, ok := cache.read(path, side)
 	if !ok {
 		// Unreadable side (deleted file, etc.) — a sentinel that reverts if the
 		// file later returns, rather than "" which would pin it reviewed forever.

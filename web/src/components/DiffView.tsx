@@ -5,10 +5,11 @@ import { fileStat } from "../diffStats";
 import { EXPAND_STEP, gapView, hunkGaps, type Gap, type Reveal } from "../hunkGaps";
 import { hunkWordRanges, splitPieces, type Segment } from "../wordDiff";
 import { langForPath, tokenize, type Token } from "../highlight";
-import type { Comment, CommentType, FileDiff, LineKind } from "../types";
-import { effectiveLines } from "../types";
+import type { Comment, CommentType, FileDiff, LineKind, Side } from "../types";
+import { effectiveLines, sideLabel as labelForSide } from "../types";
 import { CommentComposer } from "./CommentComposer";
 import { CommentThread, type CommentActions } from "./CommentThread";
+import { FileComments } from "./FileComments";
 import { FileHeader } from "./FileHeader";
 import { MarkdownView } from "./MarkdownView";
 import { MediaView } from "./MediaView";
@@ -40,8 +41,7 @@ interface Props {
   repo: string;
   headRef: string;
   baseRef: string;
-  worktree: boolean;
-  indexed: boolean;
+  side: Side;
   comments: Comment[];
   onAddComment: (args: {
     filePath: string;
@@ -104,8 +104,7 @@ export const DiffView = memo(function DiffView({
   repo,
   headRef,
   baseRef,
-  worktree,
-  indexed,
+  side,
   comments,
   onAddComment,
   actions,
@@ -136,7 +135,6 @@ export const DiffView = memo(function DiffView({
   const [delTokens, setDelTokens] = useState<Map<string, Token[]> | null>(null);
   const [svgAsImage, setSvgAsImage] = useState(false);
   const [mdRendered, setMdRendered] = useState(false);
-  const [fileComposer, setFileComposer] = useState(false);
   // How much of each hidden region between hunks the reviewer has revealed, keyed
   // by the gap's index (see hunkGaps).
   const [revealed, setRevealed] = useState<Record<number, Reveal>>({});
@@ -159,7 +157,7 @@ export const DiffView = memo(function DiffView({
   // leftover-thread row still shows the comments stranded there.
   const docView = markdown && mdRendered && !missing;
   const canToggleMode = !mediaView && !docView && file.newPath !== "" && !unchanged;
-  const sideLabel = indexed ? "the index" : worktree ? "the working tree" : headRef;
+  const sideLabel = labelForSide(side, headRef);
 
   useEffect(() => {
     setCollapsed(reviewed || isLarge);
@@ -184,8 +182,8 @@ export const DiffView = memo(function DiffView({
   // synthetic "unchanged" card has none, so without the side its key never moves.
   const contentKey = useMemo(
     () =>
-      `${repo} ${headRef} ${worktree} ${indexed} ${file.status} ${file.newPath} ${JSON.stringify(file.hunks)}`,
-    [repo, headRef, worktree, indexed, file]
+      `${repo} ${headRef} ${side} ${file.status} ${file.newPath} ${JSON.stringify(file.hunks)}`,
+    [repo, headRef, side, file]
   );
   // switchMode writes source outside the fetch effect, so it needs the live key to
   // check against — its own closure's is the one captured before the await.
@@ -202,11 +200,11 @@ export const DiffView = memo(function DiffView({
     if (collapsed || source || file.status === "deleted" || !file.newPath || mediaView) return;
     let cancelled = false;
     api
-      .file(repo, file.newPath, headRef, worktree, indexed)
+      .file(repo, file.newPath, headRef, side)
       .then((res) => {
         if (cancelled) return;
         setMissing(false);
-        setSubstituted(!worktree && !indexed && res.worktree);
+        setSubstituted(side === "head" && res.worktree);
         setSource(res.content.replace(/\n$/, "").split("\n"));
       })
       .catch((e) => {
@@ -217,7 +215,7 @@ export const DiffView = memo(function DiffView({
     return () => {
       cancelled = true;
     };
-  }, [collapsed, source, file, headRef, repo, worktree, indexed, mediaView]);
+  }, [collapsed, source, file, headRef, repo, side, mediaView]);
 
   useEffect(() => {
     if (!source || !lang || source.length > HIGHLIGHT_MAX_LINES) {
@@ -392,10 +390,10 @@ export const DiffView = memo(function DiffView({
     if (next === "full" && !source) {
       const key = contentKey;
       try {
-        const res = await api.file(repo, file.newPath, headRef, worktree, indexed);
+        const res = await api.file(repo, file.newPath, headRef, side);
         // The side moved while this was in flight; the fetch effect owns the refetch.
         if (key !== contentKeyRef.current) return;
-        setSubstituted(!worktree && !indexed && res.worktree);
+        setSubstituted(side === "head" && res.worktree);
         setSource(res.content.replace(/\n$/, "").split("\n"));
       } catch (e) {
         setLoadError(`Could not load full file: ${(e as Error).message}`);
@@ -440,15 +438,9 @@ export const DiffView = memo(function DiffView({
     if (ok) setSelection(null); // keep the composer open (with the text) on failure
   }
 
-  async function submitFileComment(body: string, type: CommentType) {
-    const ok = await onAddComment({
-      filePath: path,
-      startLine: 0,
-      endLine: 0,
-      body,
-      type,
-    });
-    if (ok) setFileComposer(false);
+  // FileComments closes its own composer on success, so this only has to report it.
+  function submitFileComment(body: string, type: CommentType) {
+    return onAddComment({ filePath: path, startLine: 0, endLine: 0, body, type });
   }
 
   function renderContent(
@@ -692,13 +684,10 @@ export const DiffView = memo(function DiffView({
               repo={repo}
               headRef={headRef}
               baseRef={baseRef}
-              worktree={worktree}
-              indexed={indexed}
+              side={side}
               asImage={asImage}
               comments={comments}
               renderThread={renderThread}
-              fileComposer={fileComposer}
-              onSetFileComposer={setFileComposer}
               onSubmitFileComment={submitFileComment}
             />
           ) : docView ? (
@@ -707,8 +696,6 @@ export const DiffView = memo(function DiffView({
                 source={source.join("\n")}
                 comments={comments}
                 renderThread={renderThread}
-                fileComposer={fileComposer}
-                onSetFileComposer={setFileComposer}
                 onSubmitFileComment={submitFileComment}
               />
             ) : (
@@ -724,20 +711,11 @@ export const DiffView = memo(function DiffView({
                   comment at all, and no file had a way to say something about itself.
                   Both are the same missing surface, which the media and markdown
                   views have had all along. */}
-              <div className="file-comments">
-                {fileComments.map(renderThread)}
-                {fileComposer ? (
-                  <CommentComposer
-                    submitLabel="Add comment"
-                    onSubmit={submitFileComment}
-                    onCancel={() => setFileComposer(false)}
-                  />
-                ) : (
-                  <button className="btn add-file-comment" onClick={() => setFileComposer(true)}>
-                    + Add file comment
-                  </button>
-                )}
-              </div>
+              <FileComments
+                comments={fileComments}
+                renderThread={renderThread}
+                onSubmit={submitFileComment}
+              />
             </>
           )}
         </div>

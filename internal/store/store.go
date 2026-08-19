@@ -68,10 +68,9 @@ type Comment struct {
 	Author    string      `json:"author"`
 	Resolved  bool        `json:"resolved"`
 	CommitSHA string      `json:"commitSha"`
-	Worktree  bool        `json:"worktree"`
-	// Indexed marks the anchor side as the git index (staged view). Mutually
-	// exclusive with Worktree: index / working tree / head_ref.
-	Indexed   bool      `json:"indexed"`
+	// The side the comment was anchored to — head_ref, the working tree, or the
+	// git index. Stored as two flags (see side.go); one value everywhere else.
+	Side      Side      `json:"side"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 	Replies   []Reply   `json:"replies"`
@@ -172,36 +171,28 @@ CREATE TABLE IF NOT EXISTS reviewed_files (
 	if err != nil {
 		return err
 	}
-	// Columns added after the initial schema — CREATE TABLE IF NOT EXISTS won't
-	// backfill them onto older DBs, so add each explicitly (no-op once present).
-	if err := s.ensureColumn("reviews", "summary", "summary TEXT NOT NULL DEFAULT ''"); err != nil {
-		return err
+	// Columns added after the initial schema. CREATE TABLE IF NOT EXISTS won't
+	// backfill them onto an older DB, so each is added explicitly (a no-op once
+	// present). Adding a future column means one row here — and it must also go in
+	// the CREATE TABLE above, so a fresh DB gets it without the migration.
+	added := []struct{ table, column, ddl string }{
+		{"reviews", "summary", "summary TEXT NOT NULL DEFAULT ''"},
+		{"comments", "resolved", "resolved INTEGER NOT NULL DEFAULT 0"},
+		{"comments", "author", "author TEXT NOT NULL DEFAULT 'reviewer'"},
+		{"comments", "worktree", "worktree INTEGER NOT NULL DEFAULT 0"},
+		{"comments", "commit_sha", "commit_sha TEXT NOT NULL DEFAULT ''"},
+		{"comments", "indexed", "indexed INTEGER NOT NULL DEFAULT 0"},
+		{"reviewed_files", "content_hash", "content_hash TEXT NOT NULL DEFAULT ''"},
+		{"reviewed_files", "worktree", "worktree INTEGER NOT NULL DEFAULT 0"},
+		{"reviewed_files", "indexed", "indexed INTEGER NOT NULL DEFAULT 0"},
+		{"replies", "author", "author TEXT NOT NULL DEFAULT 'reviewer'"},
 	}
-	if err := s.ensureColumn("comments", "resolved", "resolved INTEGER NOT NULL DEFAULT 0"); err != nil {
-		return err
+	for _, c := range added {
+		if err := s.ensureColumn(c.table, c.column, c.ddl); err != nil {
+			return fmt.Errorf("add %s.%s: %w", c.table, c.column, err)
+		}
 	}
-	if err := s.ensureColumn("comments", "author", "author TEXT NOT NULL DEFAULT 'reviewer'"); err != nil {
-		return err
-	}
-	if err := s.ensureColumn("comments", "worktree", "worktree INTEGER NOT NULL DEFAULT 0"); err != nil {
-		return err
-	}
-	if err := s.ensureColumn("comments", "commit_sha", "commit_sha TEXT NOT NULL DEFAULT ''"); err != nil {
-		return err
-	}
-	if err := s.ensureColumn("comments", "indexed", "indexed INTEGER NOT NULL DEFAULT 0"); err != nil {
-		return err
-	}
-	if err := s.ensureColumn("reviewed_files", "content_hash", "content_hash TEXT NOT NULL DEFAULT ''"); err != nil {
-		return err
-	}
-	if err := s.ensureColumn("reviewed_files", "worktree", "worktree INTEGER NOT NULL DEFAULT 0"); err != nil {
-		return err
-	}
-	if err := s.ensureColumn("reviewed_files", "indexed", "indexed INTEGER NOT NULL DEFAULT 0"); err != nil {
-		return err
-	}
-	return s.ensureColumn("replies", "author", "author TEXT NOT NULL DEFAULT 'reviewer'")
+	return nil
 }
 
 // SQLite lacks ADD COLUMN IF NOT EXISTS, so check first. table/column/ddl are
@@ -263,10 +254,12 @@ func scanReview(sc rowScanner) (Review, error) {
 func scanComment(sc rowScanner) (Comment, error) {
 	var c Comment
 	var created, updated string
+	var worktree, indexed bool
 	if err := sc.Scan(&c.ID, &c.ReviewID, &c.FilePath, &c.StartLine, &c.EndLine,
-		&c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved, &c.Author, &c.CommitSHA, &c.Worktree, &c.Indexed); err != nil {
+		&c.Snippet, &c.Type, &c.Body, &created, &updated, &c.Resolved, &c.Author, &c.CommitSHA, &worktree, &indexed); err != nil {
 		return Comment{}, err
 	}
+	c.Side = sideFromFlags(worktree, indexed)
 	c.CreatedAt, _ = time.Parse(timeFmt, created)
 	c.UpdatedAt, _ = time.Parse(timeFmt, updated)
 	c.Replies = []Reply{} // never null in JSON; GetReview/getComment fill in any replies
@@ -381,8 +374,9 @@ func (s *Store) listReviewedFiles(reviewID int64) ([]string, error) {
 type ReviewedFile struct {
 	Path        string
 	ContentHash string
-	Worktree    bool
-	Indexed     bool
+	// The side the fingerprint was captured from, so the re-hash on the next
+	// review read compares against the same content (see api/reviewed.go).
+	Side Side
 }
 
 func (s *Store) ListReviewedFilesFull(reviewID int64) ([]ReviewedFile, error) {
@@ -395,9 +389,11 @@ func (s *Store) ListReviewedFilesFull(reviewID int64) ([]ReviewedFile, error) {
 	out := []ReviewedFile{}
 	for rows.Next() {
 		var f ReviewedFile
-		if err := rows.Scan(&f.Path, &f.ContentHash, &f.Worktree, &f.Indexed); err != nil {
+		var worktree, indexed bool
+		if err := rows.Scan(&f.Path, &f.ContentHash, &worktree, &indexed); err != nil {
 			return nil, err
 		}
+		f.Side = sideFromFlags(worktree, indexed)
 		out = append(out, f)
 	}
 	return out, rows.Err()
@@ -413,13 +409,14 @@ type FileReviewMark struct {
 // SetFilesReviewed marks (or unmarks) a set of files in one transaction, so a
 // folder-level toggle lands atomically and fires a single change notification.
 // The upsert refreshes the fingerprint, so re-reviewing a changed file re-pins it.
-func (s *Store) SetFilesReviewed(reviewID int64, marks []FileReviewMark, reviewed, worktree, indexed bool) error {
+func (s *Store) SetFilesReviewed(reviewID int64, marks []FileReviewMark, reviewed bool, side Side) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 	now := nowStr()
+	worktree, indexed := side.flags()
 	for _, m := range marks {
 		if reviewed {
 			_, err = tx.Exec(
@@ -521,15 +518,16 @@ func (s *Store) listComments(reviewID int64) ([]Comment, error) {
 
 func (s *Store) AddComment(c Comment) (*Comment, error) {
 	now := nowStr()
+	worktree, indexed := c.Side.flags()
 	res, err := s.db.Exec(
 		`INSERT INTO comments (review_id, file_path, start_line, end_line, snippet, type, body, author, commit_sha, worktree, indexed, created_at, updated_at)
 		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		c.ReviewID, c.FilePath, c.StartLine, c.EndLine, c.Snippet, c.Type, c.Body, c.Author, c.CommitSHA, c.Worktree, c.Indexed, now, now)
+		c.ReviewID, c.FilePath, c.StartLine, c.EndLine, c.Snippet, c.Type, c.Body, c.Author, c.CommitSHA, worktree, indexed, now, now)
 	if err != nil {
 		return nil, err
 	}
 	id, _ := res.LastInsertId()
-	return s.getComment(id)
+	return s.GetComment(id)
 }
 
 // UpdateComment rewrites the editable fields plus the anchor basis (snippet +
@@ -543,13 +541,7 @@ func (s *Store) UpdateComment(id int64, body string, ctype CommentType, start, e
 	if err != nil {
 		return nil, err
 	}
-	return s.getComment(id)
-}
-
-// GetComment reads a single comment (with its replies). Used before an update to
-// recover the anchor side/path needed to re-capture the snippet.
-func (s *Store) GetComment(id int64) (*Comment, error) {
-	return s.getComment(id)
+	return s.GetComment(id)
 }
 
 // updated_at is deliberately left untouched: it tracks the last body/type edit
@@ -573,7 +565,9 @@ func (s *Store) DeleteComment(id int64) (int64, error) {
 	return reviewID, nil
 }
 
-func (s *Store) getComment(id int64) (*Comment, error) {
+// GetComment reads a single comment with its replies. Also used before an update,
+// to recover the anchor side and path needed to re-capture the snippet.
+func (s *Store) GetComment(id int64) (*Comment, error) {
 	c, err := scanComment(s.db.QueryRow(`SELECT `+commentCols+` FROM comments WHERE id=?`, id))
 	if err != nil {
 		return nil, err
