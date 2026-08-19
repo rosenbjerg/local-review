@@ -17,7 +17,15 @@ vi.mock("./api", () => ({
   api: { file: vi.fn() },
 }));
 // No grammar: rows render raw text, so assertions read the DOM directly.
-vi.mock("./highlight", () => ({ langForPath: () => null, tokenize: vi.fn(async () => null) }));
+// highlightBlocks is stubbed too, since a rendered comment thread runs its body
+// through Markdown, which chains it after markdown-it.
+vi.mock("./highlight", () => ({
+  langForPath: () => null,
+  tokenize: vi.fn(async () => null),
+  highlightBlocks: vi.fn(async () => null),
+  langForInfo: () => null,
+}));
+vi.mock("./mermaid", () => ({ renderMermaid: vi.fn(async () => null) }));
 
 import { api } from "./api";
 import { DiffView } from "./components/DiffView";
@@ -283,4 +291,105 @@ test("a file opened only to comment on gets no empty-card note", async () => {
 
   await waitFor(() => expect(screen.getByText("WHOLE-FILE")).toBeTruthy());
   expect(screen.queryByText(/no content changes/i)).toBeNull();
+});
+
+// Line commenting anchors to the new side, so a deleted file — every row a deletion,
+// with no new-side line to click — had no way to take a comment at all. Reviewing a
+// deletion is ordinary ("why did this go?"), and the file-level anchor the store,
+// API and export already support was reachable only from the media and markdown
+// views. Both gaps are the one missing surface.
+test("a deleted file can take a file-level comment", async () => {
+  const deleted: FileDiff = {
+    oldPath: "gone.txt",
+    newPath: "",
+    status: "deleted",
+    hunks: [
+      {
+        header: "@@ -1,2 +0,0 @@",
+        lines: [
+          { kind: "del", oldLine: 1, content: "one" },
+          { kind: "del", oldLine: 2, content: "two" },
+        ],
+      },
+    ],
+  };
+  const onAddComment = vi.fn(async () => true);
+  render(<DiffView {...props} file={deleted} headRef="feature" onAddComment={onAddComment} />);
+
+  fireEvent.click(screen.getByText("+ Add file comment"));
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "why was this removed?" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add comment" }));
+
+  await waitFor(() => expect(onAddComment).toHaveBeenCalled());
+  expect(onAddComment.mock.calls[0][0]).toMatchObject({
+    // The old path: a deleted file has no new side to name it by.
+    filePath: "gone.txt",
+    startLine: 0,
+    endLine: 0,
+  });
+});
+
+// The same surface is what lets any source file carry a remark about itself, rather
+// than forcing it onto an arbitrary line.
+test("a source file can take a file-level comment", async () => {
+  const modified: FileDiff = {
+    oldPath: "a.txt",
+    newPath: "a.txt",
+    status: "modified",
+    hunks: [{ header: "@@ -1 +1 @@", lines: [{ kind: "add", newLine: 1, content: "x" }] }],
+  };
+  vi.mocked(api.file).mockResolvedValue(content("x"));
+  const onAddComment = vi.fn(async () => true);
+  render(<DiffView {...props} file={modified} headRef="feature" onAddComment={onAddComment} />);
+
+  fireEvent.click(screen.getByText("+ Add file comment"));
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "this file should not exist" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add comment" }));
+
+  await waitFor(() => expect(onAddComment).toHaveBeenCalled());
+  expect(onAddComment.mock.calls[0][0]).toMatchObject({ filePath: "a.txt", startLine: 0, endLine: 0 });
+});
+
+// A line-0 comment belongs to the file, so it renders in the file block below the
+// table — not in the leftover bucket, which is for comments whose *line* isn't on
+// screen. Keeping them apart is what stops a file remark from reading as a stranded
+// line comment.
+test("existing file-level comments render below the table, not as leftovers", async () => {
+  const modified: FileDiff = {
+    oldPath: "a.txt",
+    newPath: "a.txt",
+    status: "modified",
+    hunks: [{ header: "@@ -1 +1 @@", lines: [{ kind: "add", newLine: 1, content: "x" }] }],
+  };
+  const fileComment = {
+    id: 7,
+    reviewId: 1,
+    filePath: "a.txt",
+    startLine: 0,
+    endLine: 0,
+    snippet: "",
+    type: "bug" as const,
+    body: "whole-file remark",
+    author: "reviewer",
+    resolved: false,
+    commitSha: "",
+    worktree: false,
+    createdAt: "",
+    updatedAt: "",
+    replies: [],
+  };
+  vi.mocked(api.file).mockResolvedValue(content("x"));
+  render(
+    <DiffView
+      {...props}
+      file={modified}
+      headRef="feature"
+      comments={[fileComment]}
+      actions={{ onEdit: vi.fn(), onDelete: vi.fn(), onReply: vi.fn(), onResolve: vi.fn() } as never}
+    />
+  );
+
+  const body = await screen.findByText("whole-file remark");
+  expect(body.closest(".file-comments")).not.toBeNull();
+  expect(body.closest("table")).toBeNull();
 });

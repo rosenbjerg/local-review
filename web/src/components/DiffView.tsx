@@ -612,7 +612,12 @@ export const DiffView = memo(function DiffView({
     }
   }
 
-  const leftover = comments.filter((c) => !rendered.has(c.id));
+  // A line-0 comment is about the file, not about any row, so it renders in its own
+  // block below the table — where MediaView and MarkdownView already put theirs —
+  // rather than in the leftover bucket, which exists for comments whose *line* isn't
+  // on screen (Changed view hiding it, or an outdated anchor).
+  const fileComments = comments.filter((c) => effectiveLines(c).start === 0);
+  const leftover = comments.filter((c) => !rendered.has(c.id) && effectiveLines(c).start !== 0);
   if (leftover.length > 0) {
     body.push(threadRow("leftover", leftover.map(renderThread)));
   }
@@ -710,9 +715,30 @@ export const DiffView = memo(function DiffView({
               <div className="binary-note media-body">Loading…</div>
             )
           ) : (
-            <table className="diff">
-              <tbody>{body}</tbody>
-            </table>
+            <>
+              <table className="diff">
+                <tbody>{body}</tbody>
+              </table>
+              {/* Line commenting anchors to the new side, so a deleted file — every
+                  row a deletion, no new-side line to click — had no way to take a
+                  comment at all, and no file had a way to say something about itself.
+                  Both are the same missing surface, which the media and markdown
+                  views have had all along. */}
+              <div className="file-comments">
+                {fileComments.map(renderThread)}
+                {fileComposer ? (
+                  <CommentComposer
+                    submitLabel="Add comment"
+                    onSubmit={submitFileComment}
+                    onCancel={() => setFileComposer(false)}
+                  />
+                ) : (
+                  <button className="btn add-file-comment" onClick={() => setFileComposer(true)}>
+                    + Add file comment
+                  </button>
+                )}
+              </div>
+            </>
           )}
         </div>
       )}
