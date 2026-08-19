@@ -195,7 +195,7 @@ export function TopBar({ selection: s, actions, status }: Props) {
           <button
             className="btn"
             onClick={actions.onShowPrompts}
-            title="Copyable prompts: hand a coding agent this review to address, or have an agent review the branch itself"
+            title="Copyable, editable prompts: hand a coding agent this review to address, or have an agent review the branch itself"
           >
             Agent prompts
           </button>

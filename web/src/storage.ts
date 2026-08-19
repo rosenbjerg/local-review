@@ -1,3 +1,5 @@
+import type { PromptKind } from "./prompts";
+
 // Best-effort localStorage: private-mode/quota/disabled throws fall back to the
 // caller's default instead of propagating.
 export const LS = {
@@ -8,6 +10,7 @@ export const LS = {
   repo: "lr.repo",
   exportInstructions: "lr.exportInstructions",
   commentSort: "lr.commentSort",
+  agentPromptsByRepo: "lr.agentPromptsByRepo",
 } as const;
 
 export function getString(key: string, def = ""): string {
@@ -100,4 +103,38 @@ export function writeDiffViewPref(repo: string, pref: DiffViewPref): void {
   const map = getJSON<Record<string, DiffViewPref>>(LS.diffViewByRepo, {});
   map[repo] = normalizeDiffView(pref);
   setJSON(LS.diffViewByRepo, map);
+}
+
+// Per-repo agent-prompt overrides, under lr.agentPromptsByRepo (a { repo: { kind:
+// template } } map). Keyed by repo alone, like the base and diff-view prefs: an edited
+// prompt is how you brief an agent about a repo, not about one review — which is also
+// why the volatile values stay placeholders (see prompts.ts).
+type PromptOverrides = Partial<Record<PromptKind, string>>;
+
+// A stored template counts only if it is a non-blank string. Blank reads as absent
+// (and the editor refuses to save one), so a hand-edited or truncated entry can't
+// leave the modal showing an empty box with no default left to fall back to.
+export function readPromptOverride(repo: string, kind: PromptKind): string | null {
+  const map = getJSON<Record<string, PromptOverrides>>(LS.agentPromptsByRepo, {});
+  const v = map[repo]?.[kind];
+  return typeof v === "string" && v.trim() !== "" ? v : null;
+}
+
+export function writePromptOverride(repo: string, kind: PromptKind, template: string): void {
+  const map = getJSON<Record<string, PromptOverrides>>(LS.agentPromptsByRepo, {});
+  map[repo] = { ...map[repo], [kind]: template };
+  setJSON(LS.agentPromptsByRepo, map);
+}
+
+// Drop the override (back to the built-in template), and the repo's entry with it once
+// it holds nothing: the other prompt kind must not read as customised because this one
+// once was, and an accreting map of empty objects is a stored value that says
+// "edited here" when nothing is.
+export function clearPromptOverride(repo: string, kind: PromptKind): void {
+  const map = getJSON<Record<string, PromptOverrides>>(LS.agentPromptsByRepo, {});
+  const entry = map[repo];
+  if (!entry) return;
+  delete entry[kind];
+  if (Object.keys(entry).length === 0) delete map[repo];
+  setJSON(LS.agentPromptsByRepo, map);
 }

@@ -173,6 +173,14 @@ opens two copyable prompts, one per direction:
   (`GET /api/reviews/{id}/comments?author=review-agent`) to follow up on your
   replies.
 
+Both are **editable**, and **Save** keeps your version for that repo — house rules
+for what an agent should look for, the test command to run, conventions to respect.
+**Reset** restores the built-in one. The two prompts are edited, saved and reset
+independently. The review-specific values stay as placeholders (`{{origin}}`,
+`{{reviewId}}`, `{{headRef}}`, `{{baseRef}}`) that are filled in when you copy, so a
+saved prompt keeps working on the next review rather than naming the one you edited it
+against.
+
 Prefer to paste? **Export** (modal) previews the rendered markdown, then copies or
 downloads it — optionally with **agent reply instructions**, a `curl` example so
 a paste-only agent can still post replies.

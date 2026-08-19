@@ -1690,12 +1690,11 @@ textarea:focus-visible {
   height: auto;
   max-height: 88vh;
 }
-/* Content-sized but roomier than modal-sm — for the agent-instructions preview,
-   whose curl lines want more width. Head stays fixed; the pre scrolls within. */
+/* Narrower than the export modal (the agent prompts are prose and curl lines, not a
+   wide document) but full-height like it: the body is a textarea, which fills the
+   dialog rather than sizing to the text in it. */
 .modal-md {
-  width: min(720px, 94vw);
-  height: auto;
-  max-height: 88vh;
+  width: min(880px, 94vw);
 }
 .help-body {
   padding: 8px 8px 12px;
@@ -1812,6 +1811,41 @@ kbd {
 }
 .modal-head label.checkbox input {
   cursor: pointer;
+}
+
+/* Agent-prompt editor: the modal body is an editable textarea rather than a preview,
+   so it owns the scroll (flex:1 + min-height:0) and the Reset/Save pair sits in a
+   foot below it. Borderless — the head's and foot's rules already frame it. */
+.prompt-editor {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 16px;
+  border: none;
+  border-radius: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  resize: none;
+  overflow: auto;
+}
+.modal-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.prompt-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.prompt-dirty {
+  color: var(--warn);
+  font-size: 12px;
 }
 .markdown-preview {
   margin: 0;

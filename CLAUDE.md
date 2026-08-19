@@ -80,6 +80,7 @@ web/src/
   useOccurrenceHighlight.ts  select a word → light up its other occurrences in that file
   useUnseenActivity.ts   count agent comments/replies that arrived while the tab was hidden
   useFocusTrap.ts        modal focus hook: focus-in, Tab trap, restore on close
+  prompts.ts             the two agent prompts as {{placeholder}} templates + renderPrompt
   storage.ts             typed, error-swallowing localStorage helpers + the lr.* keys
   components/
     FileExplorer.tsx     left pane: hierarchical file tree, collapse, reviewed toggle,
@@ -99,8 +100,9 @@ web/src/
                          rendered-markdown views, which each held that flag before)
     MarkdownView.tsx     rendered (as-published) view of a .md file + file-level comments
     ExportModal.tsx      rendered-markdown preview (via Markdown) + Raw toggle + copy/download
-    AgentPromptsModal.tsx  copyable agent prompts (Address-the-review / Do-a-review),
-                         ViewToggle to switch + Copy the active one
+    AgentPromptsModal.tsx  the agent prompts (Address-the-review / Do-a-review) in an
+                         editable textarea: ViewToggle to switch, Copy the rendered
+                         draft, Reset/Save the shown one per repo
     Modal.tsx            shared dialog shell: backdrop, focus trap, Escape, dialog aria
     ViewToggle.tsx       data-driven segmented control (Changed/Full, Text/Image,
                          Code/Rendered, Preview/Raw)
@@ -727,10 +729,11 @@ web/src/
   chips — status labels, code, kbd, thumbnails), `--radius-md` (controls & cards
   — buttons, inputs, threads, code blocks), `--radius-lg` (large surfaces — file
   cards, modals), `--radius-pill` (count/type badges).
-- Persisted UI prefs (panel widths, comment sort, and the per-repo base branch and
-  diff-view axes) go in `localStorage` under `lr.*` keys, via `storage.ts`. Validate
-  a stored value on read (`isCommentSort`, `normalizeDiffView`) so a stale or
-  impossible one falls back to the default rather than reaching the app.
+- Persisted UI prefs (panel widths, comment sort, and the per-repo base branch,
+  diff-view axes and agent prompts) go in `localStorage` under `lr.*` keys, via
+  `storage.ts`. Validate a stored value on read (`isCommentSort`, `normalizeDiffView`,
+  `readPromptOverride`'s non-blank-string check) so a stale or impossible one falls
+  back to the default rather than reaching the app.
 - Modals (`.modal` inside a `.modal-backdrop`) close on Escape and backdrop
   click, and use `useFocusTrap` for focus-in / Tab-trap / restore-on-close —
   give a new modal the same treatment (mark its safe default control
@@ -763,6 +766,21 @@ web/src/
   on `POST /api/reviews/{id}/export`; the export modal's checkbox drives it and
   remembers the last choice in `localStorage` under `lr.exportInstructions`. The
   curl base URL comes from the export request's `Host`.
+- **The agent prompts are templates, not strings** (`web/src/prompts.ts`). A reviewer
+  can edit either one and **Save** it for the repo (`lr.agentPromptsByRepo`), where it
+  outlives the review it was edited against — so the review-specific values are
+  `{{origin}}`/`{{reviewId}}`/`{{headRef}}`/`{{baseRef}}`, substituted by `renderPrompt`
+  at **copy** time. Interpolating them when the modal opens (what the old
+  `buildReplyPrompt(review, origin)` did) would bake one review's id and refs into the
+  saved text and silently mis-brief the next agent, so keep any new volatile value a
+  placeholder and add it to `PROMPT_PLACEHOLDERS` — which the editor lists and
+  `prompts.test.ts` pins against what actually resolves, both directions. An
+  unrecognised token is left standing rather than blanked: the text is hand-edited, and
+  `{{orgin}}` in a copied curl says what went wrong where a gap would not. Save refuses
+  a blank template and `readPromptOverride` reads one as absent — two halves of the same
+  rule, since a stored blank would leave the editor with no default left to fall back
+  to. `App` keys the modal on `repo` so a switch remounts it instead of saving one
+  repo's drafts under another's key. Covered by `web/src/agentPromptsModal.test.tsx`.
 - Go's build cache has occasionally embedded a **stale `web/dist`**; if the served
   bundle doesn't match disk, `rm` the binary and rebuild. `start.sh` (vite → go)
   is the reliable path.

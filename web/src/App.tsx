@@ -12,7 +12,6 @@ import { LazyFile } from "./components/LazyFile";
 import { ResetConfirmModal } from "./components/ResetConfirmModal";
 import { ReviewSummary } from "./components/ReviewSummary";
 import { TopBar } from "./components/TopBar";
-import { buildReplyPrompt, buildReviewPrompt } from "./prompts";
 import { useActiveFile } from "./useActiveFile";
 import { useCommentActions } from "./useCommentActions";
 import { useCommentRefs } from "./useCommentRefs";
@@ -529,20 +528,18 @@ export default function App() {
       )}
 
       {showPrompts && review && (
+        // Keyed on the repo so a switch remounts the editor with that repo's saved
+        // prompts, rather than carrying the previous repo's drafts across.
         <AgentPromptsModal
+          key={repo}
+          repo={repo}
+          vars={{
+            origin: window.location.origin,
+            reviewId: review.id,
+            headRef: review.headRef,
+            baseRef: review.baseRef,
+          }}
           onClose={() => setShowPrompts(false)}
-          prompts={[
-            {
-              value: "reply",
-              label: "Address the review",
-              text: buildReplyPrompt(review, window.location.origin),
-            },
-            {
-              value: "review",
-              label: "Do a review",
-              text: buildReviewPrompt(review, window.location.origin),
-            },
-          ]}
         />
       )}
 
