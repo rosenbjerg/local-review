@@ -90,7 +90,9 @@ func main() {
 	defer cancelBase()
 
 	srv := &http.Server{
-		Handler:     api.WithErrorLogging(mux),
+		// WithSameOrigin inside the logger, so a refused cross-site write is logged
+		// like any other 4xx.
+		Handler:     api.WithErrorLogging(api.WithSameOrigin(mux)),
 		BaseContext: func(net.Listener) context.Context { return baseCtx },
 		// Bound the header read so a stalled client can't hold a connection open
 		// indefinitely. No ReadTimeout/WriteTimeout: those would abort the long-lived
