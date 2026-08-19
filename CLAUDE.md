@@ -694,6 +694,17 @@ web/src/
 
 ## Gotchas
 
+- **Never test against the default port (7777) or the default data dir.** A real
+  instance is usually already running on 7777 against the developer's own repos and
+  reviews. A test server started there **fails to bind and exits**, and every
+  subsequent request silently hits the *live* instance instead — which is how a
+  probe of `POST /api/reviews/{id}/reset` once wiped a real review's comments,
+  reviewed marks and summary (there is no undo). Always
+  `-port <something unusual> -data-dir <tmp>`, and **confirm the server you started
+  is the one answering** (check its log for `listen … address already in use`, and
+  that `GET /api/repos` returns *your* fixture repos) before sending any write.
+  The one exception is the Vite dev proxy, which hardcodes `127.0.0.1:7777` in
+  `vite.config.ts` — testing that path means stopping the real instance first.
 - **Build the frontend before `go build`** — `//go:embed all:web/dist` fails to
   compile if `web/dist` is empty. A tracked `web/dist/.gitkeep` keeps it
   compilable on a fresh clone; a Vite plugin (`preserveGitkeep`) recreates it
