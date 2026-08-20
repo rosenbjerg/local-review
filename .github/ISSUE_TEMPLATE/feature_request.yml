@@ -6,10 +6,9 @@ body:
     attributes:
       value: |
         Thanks for the idea. local-review deliberately stays a **local,
-        single-user** review tool — see the non-goals in
-        [SPEC.md](https://github.com/rosenbjerg/local-review/blob/main/SPEC.md)
-        (no multi-user, no remote hosting, no posting reviews back to
-        GitHub/GitLab). Requests that fit that scope are the most likely to land.
+        single-user** review tool: no multi-user, no remote hosting, no posting
+        reviews back to GitHub/GitLab. Requests that fit that scope are the most
+        likely to land.
   - type: textarea
     id: problem
     attributes:

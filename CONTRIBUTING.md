@@ -7,10 +7,10 @@ loop, and the conventions to match.
 
 ## Scope
 
-Please keep the [non-goals](SPEC.md#non-goals-for-now) in mind before starting a
-large change: no multi-user/collaboration/auth, no cross-machine sync or remote
-hosting, no posting reviews back to GitHub/GitLab. Changes that fit the local,
-single-user model are the most likely to be merged. For anything non-trivial,
+Please keep the non-goals in mind before starting a large change: no
+multi-user/collaboration/auth, no cross-machine sync or remote hosting, no posting
+reviews back to GitHub/GitLab. Changes that fit the local, single-user model are the
+most likely to be merged. For anything non-trivial,
 open an issue first so we can agree on the approach.
 
 ## Prerequisites
@@ -79,7 +79,7 @@ logic with a standalone node script.
 
 There's more architectural detail — how comments anchor and stay drift-resistant,
 how staleness is derived, the SSE multi-tab sync, syntax highlighting — in
-[`CLAUDE.md`](CLAUDE.md) and [`SPEC.md`](SPEC.md). Skim them before a deep change.
+[`CLAUDE.md`](CLAUDE.md). Skim it before a deep change.
 
 ## Pull requests
 

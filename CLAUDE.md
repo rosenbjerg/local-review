@@ -1,7 +1,6 @@
 # CLAUDE.md
 
-Guidance for working in this repo. See `SPEC.md` for the design rationale and
-`README.md` for user-facing usage.
+Guidance for working in this repo. See `README.md` for user-facing usage.
 
 ## What this is
 
@@ -23,6 +22,7 @@ npm --prefix web install
 npm --prefix web run build        # → web/dist (embedded)
 go build -o local-review .
 ./local-review -root <folder>      # serves http://127.0.0.1:7777
+# other flags: -port, -data-dir, -no-open, -retention-days
 
 # frontend dev with hot reload (Vite proxies /api → :7777):
 ./local-review -root <folder> -no-open   # terminal 1
@@ -47,22 +47,36 @@ gofmt gate on a file we don't own.
 ## Layout
 
 ```
-main.go                  server: embeds web/dist, resolves DB path, prunes drafts, opens browser
+main.go                  server: embeds web/dist, resolves DB path, prunes drafts, wraps the mux (error logging → same-origin guard), graceful shutdown, opens browser
 internal/git/git.go      git service (shells out to `git`): branches, merge-base, recent commits, diff parser (committed-range / working-tree / index variants), file content (ref/worktree/index), worktree fingerprint
 internal/store/store.go  SQLite (modernc.org/sqlite, WAL): reviews, comments, replies, reviewed_files
-internal/api/api.go      Server, repo resolution (repoFor: root-confined, traversal-safe), route table
+internal/api/api.go      Server, repo resolution (repoFor: root-confined, symlink- and traversal-safe), route table
 internal/api/handlers_git.go       read-only git endpoints: repos, branches, diff, files, commits, file, blob (+ mergeBase/resolveBase helpers)
 internal/api/handlers_reviews.go   create/resume, read, reset, delete, summary, reviewed marks, export
 internal/api/handlers_comments.go  comments + replies
 internal/api/respond.go            decodeBody / pathID / writeJSON / httpError / storeError / notify
 internal/api/validate.go           what the API refuses: validRef / validPath / validBody / validCommentType
 internal/api/side.go               the anchor side: readSide (the one side→git-read map), sideLabel, sideOf
+internal/api/annotate.go           live anchor status (diff tracking / snippet match), snippet capture, the batched content + diff caches
+internal/api/reviewed.go           re-hashes reviewed files, dropping marks whose content moved
+internal/api/origin.go             WithSameOrigin: the browser-write guard (Sec-Fetch-Site, then Origin)
+internal/api/logging.go            WithErrorLogging: logs every 4xx/5xx with its body (Flush passes through, for SSE)
 internal/api/events.go   in-memory SSE hub: per-review subscriber channels, publish/prune
 internal/api/watch.go    per-review filesystem poller: fingerprints the repo while subscribed, pings on out-of-band change
 internal/export/export.go  renders a review → canonical markdown
 web/src/
-  App.tsx                top-level state, repo/branch pickers, 3-column resizable layout, all handlers
-  api.ts                 fetch wrappers    types.ts  shared types
+  App.tsx                composition root: wires the hooks below, owns the pure view state
+                         (selected/opened files, modal flags, comment sort + filter), derives
+                         allFiles / sortedComments / commentsByPath, renders the 3-column layout
+  useReview.ts           the review data layer: repo/branch/diff-scope selection, create + resume,
+                         the diff and SSE refetches (and the reqSeq stale-response guard),
+                         reviewed marks, summary
+  useCommentActions.ts   comment/reply CRUD as optimistic mutations; identity-stable handlers
+  useJump.ts             comment/file navigation: activeComment, the expand signals, jumpTo
+  useActiveFile.ts       scroll-spy over the diff column (which file you're reading) + suppress()
+  usePanelResize.ts      the two panel widths; a drag writes grid-template-columns via ref
+  useKeyboardShortcuts.ts  the one window keydown listener behind every single-key shortcut
+  api.ts                 fetch wrappers    types.ts  shared types    util.ts  clamp
   highlight.ts           Shiki wrapper: all languages, lazy-loaded, JS regex engine
   mermaid.ts             ```mermaid fences → SVG; lazy-loaded, runs after highlighting
   time.ts                relative/absolute timestamp + edited-marker helpers
@@ -70,6 +84,8 @@ web/src/
   commentFilter.ts       the comments-pane filters (status / type / author) + the authors present
   commentTurn.ts         whose move a thread is waiting on (who spoke last) + the awaiting-you count
   commentsByPath.ts      group comments per file card + the by-value compare its memo uses
+  commentRef.ts          the markdown-it rule that turns `#<id>` into a link to that comment
+  reviewNav.ts           nextUnreviewed: the file `v` advances to
   wordDiff.ts            intra-line diff: token LCS → changed char ranges + the segment splitter
   hunkGaps.ts            the unchanged regions a hunk view hides: their line ranges + how much is revealed
   diffRows.ts            what the diff table shows, as data: buildRows (source/hunks/reveals → rows)
@@ -79,19 +95,31 @@ web/src/
   occurrences.ts         occurrence matching: term validation, whole-word vs substring, span→text-node mapping
   useOccurrenceHighlight.ts  select a word → light up its other occurrences in that file
   useUnseenActivity.ts   count agent comments/replies that arrived while the tab was hidden
+  useCommentRefs.ts      delegated click/hover/focus handling for those `#<id>` links
   useFocusTrap.ts        modal focus hook: focus-in, Tab trap, restore on close
   prompts.ts             the two agent prompts as {{placeholder}} templates + renderPrompt
   storage.ts             typed, error-swallowing localStorage helpers + the lr.* keys
   components/
+    TopBar.tsx           repo / head / base / from pickers, the two diff-scope checkboxes,
+                         the changed-file count + `+N -M` badge and compareTitle, reload, and
+                         the review-scoped buttons (agent prompts, export, reset, help)
     FileExplorer.tsx     left pane: hierarchical file tree, collapse, reviewed toggle,
                          per-file +/- counts, reviewed-progress bar (the head's bottom edge)
     DiffView.tsx         center: per-file diff — fetches the source, tokenizes, owns the
                          view/selection/reveal state, and draws the rows diffRows.ts
                          planned; Changed/Full toggle, auto-collapse large files
+    FileHeader.tsx       the file card's header row: collapse, status + path, +/- counts,
+                         comment count, reviewed checkbox, and the per-file view toggles
+    MediaView.tsx        before/after image pair (via /api/blob) or the no-preview note; each
+                         side falls back to "no longer in <side>" on a 404 it can't read
     LazyFile.tsx         viewport lazy-mount wrapper (IntersectionObserver) + scroll anchor
     FindBar.tsx          occurrence-highlight bar above the diff: term, n-of-N, prev/next
     CommentThread.tsx    a comment thread: root comment (edit/delete) + replies + reply composer
     CommentsPanel.tsx    right pane: cross-file comment overview, sort + filter selects, jump-to
+    CommentPreview.tsx   the compact read-only comment (meta + clamped body), shared by the
+                         pane and the `#<id>` popover; never linkifies nested refs
+    CommentRefPopover.tsx  that popover: positioned from the anchor's rect (flip above,
+                         clamp in), pointer-events: none
     ReviewSummary.tsx    the review's free-text summary above the comments pane (view/edit)
     CommentComposer.tsx  type pills (one-click radiogroup, built on the .badge-<type>
                          chips) + body textarea (reused for new/edit; replies hide the type)
@@ -103,10 +131,18 @@ web/src/
     AgentPromptsModal.tsx  the agent prompts (Address-the-review / Do-a-review) in an
                          editable textarea: ViewToggle to switch, Copy the rendered
                          draft, Reset/Save the shown one per repo
+    AddFileModal.tsx     typeahead over the repo's tracked files (GET /api/files), to open a
+                         file the branch didn't change and comment on it
+    HelpModal.tsx        the keyboard-shortcuts overlay (`?`)
+    ResetConfirmModal.tsx  names what a reset would delete, then does it
     Modal.tsx            shared dialog shell: backdrop, focus trap, Escape, dialog aria
+    Combobox.tsx         searchable single-select — a native <select> can't filter, which
+                         gets unwieldy with many branches
     ViewToggle.tsx       data-driven segmented control (Changed/Full, Text/Image,
                          Code/Rendered, Preview/Raw)
     CopyButton.tsx       clipboard button with idle/ok/fail state (lazy text builder)
+    ErrorBoundary.tsx    the app's only class component: shows a render-time throw plus a
+                         reload and a "clear the lr.* keys" escape hatch
     (small shared UI primitives: Chevron, CommentCount, DiffStatBadge, AnchorBadge,
      MetaTimestamps,
      Markdown — markdown-it + async Shiki code-fence highlight, then async mermaid
@@ -119,11 +155,47 @@ web/src/
 - **Root-scoped, multi-repo.** The server is started with `-root <folder>` and
   serves every git repo directly under it (`GET /api/repos`). Git-reading calls
   (`branches`/`diff`/`file`) and review creation take a `repo` param (a single
-  path segment); `api.repoFor` validates it against the root and rejects
-  traversal. Review/comment/export endpoints work off `review_id` (which carries
-  `repo_path`), so they need no `repo` param.
+  path segment); `api.repoFor` validates it against the root and rejects traversal —
+  and resolves both sides' symlinks before comparing, so a symlink dropped in the root
+  can't point the tool at a repo outside it (`isGitRepo`'s `os.Stat` follows links).
+  Review/comment/export endpoints work off `review_id` (which carries `repo_path`), so
+  they need no `repo` param.
 - **Backend is source of truth** for review state; React caches it and mutates
   via the API. Discrete actions (add/delete/toggle) save immediately.
+- **A write must come from this page, or from no browser at all.** Binding to loopback
+  keeps the network out, not the browser: every page the user visits can reach
+  127.0.0.1, and a plain auto-submitting `<form>` is a CORS "simple request" — no
+  preflight, so it lands in the handler. That reaches every POST here, including
+  `/reset` (destroys a review and needs no body at all), `/resolved` (quietly drops
+  threads from the export) and `/comments` (writes text into an artifact the user then
+  hands a coding agent to act on). `api.WithSameOrigin` (`origin.go`, wrapped *inside*
+  `WithErrorLogging` in `main.go` so a refusal logs like any other 4xx) answers those
+  with a 403. Three rules: **reads are exempt** — GET/HEAD/OPTIONS change nothing, and
+  the SSE stream, `/api/blob`'s `<img>` loads and the embedded assets have to work
+  regardless of headers; **`Sec-Fetch-Site` is checked before `Origin`**, which is
+  load-bearing for `npm run dev` (the browser talks to Vite on :5173, so its forwarded
+  `Origin` never matches our `Host`, while `Sec-Fetch-Site` still reads `same-origin`) —
+  and a value we fail to recognize must not read as "header absent", hence the
+  normalize; **neither header means no browser**, which is allowed, because the
+  agent-facing API has to keep working from curl and a non-browser client carries no
+  ambient credentials to forge. `same-site` is refused — that's another port on
+  localhost, not this app. The guard covers every non-read method, but POST is what it's
+  *for*: PATCH/DELETE already force a preflight the attacking page can't get an answer
+  to. `origin_test.go` pins it.
+- **A list the API returns is `[]`, never `null`.** Go marshals a nil slice as `null`,
+  and the client stores what it is given: `{"branches": null}` from a repo with no
+  commits threw on `branches.find`, and because the repo selection is remembered in
+  `lr.repo`, every reload re-selected that repo and threw again — the app stayed dead
+  until localStorage was cleared by hand, and one freshly `git init`ed folder under
+  `-root` was enough to trigger it. So initialize the slice (`ListBranches`,
+  `listComments`, `listReviewedFiles`, `handleListComments`) **and** normalize on
+  ingest (`useReview` does, at all three branch ingest points) — a null must not be
+  able to reach state from any source. `ErrorBoundary` is the backstop for the class
+  rather than that instance: a render-time throw now shows the message, a reload, and a
+  "clear saved settings" escape hatch — the remembered selection being both the
+  likeliest thing a crash is tied to and the one thing a plain reload won't undo. And
+  `branchesLoaded` is what lets the empty state say "this repo has no commits yet"
+  instead of asking for a branch that cannot exist.
 - **Comments anchor to the new side** (HEAD path + line) and store a captured
   `snippet` so feedback survives line drift. The **server** captures that snippet
   from the anchored range at add time (`captureSnippet` in `annotate.go`, reading
@@ -153,10 +225,9 @@ web/src/
   recomputes a live `anchorStatus` (`current` | `moved` | `outdated`) on every
   review read (`handleGetReview`, `handleCreateReview`, `handleExport`, and the
   add-comment response). **Primary method: precise line tracking via git.** For a
-  committed comment with a `commit_sha`, `annotateByDiff` runs
-  `git diff <commit_sha> head` (the **whole** diff, no pathspec — so git can pair a
-  rename; restricting to the old path would report a bare deletion) and maps the
-  original range through the matched file's hunks (`git.MapOldLine`): every line
+  committed comment with a `commit_sha`, `annotateByDiff` diffs that commit against
+  head (see the read strategy below for *which* diff) and maps the original range
+  through the matched file's hunks (`git.MapOldLine`): every line
   surviving contiguously → `current` (same position) or `moved` (shifted, with
   derived `currentStartLine`/`currentEndLine`); any line deleted/modified →
   `outdated`. **Renames are followed:** when the matched file is a rename, the move
@@ -176,8 +247,41 @@ web/src/
   `types.ts` and `export.go`) and badges "moved from `<old>`"; the export files it
   under the new path too. `anchorStatus`/`currentStartLine`/`currentEndLine`/
   `currentFilePath` are computed on `store.Comment` in the API layer with
-  `omitempty` — the store never reads or writes them. Diffs are cached per distinct
-  commit_sha (the whole diff), file reads per path, per review read.
+  `omitempty` — the store never reads or writes them.
+- **A review read must not spawn a git process per file.** It runs on every
+  comment/reply/reviewed mutation, in every open tab, plus every tick of the ~1.5s
+  filesystem poller — i.e. continuously while an agent works, which is exactly when a
+  review is large (measured at 60 comments + 60 reviewed files: 0.95s per read, nearly
+  all of it process spawn). Three things keep it flat, all of them removing *spawns*
+  rather than work. **`git.BatchObjects`** reads many `<ref>:<path>` objects through one
+  `cat-file --batch`: payloads are taken by the byte count in each record header and
+  never by scanning for a delimiter (file content can hold newlines, NULs, or something
+  shaped exactly like a header), and records are correlated to inputs **by position**,
+  since a found record reports the resolved oid rather than echoing the spec; trees and
+  anything odd fall through to the single-object path that produced the old answer.
+  **One `contentCache`**, keyed by `(side, path)` and warmed per side by `warmCache`
+  before either half runs, serves *both* halves — comment staleness and reviewed-file
+  fingerprints want the same files from the same sides and used to read them twice over.
+  And **diff tracking is two-tier**: a cheap path-scoped `git diff <sha> head -- <path>`,
+  escalating to the whole-tree find-renames diff only when the file reads as deleted
+  (the pathspec reports a rename as a bare deletion, so the escalation is what tells a
+  real deletion from a rename to follow) — except where **several** comments share one
+  sha, where the whole-tree diff is read directly instead: one process, cached per sha,
+  and it pairs renames itself. The batch's failure mode is what makes all of this safe:
+  a cold or failed batch still reads per file, so correctness never rests on the batch
+  parser. `annotate_test.go` asserts the scoped and whole-tree branches **agree** on
+  renames, deletions, shifts and interior edits — that equivalence is the thing that
+  could silently rot.
+- **An unreadable repo is not a stale review.** Both halves of a review read infer
+  staleness from a *failed* read — a comment whose side won't open is `outdated`, a
+  reviewed file whose content won't hash reverts to unread — and that inference only
+  holds while the repo itself is readable. Move or rename the repo directory (an
+  ordinary thing to do), or delete the branch, or leave a rebase in flight, and every
+  per-file read fails at once: the reviewer would be shown a review where every comment
+  is stale and nothing is reviewed, at HTTP 200, with nothing saying why. So
+  `annotationBlocker` probes those two conditions first (`isGitRepo`, then does
+  `head_ref` resolve) and on either sets `review.annotationError` and annotates
+  **nothing** — the stored state stands, and a banner says it isn't being checked.
 - **A review carries a free-text `summary`** — the framing a pile of line comments
   can't give ("the auth refactor is fine, but the error handling needs a
   rethink"). Set via `POST /api/reviews/{id}/summary` (trimmed server-side, and
@@ -229,13 +333,39 @@ web/src/
   `GetReview`+`annotateReview` (no store/SQL change); empty result is `[]`, not
   null. Distinct from the reply-oriented markdown `export`, which is the
   reviewer→coding-agent artifact.
+- **`#<id>` in a comment or reply body links to that comment** (`commentRef.ts`):
+  with three identities writing, threads end up referring to one another, and a bare
+  "see #42" that isn't clickable makes the reader hunt. Detection is a markdown-it
+  **core rule** over text tokens, which is what makes it skip inline code and fenced
+  blocks for free; it also skips text already inside a link, so a ref in a markdown
+  link or a linkified URL (`…/pr#42`) can't nest `<a>` tags. It is **gated on the
+  review's comment ids**, passed as render `env` via `Markdown`'s `commentIds` prop —
+  only comment and reply bodies pass it, so stray "issue #42" prose, unknown ids,
+  markdown files and the export preview all stay plain. The anchors are `innerHTML`, so
+  interaction is one set of **delegated** document listeners (`useCommentRefs`): click →
+  `jumpTo`, reusing the pane's highlight/expand/cross-file-mount path rather than a
+  second navigation implementation; hover (250ms) or focus (immediate) →
+  `CommentRefPopover`, dismissed on leave or on **any** scroll, since a scroll moves the
+  anchor out from under the rect the popover was placed against. The popover is
+  `pointer-events: none` and shares `CommentPreview` with the comments pane — which
+  deliberately does *not* linkify refs, so a preview can't spawn a preview. `App` keys
+  the id `Set` on the **joined id list**, not on the comments array: a no-op SSE
+  refetch returns structurally equal comments in a fresh array, and a new `Set`
+  identity there would re-run markdown-it + Shiki in every thread on every ping.
 - **Diff base** defaults to the main-branch *name* (stored on the review); the
   `/api/diff` handler resolves it to `merge-base(base, head)` at query time, so
   the review shows only what the branch introduces. `MainBranch()` prefers a
   local `main`/`master`, then falls back to the remote default
   (`origin/HEAD`) / `origin/main` / `origin/master` — so a branch worked off
   `origin/main` with no local trunk still gets an auto base. If nothing
-  resolves it returns `""` and create-review/diff ask for an explicit base.
+  resolves it returns `""` and create-review/diff ask for an explicit base. A base
+  that no longer resolves (a local `main` deleted after checking out a remote branch)
+  falls back to that auto default rather than failing with a raw "ambiguous argument"
+  from git — `resolveBase`, used by diff, commits and create-review alike. Two refs
+  with **no common ancestor** are a bad selection, not a server fault, so
+  `git.ErrNoMergeBase` answers **400** with prose naming both ends
+  (`mergeBaseStatus`/`mergeBaseError`); anything else from `merge-base` stays a 500
+  carrying git's own message.
 - **The diff view is two orthogonal axes**, *not* part of review identity —
   the review still resumes by `(repo, base_ref, head_ref)` and comments still anchor
   to whichever side they were added on, regardless of the view on screen. `/api/diff`
@@ -275,6 +405,18 @@ web/src/
   are loading it never is. And only the reviewer's toggles write
   (`changeUncommitted`/`changeUnstaged`) — persisting from an effect on the state
   would let that guard, or the `unstaged` reset, erase the stored choice.
+- **A file the branch didn't change can still carry comments.** `GET /api/files`
+  (the repo's tracked files at head) backs a typeahead (`AddFileModal`), and the chosen
+  path becomes a synthetic `unchanged` `FileDiff` in `App`'s `allFiles` — no hunks,
+  rendered in Full view, where every line is commentable. The same mechanism derives a
+  card from any **comment** whose path isn't in the diff, which is what makes a comment
+  an agent filed on a non-changed file visible and jumpable in the browser instead of
+  only in the export — and what restores an opened file after a reload, since
+  `openedFiles` itself is session state, deliberately not persisted. The backend needed
+  nothing: it captures snippets and annotates anchors for any path. Two consequences
+  documented below: these cards are excluded from the reviewed-progress denominator
+  (they aren't work the branch asked for), and they're why `DiffView`'s `contentKey`
+  can't be derived from the hunks alone.
 - **The view has to say what it compares.** Four controls (repo/head/base/from plus
   the two checkboxes) can name a range but not explain it, and a reviewer's reflex is
   to check the result against their git client — where a mismatched file count reads
@@ -306,6 +448,18 @@ web/src/
 - **DB lives in `~/.local-review/`** by default; override the directory with the
   `-data-dir` flag (a leading `~` is expanded, relative paths are made absolute).
   One DB serves many repos, keyed by abs path.
+- **The server has to exit cleanly, and SSE is what makes that awkward.** A stream
+  lives as long as its tab, so `main` derives every request context from a `baseCtx`
+  and cancels it on SIGINT/SIGTERM *before* `srv.Shutdown`: `handleEvents` waits on
+  `r.Context()`, and without the cancel Shutdown would block on the open streams until
+  its deadline, leaving the deferred `st.Close()` too late to checkpoint the WAL
+  cleanly. For the same reason `ReadHeaderTimeout` is set but `ReadTimeout`/
+  `WriteTimeout` are **not** — those would abort streams that legitimately read nothing
+  and write for minutes. The listener is bound explicitly before the browser opens, so
+  a port-in-use failure aborts instead of opening a tab at a server that isn't there.
+  `-retention-days` (default 30) prunes draft reviews older than that on startup;
+  `<= 0` disables pruning, since a non-positive cutoff would sit at/after now and wipe
+  every draft.
 - Reviews resume by `(repo_path, base_ref, head_ref)` regardless of status, so
   exporting (which sets status `exported`) never orphans an in-progress review.
 - `reviewed_files` persists per-file "reviewed" state, keyed by path within a
@@ -699,38 +853,43 @@ web/src/
   occurrence match (only while a highlight is live, and never from a focused
   button/link, so it can't steal the key from a control), `Escape` clear an occurrence
   highlight. The handler bails when the target is an input/textarea/select
-  or a modifier is held, and while a modal is open, so it never fights the
-  composer or the browser — which is also what leaves `Escape` to the `Modal` shell
-  and the comment composer. The bail covers **the whole `.composer` subtree**, not
-  just its textarea: the type pills and Cancel/Submit are focusable, and `v`/`e`
-  firing off one of them would act on the review mid-comment. That's also why
-  `CommentComposer` binds ⌘/Ctrl+Enter and Escape on its **root** rather than the
-  textarea — bound any narrower, both keys would be dead everywhere the global
+  or a modifier is held, and while a modal is open (the one exception being `?`, which
+  still closes the help overlay), so it never fights the composer or the browser —
+  which is also what leaves `Escape` to the `Modal` shell and the comment composer.
+  The bail covers **the whole `.composer` subtree**, not just its textarea: the type
+  pills and Cancel/Submit are focusable, and `v`/`e` firing off one of them would act
+  on the review mid-comment. That's also why `CommentComposer` binds ⌘/Ctrl+Enter and
+  Escape on its **root** rather than the textarea — bound any narrower, both keys would
+  be dead everywhere the global
   handler has stood down. Covered by `useKeyboardShortcuts.test.ts` and
   `commentComposer.test.tsx`. The `?` header button opens the same overlay.
 
 ## Conventions
 
-- Go: standard library only for HTTP; errors bubble up as JSON via `httpError`.
+- Go: standard library only for HTTP; errors bubble up as JSON via `httpError`, and a
+  handler that returns a list initializes the slice so it marshals as `[]`, not `null`.
 - Frontend: strict TS (`noUnusedLocals`/`noUnusedParameters` on) — no dead code.
   Match the existing component style; keep CSS in `web/src/styles.css` (no CSS-in-JS).
 - CSS colors come from the `:root` custom properties — never raw hex in a rule.
   Surfaces (`--bg`, `--bg-elev`, `--bg-hover`, `--border`, `--text`, `--muted`,
   `--accent`), the diff-row shades (`--add-bg`/`--add-border`/`--del-bg`/
-  `--sel-bg`), and the semantic status palette (`--danger`/`--success`/`--warn`/
-  `--info`, each with a matching `-border` shade) used by `.status-*`/`.fstat-*`/
-  `.badge-*` and danger controls. Plus a few derived/utility tokens:
-  `--accent-hover` (brighter accent for the hover state of `.btn-primary`),
+  `--sel-bg`) plus the intra-line word marks (`--add-word-bg`/`--del-word-bg`, opaque
+  rather than tinted — over the row shades a translucent one is almost invisible), the
+  occurrence highlight (`--occ-bg`/`--occ-bg-active`), and the semantic status palette
+  (`--danger`/`--success`/`--warn`/`--info`, each with a matching `-border` shade) used
+  by `.status-*`/`.fstat-*`/`.badge-*` and danger controls. Plus a few derived/utility
+  tokens: `--accent-hover` (brighter accent for the hover state of `.btn-primary`),
   `--danger-soft` (translucent danger tint for hover fills + the error banner),
   `--on-accent` (foreground on saturated accent/success fills), `--backdrop`
-  (modal scrim), and `--checker-bg`/`--checker-fg` (transparent-image
-  checkerboard). Add a var rather than reintroduce a literal.
+  (modal scrim), `--checker-bg`/`--checker-fg` (transparent-image checkerboard) and
+  `--font-mono`. Add a var rather than reintroduce a literal.
 - Corner radii come from a fixed scale, never a literal: `--radius-sm` (inline
   chips — status labels, code, kbd, thumbnails), `--radius-md` (controls & cards
   — buttons, inputs, threads, code blocks), `--radius-lg` (large surfaces — file
   cards, modals), `--radius-pill` (count/type badges).
-- Persisted UI prefs (panel widths, comment sort, and the per-repo base branch,
-  diff-view axes and agent prompts) go in `localStorage` under `lr.*` keys, via
+- Persisted UI prefs (panel widths, selected repo, comment sort, the export's
+  instructions checkbox, and the per-repo base branch, diff-view axes and agent
+  prompts) go in `localStorage` under `lr.*` keys, via
   `storage.ts`. Validate a stored value on read (`isCommentSort`, `normalizeDiffView`,
   `readPromptOverride`'s non-blank-string check) so a stale or impossible one falls
   back to the default rather than reaching the app.
@@ -738,8 +897,8 @@ web/src/
   click, and use `useFocusTrap` for focus-in / Tab-trap / restore-on-close —
   give a new modal the same treatment (mark its safe default control
   `data-autofocus`). The global keyboard shortcuts in `App.tsx` must bail while
-  a modal is open (see the `showExport`/`showPrompts`/`showHelp`/
-  `confirmingReset` guards).
+  a modal is open (see the `showExport`/`showPrompts`/`showHelp`/`showAddFile`/
+  `confirmingReset` guards, passed to `useKeyboardShortcuts` as one `modalOpen` flag).
 
 ## Gotchas
 
@@ -793,4 +952,3 @@ web/src/
   dependency (the `useMemoCache` polyfill for React 18). The intentional partial-dep
   effects surface as `exhaustive-deps` warnings, not inline disables (which would
   make the compiler rules distrust the whole file); `set-state-in-effect` is off.
-```
