@@ -632,11 +632,13 @@ textarea:focus-visible {
   padding: 6px 10px;
   border-bottom: 1px solid var(--border);
 }
-.explorer-search-wrap {
+/* Shared by the file explorer's search and the comments pane's — one look for
+   "narrow this list", wherever the list is. The rows around them differ. */
+.search-wrap {
   position: relative;
   display: flex;
 }
-.explorer-search {
+.search-input {
   width: 100%;
   background: var(--bg);
   color: var(--text);
@@ -645,7 +647,7 @@ textarea:focus-visible {
   padding: 4px 24px 4px 8px; /* right room for the clear button */
   font-size: 12px;
 }
-.explorer-search-clear {
+.search-clear {
   position: absolute;
   right: 4px;
   top: 50%;
@@ -659,7 +661,7 @@ textarea:focus-visible {
   padding: 2px 5px;
   border-radius: var(--radius-sm);
 }
-.explorer-search-clear:hover {
+.search-clear:hover {
   color: var(--text);
   background: var(--bg-hover);
 }
@@ -1446,6 +1448,9 @@ textarea:focus-visible {
 .awaiting-toggle[aria-pressed="true"] {
   background: var(--info-border);
   color: var(--on-accent);
+}
+.comments-search-row {
+  margin-bottom: 6px;
 }
 .comments-filter {
   display: flex;

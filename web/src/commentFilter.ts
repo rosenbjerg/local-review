@@ -1,6 +1,6 @@
 import { turnOf } from "./commentTurn";
 import type { Comment, CommentType } from "./types";
-import { COMMENT_TYPES } from "./types";
+import { COMMENT_TYPES, effectivePath } from "./types";
 
 // The comments pane's filters, the counterpart to commentSort's orderings. Session
 // state, deliberately not persisted: a filter remembered from yesterday would open
@@ -28,9 +28,12 @@ export interface CommentFilter {
   // An exact root author, or ANY. Authors are open-ended (an API client sets its
   // own), so the choices come from the review rather than a fixed list.
   author: string;
+  // Free text, matched against the whole thread (see matchesQuery). Blank means
+  // no narrowing — it's the query's ANY.
+  query: string;
 }
 
-export const NO_FILTER: CommentFilter = { status: ANY, type: ANY, author: ANY };
+export const NO_FILTER: CommentFilter = { status: ANY, type: ANY, author: ANY, query: "" };
 
 export const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: ANY, label: "Any status" },
@@ -52,8 +55,31 @@ export function authorsOf(comments: Comment[]): string[] {
   return [...new Set(comments.map((c) => c.author).filter(Boolean))].sort();
 }
 
+// The needle a query narrows by: trimmed and lowercased, so matching is
+// case-insensitive and a whitespace-only query narrows nothing. Everything that
+// acts on the query goes through this — the pane highlights matches with the same
+// needle it filtered with, or it would mark text that isn't why the row is there.
+export function queryNeedle(query: string): string {
+  return query.trim().toLowerCase();
+}
+
+// A plain case-insensitive substring, matched against the thread rather than the
+// root comment alone: the pane lists roots, so a term that only appears in a reply
+// still has to surface the thread that holds it. Both paths count, so a
+// rename-moved comment is findable under either its old or its new home.
+function matchesQuery(c: Comment, needle: string): boolean {
+  if (!needle) return true;
+  const has = (s: string | undefined) => !!s && s.toLowerCase().includes(needle);
+  return (
+    has(c.body) ||
+    has(effectivePath(c)) ||
+    has(c.filePath) ||
+    (c.replies ?? []).some((r) => has(r.body))
+  );
+}
+
 export function isFiltered(f: CommentFilter): boolean {
-  return f.status !== ANY || f.type !== ANY || f.author !== ANY;
+  return f.status !== ANY || f.type !== ANY || f.author !== ANY || queryNeedle(f.query) !== "";
 }
 
 function matchesStatus(c: Comment, status: StatusFilter): boolean {
@@ -79,7 +105,8 @@ export function matchesFilter(c: Comment, f: CommentFilter): boolean {
   return (
     matchesStatus(c, f.status) &&
     (f.type === ANY || c.type === f.type) &&
-    (f.author === ANY || c.author === f.author)
+    (f.author === ANY || c.author === f.author) &&
+    matchesQuery(c, queryNeedle(f.query))
   );
 }
 

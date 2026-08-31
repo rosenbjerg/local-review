@@ -41,8 +41,9 @@ One binary: Go backend with the React frontend embedded, nothing to install but
   follow it as the branch moves — renames included — badging anything that *moved* or
   went *outdated*.
 - **A pane that keeps score.** Every thread in one list: sorted by file, age or
-  activity, filtered by status, type or author. Threads whose last word was the
-  agent's are marked *awaiting you*, and `n`/`p` steps whatever's on screen.
+  activity, filtered by status, type or author, and searchable by text — including
+  text an agent wrote in a reply. Threads whose last word was the agent's are marked
+  *awaiting you*, and `n`/`p` steps whatever's on screen.
 - **Reviewed-file tracking.** Tick off a file or a whole folder; the tree shows how
   far you've got, and a file un-ticks itself if it changes after you read it.
 - **Agent handoff, two ways.** Hand an agent the review to address, or send one to
@@ -130,8 +131,8 @@ Opens `http://127.0.0.1:7777`. From there:
    against `HEAD` rather than the merge-base.
 3. **Review, then export.** Click a line number or drag across a range to comment;
    the **+** above the file tree pulls in a file the branch didn't touch. Expand the
-   hidden lines between hunks when you want more context, sort or filter the comments
-   pane to work through what's open, and press `?` for the shortcuts. **Export**
+   hidden lines between hunks when you want more context, sort, filter or search the
+   comments pane to work through what's open, and press `?` for the shortcuts. **Export**
    previews the markdown, then copies or downloads it.
 
 State lives in SQLite under `~/.local-review/` (move it with `-data-dir`), keyed by

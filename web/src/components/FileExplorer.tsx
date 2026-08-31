@@ -3,6 +3,7 @@ import { fileStat } from "../diffStats";
 import { type Comment, type FileDiff, effectivePath } from "../types";
 import { Chevron } from "./Chevron";
 import { DiffStatBadge } from "./DiffStatBadge";
+import { HighlightMatch } from "./HighlightMatch";
 
 interface Props {
   files: FileDiff[];
@@ -90,31 +91,6 @@ function collectFilePaths(node: DirNode): string[] {
   };
   walk(node);
   return out;
-}
-
-// Wrap each occurrence of the (already-lowercased) needle in a <mark>. Runs on
-// each rendered folder/file name so a match inside any path segment shows.
-function highlightMatch(text: string, needle: string): ReactNode {
-  if (!needle) return text;
-  const lower = text.toLowerCase();
-  const parts: ReactNode[] = [];
-  let i = 0;
-  let key = 0;
-  for (;;) {
-    const idx = lower.indexOf(needle, i);
-    if (idx < 0) {
-      parts.push(text.slice(i));
-      break;
-    }
-    if (idx > i) parts.push(text.slice(i, idx));
-    parts.push(
-      <mark key={key++} className="search-hl">
-        {text.slice(idx, idx + needle.length)}
-      </mark>
-    );
-    i = idx + needle.length;
-  }
-  return parts;
 }
 
 export function FileExplorer({
@@ -242,7 +218,7 @@ export function FileExplorer({
             />
             <Chevron open={!isCollapsed} size={10} className="tree-chevron" />
             <span className={`tree-folder${done ? " reviewed" : ""}`}>
-              {highlightMatch(n.name, q)}
+              <HighlightMatch text={n.name} needle={q} />
             </span>
             <span className="muted tree-progress">
               {stats.reviewed}/{stats.total}
@@ -274,7 +250,9 @@ export function FileExplorer({
               <span className={`fstat fstat-${n.file.status}`}>
                 {STATUS_MARK[n.file.status] ?? "M"}
               </span>
-              <span className="fname">{highlightMatch(n.name, q)}</span>
+              <span className="fname">
+                <HighlightMatch text={n.name} needle={q} />
+              </span>
             </button>
             {stat && <DiffStatBadge stat={stat} />}
             {count > 0 && <span className="explorer-count">{count}</span>}
@@ -332,11 +310,11 @@ export function FileExplorer({
           />
         </div>
         <div className="explorer-search-row">
-          <div className="explorer-search-wrap">
+          <div className="search-wrap">
             <input
               ref={searchRef}
               type="text"
-              className="explorer-search"
+              className="search-input"
               placeholder="Search files… ( / )"
               value={query}
               aria-label="Search files"
@@ -352,7 +330,7 @@ export function FileExplorer({
             {query && (
               <button
                 type="button"
-                className="explorer-search-clear"
+                className="search-clear"
                 aria-label="Clear search"
                 title="Clear search"
                 onClick={() => {

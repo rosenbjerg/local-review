@@ -81,7 +81,8 @@ web/src/
   mermaid.ts             ```mermaid fences → SVG; lazy-loaded, runs after highlighting
   time.ts                relative/absolute timestamp + edited-marker helpers
   commentSort.ts         the comments-pane sort orders (file / started / activity)
-  commentFilter.ts       the comments-pane filters (status / type / author) + the authors present
+  commentFilter.ts       the comments-pane filters (status / type / author / free-text
+                         search) + the authors present
   commentTurn.ts         whose move a thread is waiting on (who spoke last) + the awaiting-you count
   commentsByPath.ts      group comments per file card + the by-value compare its memo uses
   commentRef.ts          the markdown-it rule that turns `#<id>` into a link to that comment
@@ -144,7 +145,8 @@ web/src/
     ErrorBoundary.tsx    the app's only class component: shows a render-time throw plus a
                          reload and a "clear the lr.* keys" escape hatch
     (small shared UI primitives: Chevron, CommentCount, DiffStatBadge, AnchorBadge,
-     MetaTimestamps,
+     MetaTimestamps, HighlightMatch — <mark>s a needle in a plain string, shared by
+     the explorer's file search and the comments pane's,
      Markdown — markdown-it + async Shiki code-fence highlight, then async mermaid
      render; `softBreaks` picks comment (GFM <br>) vs document (CommonMark)
      newline handling)
@@ -816,10 +818,10 @@ web/src/
   last thread would strand you in an empty pane with the toggle gone); and the two
   status-filter values below. The count is taken over the **whole review**, not the
   filtered list — narrowing on another axis must not read as "nothing left to do".
-- **The comments pane is filterable** (`web/src/commentFilter.ts`) on three axes —
-  status (open / resolved / outdated / awaiting you / awaiting agent), `type`, and
-  the thread's root `author`. Status carries two axes in one select — how a thread
-  stands and whose move it is — because the answers are mutually exclusive in
+- **The comments pane is filterable** (`web/src/commentFilter.ts`) on four axes —
+  status (open / resolved / outdated / awaiting you / awaiting agent), `type`,
+  the thread's root `author`, and a free-text `query`. Status carries two axes in
+  one select — how a thread stands and whose move it is — because the answers are mutually exclusive in
   practice (a resolved thread has no turn) and a fourth select would crowd the row
   for a combination nobody wants; the two turn values need no resolved check of
   their own, since `turnOf` already calls a resolved thread `none`. With
@@ -830,7 +832,27 @@ web/src/
   pane already hiding comments — and it **resets when `review.id` changes**, since a
   filter set on one review would silently hide another's. Author choices come from
   the review's own comments (`authorsOf`), because authors are open-ended: the API
-  default is `agent`, but a client can send any string. The pane's count reads
+  default is `agent`, but a client can send any string.
+  **The `query` axis is the pane's search**, and it's an axis rather than its own
+  state so it inherits all of that: the Clear button, the `N of M` count, the
+  reset-on-review-change, and — the load-bearing one — feeding `orderedCommentIds`,
+  so `n`/`p` steps a searched list like a filtered one. Frontend-only by nature
+  rather than by concession: `App` already holds every thread in memory, so there is
+  nothing a server round-trip could match that `matchesQuery` can't. Three rules.
+  **It matches the thread, not the root comment** — every reply body counts, since
+  the pane lists roots and a term appearing only in an agent's reply still has to
+  surface the thread holding it (the opposite call from `authorsOf`, where counting
+  replies would offer a choice that filters to nothing). **Both paths count**, so a
+  rename-moved comment is findable under its old name as well as the one it now
+  renders under. And **`queryNeedle` is the only place** the raw input becomes a
+  needle (trimmed, lowercased): the pane highlights matches with the same needle it
+  filtered by, so a whitespace-only query narrows nothing and a `<mark>` can never
+  sit on text that isn't why the row is listed. The **body is deliberately not
+  marked** — it renders through `Markdown` (markdown-it → `innerHTML`), so
+  highlighting inside it would need DOM post-processing or the Custom Highlight API,
+  for a preview that's clamped anyway; a match past the clamp or inside a reply shows
+  an unmarked item, and the thread is one click away. `commentsPanel.test.tsx` pins
+  the controlled-input contract and the highlighting. The pane's count reads
   `N of M` while narrowed, and everything else that counts comments (the explorer
   badges, the export button) deliberately ignores the filter — those describe the
   review, not the pane. Filtering never touches the store or the export.

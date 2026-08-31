@@ -1,11 +1,20 @@
+import { useRef } from "react";
 import type { CommentFilter, TypeFilter } from "../commentFilter";
-import { ANY, NO_FILTER, STATUS_FILTERS, TYPE_FILTERS, isFiltered } from "../commentFilter";
+import {
+  ANY,
+  NO_FILTER,
+  STATUS_FILTERS,
+  TYPE_FILTERS,
+  isFiltered,
+  queryNeedle,
+} from "../commentFilter";
 import type { CommentSort } from "../commentSort";
 import { COMMENT_SORTS, sortTimestamp } from "../commentSort";
 import { turnOf } from "../commentTurn";
 import type { Comment } from "../types";
 import { effectivePath } from "../types";
 import { CommentPreview } from "./CommentPreview";
+import { HighlightMatch } from "./HighlightMatch";
 
 interface Props {
   // Already filtered and sorted — the same list the n/p shortcuts step through.
@@ -49,6 +58,8 @@ export function CommentsPanel({
   onDelete,
 }: Props) {
   const narrowed = isFiltered(filter);
+  const needle = queryNeedle(filter.query);
+  const searchRef = useRef<HTMLInputElement>(null);
   // A filtered-on author whose last thread just went away still needs its option,
   // or the select would sit blank on a filter that is quietly hiding everything.
   const authorOptions =
@@ -92,6 +103,42 @@ export function CommentsPanel({
           </select>
         )}
       </div>
+      {total > 0 && (
+        <div className="comments-search-row">
+          <div className="search-wrap">
+            <input
+              ref={searchRef}
+              type="text"
+              className="search-input"
+              placeholder="Search comments…"
+              value={filter.query}
+              aria-label="Search comments"
+              onChange={(e) => onFilterChange({ ...filter, query: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.stopPropagation(); // don't let it bubble to global/modal handlers
+                  if (filter.query) onFilterChange({ ...filter, query: "" });
+                  else e.currentTarget.blur();
+                }
+              }}
+            />
+            {filter.query && (
+              <button
+                type="button"
+                className="search-clear"
+                aria-label="Clear search"
+                title="Clear search"
+                onClick={() => {
+                  onFilterChange({ ...filter, query: "" });
+                  searchRef.current?.focus();
+                }}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {total > 0 && (
         <div className="comments-filter">
           <select
@@ -145,7 +192,9 @@ export function CommentsPanel({
       )}
       {fileRuns(comments).map((run) => (
         <div key={run.path} className="comment-file-group">
-          <div className="comment-file-name">{run.path}</div>
+          <div className="comment-file-name">
+            <HighlightMatch text={run.path} needle={needle} />
+          </div>
           {run.items.map((c) => (
             // a <button> can't nest in another, so the delete button is a sibling
             <div key={c.id} className="comment-nav-item">
