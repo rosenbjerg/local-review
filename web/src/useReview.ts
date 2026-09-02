@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { type ComboOption } from "./components/Combobox";
-import type { Branch, Comment, Commit, DiffOpts, FileDiff, Review, Side } from "./types";
+import type { Branch, Comment, Commit, DiffOpts, FileDiff, Repo, Review, Side } from "./types";
 import { LS, getString, readBasePref, readDiffViewPref, writeDiffViewPref } from "./storage";
-import { relativeTime } from "./time";
+import { relativeDay, relativeTime } from "./time";
 
 // A ping refetches whether or not anything the client holds actually changed —
 // the filesystem poller fires on any on-disk edit, and every comment/reply/
@@ -57,7 +57,7 @@ function keepIfSameSet(prev: Set<string>, next: string[]): Set<string> {
 // its own state. Pure view state (selectedFile/openedFiles) and jump state live
 // in App, which resets them on repo change alongside this.
 export function useReview() {
-  const [repos, setRepos] = useState<string[]>([]);
+  const [repos, setRepos] = useState<Repo[]>([]);
   const [reposLoaded, setReposLoaded] = useState(false);
   const [repo, setRepo] = useState("");
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -110,9 +110,10 @@ export function useReview() {
     api
       .repos()
       .then((r) => {
-        setRepos(r.repos);
+        const list = r.repos ?? []; // a null list must not reach state from any source
+        setRepos(list);
         const saved = getString(LS.repo);
-        setRepo(saved && r.repos.includes(saved) ? saved : (r.repos[0] ?? ""));
+        setRepo(saved && list.some((x) => x.name === saved) ? saved : (list[0]?.name ?? ""));
       })
       .catch((e) => setError((e as Error).message))
       .finally(() => setReposLoaded(true));
@@ -503,7 +504,10 @@ export function useReview() {
 
   const mainBranch = branches.find((b) => b.isMain)?.name;
   const shortSha = review?.headSha.slice(0, 7);
-  const repoOptions = useMemo<ComboOption[]>(() => repos.map((r) => ({ value: r, label: r })), [repos]);
+  const repoOptions = useMemo<ComboOption[]>(
+    () => repos.map((r) => ({ value: r.name, label: r.name, hint: relativeDay(r.lastActivity) })),
+    [repos]
+  );
   const localBranches = useMemo(() => branches.filter((b) => !b.isRemote), [branches]);
   const headOptions = useMemo<ComboOption[]>(
     () => localBranches.map((b) => ({ value: b.name, label: b.name, hint: branchHint(b, b.isCurrent && "current") })),

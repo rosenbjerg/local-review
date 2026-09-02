@@ -6,6 +6,7 @@ import type {
   DiffOpts,
   DiffResponse,
   Reply,
+  Repo,
   Review,
   Side,
 } from "./types";
@@ -53,7 +54,7 @@ function sideParams(repo: string, path: string, ref: string, side: Side): string
 }
 
 export const api = {
-  repos: () => req<{ repos: string[] }>("/api/repos"),
+  repos: () => req<{ repos: Repo[] }>("/api/repos"),
 
   branches: (repo: string) => {
     const p = new URLSearchParams({ repo });

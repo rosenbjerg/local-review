@@ -165,6 +165,25 @@ web/src/
   can't point the tool at a repo outside it (`isGitRepo`'s `os.Stat` follows links).
   Review/comment/export endpoints work off `review_id` (which carries `repo_path`), so
   they need no `repo` param.
+- **The repo picker is ordered by activity, to the day** (`listRepos`/
+  `repoActivityDate` in `internal/api/api.go`). A repo is dated by the **mtime of its
+  `.git/logs/HEAD`** — the reflog is appended on every commit, checkout, merge and
+  pull, so it says when the reviewer last worked *in that repo*, and it costs one
+  `os.Stat`. Reading the newest committer date across the refs instead would be one
+  git process per repo on the endpoint that lists them all, and would still miss
+  checkouts and branch switches; the fallbacks are `.git` itself (which is also the
+  case where it's a gitlink **file**, for a worktree or submodule, and so has no
+  `logs/` beneath it) and then nothing, an undated repo sorting last. The order is
+  **the calendar date only, then the name** — never the timestamp: the two repos you
+  switch between all day share a date, and a picker whose top entries traded places
+  on every commit would be worse than the alphabetical one it replaced. `YYYY-MM-DD`
+  is both what the wire carries (`lastActivity`, a date, because it's exactly what
+  the order rests on) and what a string compare orders correctly. For the same reason
+  the hint the picker shows is day-granular (`relativeDay` in `time.ts`, which parses
+  the parts as **local** — `Date("2026-09-02")` is UTC midnight, i.e. the day before
+  anywhere west of Greenwich): "2h ago" listed above "5h ago" would read as a broken
+  sort when the tie-break is alphabetical. `TestListReposOrder` and `time.test.ts`
+  pin both halves.
 - **Backend is source of truth** for review state; React caches it and mutates
   via the API. Discrete actions (add/delete/toggle) save immediately.
 - **A write must come from this page, or from no browser at all.** Binding to loopback

@@ -1,3 +1,11 @@
+export interface Repo {
+  name: string;
+  // The local calendar date (YYYY-MM-DD) the repo was last worked in, from its
+  // reflog's mtime — a date, not a timestamp, because it's what the picker's order
+  // rests on and that order must hold for the whole day. "" if it couldn't be dated.
+  lastActivity: string;
+}
+
 export interface Branch {
   name: string;
   isCurrent: boolean;

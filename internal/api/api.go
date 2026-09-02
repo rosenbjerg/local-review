@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"local-review/internal/git"
@@ -34,20 +35,60 @@ func isGitRepo(path string) bool {
 	return err == nil
 }
 
-func (s *Server) listRepos() ([]string, error) {
+// repoInfo is one entry in the repo picker. LastActivity is a local calendar date
+// (YYYY-MM-DD), deliberately *not* a timestamp: it is the value the ordering rests
+// on, and a picker that re-ordered itself through the working day would be worse
+// than an alphabetical one. Empty when the repo's activity can't be dated.
+type repoInfo struct {
+	Name         string `json:"name"`
+	LastActivity string `json:"lastActivity"`
+}
+
+const activityDateLayout = "2006-01-02"
+
+// repoActivityDate dates a repo by its reflog: `.git/logs/HEAD` is appended on every
+// commit, checkout, merge and pull, so its mtime is when the reviewer last worked in
+// this repo — which is what the picker wants, and what a stat can answer. Reading the
+// newest committer date across the refs instead would be one git process per repo on
+// an endpoint that lists them all, and would still miss checkouts and branch
+// switches. Two fallbacks, both cheap: `.git` itself (also the case where it's a
+// gitlink *file*, for a worktree or submodule, and so has no logs/ under it), then
+// nothing — an undated repo sorts last rather than jumping around.
+func repoActivityDate(path string) string {
+	dotGit := filepath.Join(path, ".git")
+	for _, p := range []string{filepath.Join(dotGit, "logs", "HEAD"), dotGit} {
+		if fi, err := os.Stat(p); err == nil {
+			return fi.ModTime().Local().Format(activityDateLayout)
+		}
+	}
+	return ""
+}
+
+func (s *Server) listRepos() ([]repoInfo, error) {
 	entries, err := os.ReadDir(s.Root)
 	if err != nil {
 		return nil, err
 	}
-	repos := []string{}
+	repos := []repoInfo{}
 	for _, e := range entries {
 		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
-		if isGitRepo(filepath.Join(s.Root, e.Name())) {
-			repos = append(repos, e.Name())
+		path := filepath.Join(s.Root, e.Name())
+		if isGitRepo(path) {
+			repos = append(repos, repoInfo{Name: e.Name(), LastActivity: repoActivityDate(path)})
 		}
 	}
+	// Most recently worked in first, by *date* only, then alphabetically: the two
+	// repos you're switching between all day share a date, so they hold a stable
+	// order instead of trading places on every commit. A YYYY-MM-DD compare is a
+	// date compare, and an undated repo ("") sorts last.
+	sort.SliceStable(repos, func(i, j int) bool {
+		if repos[i].LastActivity != repos[j].LastActivity {
+			return repos[i].LastActivity > repos[j].LastActivity
+		}
+		return repos[i].Name < repos[j].Name
+	})
 	return repos, nil
 }
 

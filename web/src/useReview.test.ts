@@ -47,12 +47,13 @@ const branch = (
   isRemote: !!o.remote,
   lastCommit: o.lastCommit ?? "",
 });
+const repoInfo = (name: string, lastActivity = "2026-09-01") => ({ name, lastActivity });
 const mainOnly = { main: "main", branches: [branch("main", { current: true, main: true })] };
 
 beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
-  vi.mocked(api.repos).mockResolvedValue({ repos: ["A", "B"] });
+  vi.mocked(api.repos).mockResolvedValue({ repos: [repoInfo("A"), repoInfo("B")] });
   vi.mocked(api.branches).mockResolvedValue(mainOnly);
   vi.mocked(api.commits).mockResolvedValue({ commits: [] });
   vi.mocked(api.diff).mockResolvedValue({ base: "base", head: "head", files: [] });
@@ -507,7 +508,7 @@ test("a superseded (slow) diff response is discarded", async () => {
 // reload, because the repo selection is remembered. Normalizing at every ingest
 // point is what keeps a null from ever reaching state.
 test("a repo with no commits (branches: null) does not crash the hook", async () => {
-  vi.mocked(api.repos).mockResolvedValue({ repos: ["empty"] });
+  vi.mocked(api.repos).mockResolvedValue({ repos: [repoInfo("empty")] });
   vi.mocked(api.branches).mockResolvedValue({ branches: null, main: "" } as never);
 
   const { result } = renderHook(() => useReview());

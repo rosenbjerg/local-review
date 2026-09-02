@@ -118,8 +118,11 @@ server.
 
 Opens `http://127.0.0.1:7777`. From there:
 
-1. **Pick a repo and a head branch.** Branches are listed most-recently-active
-   first (each shows when it last moved), with the trunks pinned on top —
+1. **Pick a repo and a head branch.** Repos are listed by the day you last worked
+   in each (its reflog's mtime), most recent first, ties alphabetical — so the two
+   you're switching between don't trade places through the day. Branches are listed
+   most-recently-active first (each shows when it last moved), with the trunks
+   pinned on top —
    `origin/main` and friends too, at the head of the base picker's remotes — and a
    prefix's branches, `abc/*`, kept together. The base defaults to your trunk — a
    local `main`/`master`, else the remote's default — and the diff runs from its
