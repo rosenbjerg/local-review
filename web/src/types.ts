@@ -3,6 +3,9 @@ export interface Branch {
   isCurrent: boolean;
   isMain: boolean;
   isRemote: boolean;
+  // The tip commit's committer date (RFC3339), i.e. the branch's last activity —
+  // what the server orders the pickers by. May be "" if git reported none.
+  lastCommit: string;
 }
 
 export interface Commit {

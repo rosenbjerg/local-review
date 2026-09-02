@@ -63,10 +63,18 @@ type Branch struct {
 	IsCurrent bool   `json:"isCurrent"`
 	IsMain    bool   `json:"isMain"`
 	IsRemote  bool   `json:"isRemote"`
+	// LastCommit is the tip commit's committer date (RFC3339) — the branch's last
+	// activity, which is what the picker orders by. Empty if git didn't report one.
+	LastCommit string `json:"lastCommit"`
 }
 
 func (r *Repo) ListBranches() ([]Branch, error) {
-	out, err := r.run("branch", "--format=%(refname:short)%(if)%(HEAD)%(then)\t*%(end)")
+	// Fields are unit-separated (0x1f): a refname can't contain one, and the
+	// committer date is what the picker orders by. %(HEAD) is "*" on the checked-out
+	// branch, a space otherwise. The separator is a literal byte, not git's `%x1f`
+	// escape — `git branch --format` prints that escape verbatim (`git log` expands
+	// it, which is why RecentCommits can use it).
+	out, err := r.run("branch", "--format=%(refname:short)\x1f%(committerdate:iso-strict)\x1f%(HEAD)")
 	if err != nil {
 		return nil, err
 	}
@@ -78,13 +86,17 @@ func (r *Repo) ListBranches() ([]Branch, error) {
 		if line == "" {
 			continue
 		}
-		name := line
-		current := false
-		if strings.Contains(line, "\t*") {
-			name = strings.TrimSuffix(line, "\t*")
-			current = true
+		f := strings.Split(line, "\x1f")
+		if len(f) != 3 {
+			continue
 		}
-		branches = append(branches, Branch{Name: name, IsCurrent: current, IsMain: name == main})
+		name := f[0]
+		branches = append(branches, Branch{
+			Name:       name,
+			IsCurrent:  strings.TrimSpace(f[2]) == "*",
+			IsMain:     name == main,
+			LastCommit: f[1],
+		})
 	}
 	if err := sc.Err(); err != nil {
 		return nil, err
@@ -104,49 +116,122 @@ func (r *Repo) ListBranches() ([]Branch, error) {
 // the symbolic origin/HEAD pointer via %(symref) rather than fragile "->"
 // parsing, and reflects only what the last fetch pulled — it does not fetch.
 func (r *Repo) remoteBranches(main string) ([]Branch, error) {
-	out, err := r.run("for-each-ref", "--format=%(refname:short) %(symref)", "refs/remotes")
+	out, err := r.run("for-each-ref", "--format=%(refname:short)\x1f%(symref)\x1f%(committerdate:iso-strict)", "refs/remotes")
 	if err != nil {
 		return nil, err
 	}
 	var branches []Branch
 	sc := bufio.NewScanner(strings.NewReader(out))
 	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
+		line := sc.Text()
 		if line == "" {
 			continue
 		}
-		// A non-empty symref marks the "origin/HEAD -> origin/main" pointer, not a
-		// real branch. After trimming, a normal ref leaves just its short name.
-		name, symref, _ := strings.Cut(line, " ")
-		if strings.TrimSpace(symref) != "" {
+		f := strings.Split(line, "\x1f")
+		if len(f) != 3 {
 			continue
 		}
-		branches = append(branches, Branch{Name: name, IsMain: name == main, IsRemote: true})
+		// A non-empty symref marks the "origin/HEAD -> origin/main" pointer, not a
+		// real branch.
+		if strings.TrimSpace(f[1]) != "" {
+			continue
+		}
+		name := f[0]
+		branches = append(branches, Branch{Name: name, IsMain: name == main, IsRemote: true, LastCommit: f[2]})
 	}
 	return branches, sc.Err()
 }
 
-var pinnedBranches = []string{"main", "master", "develop", "dev", "staging"}
+var pinnedBranches = []string{"main", "master", "develop", "development", "dev", "staging"}
 
-func sortBranches(branches []Branch) {
-	rank := func(name string) int {
-		for i, p := range pinnedBranches {
-			if name == p {
-				return i
-			}
+// branchRank orders the pinned trunks ahead of everything else in their partition;
+// anything unpinned ranks equal (and falls through to the date ordering). A remote
+// is ranked on the name *after* its remote, so origin/main and origin/staging head
+// the remote group the way main and staging head the locals — they're the bases a
+// reviewer reaches for, and burying them by date under whatever branch was pushed
+// most recently is exactly what the base picker must not do.
+func branchRank(b Branch) int {
+	name := b.Name
+	if b.IsRemote {
+		if _, rest, found := strings.Cut(name, "/"); found {
+			name = rest
 		}
-		return len(pinnedBranches)
+	}
+	for i, p := range pinnedBranches {
+		if name == p {
+			return i
+		}
+	}
+	return len(pinnedBranches)
+}
+
+// branchGroup is the prefix a branch is grouped under: everything before its first
+// "/", so "abc/feature-1" and "abc/feature-2" stay adjacent however old they are.
+// A branch with no prefix is its own group (keyed by its full name), so it takes its
+// place among the groups by its own date rather than lumping in with every other
+// slashless branch. For a remote the leading remote name is not the prefix — it is
+// shared by all of them — so it's kept and the first segment *after* it is used.
+func branchGroup(b Branch) string {
+	name := b.Name
+	if b.IsRemote {
+		remote, rest, found := strings.Cut(name, "/")
+		if !found {
+			return name
+		}
+		seg, _, _ := strings.Cut(rest, "/")
+		return remote + "/" + seg
+	}
+	seg, _, _ := strings.Cut(name, "/")
+	return seg
+}
+
+func branchDate(b Branch) time.Time {
+	t, err := time.Parse(time.RFC3339, b.LastCommit)
+	if err != nil {
+		return time.Time{} // unparseable/absent sorts oldest
+	}
+	return t
+}
+
+// sortBranches orders the pickers: locals before remotes, then the pinned trunks,
+// then by last activity — but grouped, so a prefix's branches stay together and the
+// group as a whole sits at its newest branch's date. Ordering the groups by their
+// newest member (rather than the branches flatly) is what keeps "abc/*" from being
+// scattered through the list by the age of each individual branch.
+func sortBranches(branches []Branch) {
+	// Locals and remotes are separate partitions, so a local literally named
+	// "origin/x" must not pool its date with the origin/x-prefixed remotes.
+	key := func(b Branch) string {
+		if b.IsRemote {
+			return "r\x00" + branchGroup(b)
+		}
+		return "l\x00" + branchGroup(b)
+	}
+	newest := map[string]time.Time{}
+	for _, b := range branches {
+		if d := branchDate(b); d.After(newest[key(b)]) {
+			newest[key(b)] = d
+		}
 	}
 	sort.SliceStable(branches, func(i, j int) bool {
-		// Locals before remotes, then pinned trunks, then alphabetical.
-		if branches[i].IsRemote != branches[j].IsRemote {
-			return !branches[i].IsRemote
+		bi, bj := branches[i], branches[j]
+		if bi.IsRemote != bj.IsRemote {
+			return !bi.IsRemote
 		}
-		ri, rj := rank(branches[i].Name), rank(branches[j].Name)
-		if ri != rj {
+		if ri, rj := branchRank(bi), branchRank(bj); ri != rj {
 			return ri < rj
 		}
-		return branches[i].Name < branches[j].Name
+		gi, gj := key(bi), key(bj)
+		if gi != gj {
+			if ni, nj := newest[gi], newest[gj]; !ni.Equal(nj) {
+				return ni.After(nj)
+			}
+			return gi < gj // same newest date: keep it deterministic
+		}
+		if di, dj := branchDate(bi), branchDate(bj); !di.Equal(dj) {
+			return di.After(dj)
+		}
+		return bi.Name < bj.Name
 	})
 }
 

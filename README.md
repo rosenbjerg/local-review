@@ -118,8 +118,11 @@ server.
 
 Opens `http://127.0.0.1:7777`. From there:
 
-1. **Pick a repo and a head branch.** The base defaults to your trunk — a local
-   `main`/`master`, else the remote's default — and the diff runs from its
+1. **Pick a repo and a head branch.** Branches are listed most-recently-active
+   first (each shows when it last moved), with the trunks pinned on top —
+   `origin/main` and friends too, at the head of the base picker's remotes — and a
+   prefix's branches, `abc/*`, kept together. The base defaults to your trunk — a
+   local `main`/`master`, else the remote's default — and the diff runs from its
    merge-base with head. Override it with an explicit ref if you like.
 2. **Narrow the view, if you want.** The **from** picker starts the diff at one of
    the branch's own commits, that commit's own changes included. **uncommitted**

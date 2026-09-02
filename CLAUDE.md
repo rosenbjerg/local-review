@@ -362,6 +362,30 @@ web/src/
   the id `Set` on the **joined id list**, not on the comments array: a no-op SSE
   refetch returns structurally equal comments in a fresh array, and a new `Set`
   identity there would re-run markdown-it + Shiki in every thread on every ping.
+- **The branch pickers are ordered by last activity, grouped by prefix**
+  (`sortBranches`/`branchGroup` in `internal/git/git.go`). Ordering by the tip
+  commit's committer date is what puts the branch you were just on near the top of a
+  repo with a hundred of them; ordering *flatly* by that date, though, scatters
+  `abc/*` through the list, so a prefix (everything before the first `/`) stays
+  together and the **group** sits at its newest member's date — the picker still reads
+  chronologically without breaking the family up. A slashless branch is its own group,
+  so it takes its own place by date. Two things keep their precedence ahead of the
+  date: locals before remotes, and the pinned trunks (`main`/`master`/`develop`/
+  `development`/`dev`/`staging`) first — a stale trunk is still the base you want
+  offered. A remote's leading remote name is neither its prefix (every remote shares
+  it) nor part of the name that ranks it: `origin/abc/*` groups as `origin/abc`, and
+  `branchRank` matches the name *after* the remote, so `origin/main` and
+  `origin/staging` head the remote group the way `main` and `staging` head the locals.
+  Without that the base picker — the only picker showing remotes — buried
+  `origin/main` under whichever `origin/<feature>` was pushed most recently, which is
+  precisely the ref it exists to offer. Each option shows the date it was ordered on
+  (`branchHint` in `useReview.ts`), like the comment sorts do — an order the list doesn't explain reads
+  as arbitrary. The separator in both format strings is a **literal `\x1f` byte, not
+  git's `%x1f` escape**: `git branch --format` prints that escape verbatim (`git log`
+  expands it, which is why `RecentCommits` can use it), and the whole listing came
+  back empty the one time it was written that way. `git_test.go`'s `TestSortBranches`
+  pins the grouping, `TestBranchRank` the remote trunks, and
+  `git_shell_test.go`'s `TestListBranchesOrderedByActivity` the parse end to end.
 - **Diff base** defaults to the main-branch *name* (stored on the review); the
   `/api/diff` handler resolves it to `merge-base(base, head)` at query time, so
   the review shows only what the branch introduces. `MainBranch()` prefers a

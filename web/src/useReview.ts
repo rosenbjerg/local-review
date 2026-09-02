@@ -3,6 +3,7 @@ import { api } from "./api";
 import { type ComboOption } from "./components/Combobox";
 import type { Branch, Comment, Commit, DiffOpts, FileDiff, Review, Side } from "./types";
 import { LS, getString, readBasePref, readDiffViewPref, writeDiffViewPref } from "./storage";
+import { relativeTime } from "./time";
 
 // A ping refetches whether or not anything the client holds actually changed —
 // the filesystem poller fires on any on-disk edit, and every comment/reply/
@@ -16,6 +17,15 @@ import { LS, getString, readBasePref, readDiffViewPref, writeDiffViewPref } from
 // moved and stringifying a large diff would cost more than it saves.
 function keepIfSame<T>(prev: T, next: T): T {
   return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+}
+
+// The branch pickers are ordered by last activity (grouped by prefix, server-side),
+// so each option states the date it was ordered on — as the comment sorts do, an
+// order the list doesn't explain reads as arbitrary. Any role marker ("current" /
+// "main") keeps its place ahead of it.
+function branchHint(b: Branch, role: string | false): string | undefined {
+  const rel = relativeTime(b.lastCommit);
+  return [role || "", rel].filter(Boolean).join(" · ") || undefined;
 }
 
 // How many of base..head's commits the "from" picker asks for. Both callers pass it
@@ -496,16 +506,21 @@ export function useReview() {
   const repoOptions = useMemo<ComboOption[]>(() => repos.map((r) => ({ value: r, label: r })), [repos]);
   const localBranches = useMemo(() => branches.filter((b) => !b.isRemote), [branches]);
   const headOptions = useMemo<ComboOption[]>(
-    () => localBranches.map((b) => ({ value: b.name, label: b.name, hint: b.isCurrent ? "current" : undefined })),
+    () => localBranches.map((b) => ({ value: b.name, label: b.name, hint: branchHint(b, b.isCurrent && "current") })),
     [localBranches]
   );
   const baseOptions = useMemo<ComboOption[]>(() => {
     const opts: ComboOption[] = [{ value: "", label: `auto${mainBranch ? ` (${mainBranch})` : ""}` }];
     for (const b of localBranches) {
-      opts.push({ value: b.name, label: b.name, hint: b.isMain ? "main" : undefined });
+      opts.push({ value: b.name, label: b.name, hint: branchHint(b, b.isMain && "main") });
     }
     for (const b of branches.filter((b) => b.isRemote)) {
-      opts.push({ value: b.name, label: b.name, hint: b.isMain ? "main" : undefined, group: "remote (last fetched)" });
+      opts.push({
+        value: b.name,
+        label: b.name,
+        hint: branchHint(b, b.isMain && "main"),
+        group: "remote (last fetched)",
+      });
     }
     return opts;
   }, [branches, localBranches, mainBranch]);

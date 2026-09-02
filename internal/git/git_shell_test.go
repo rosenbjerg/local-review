@@ -305,3 +305,70 @@ func TestBatchObjectsEmptyInput(t *testing.T) {
 		t.Errorf("unusable specs should be skipped, got %v", got)
 	}
 }
+
+// commitAtDate commits with a fixed committer date, which is what a branch's
+// "last activity" (and so the picker's order) is derived from.
+func commitAtDate(t *testing.T, dir, file, date string) {
+	t.Helper()
+	mustWrite(t, dir, file, "x\n")
+	cmd := exec.Command("git", "add", "-A")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v\n%s", err, out)
+	}
+	cmd = exec.Command("git", "commit", "-q", "-m", file)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"GIT_CONFIG_GLOBAL=/dev/null",
+		"GIT_CONFIG_SYSTEM=/dev/null",
+		"GIT_TERMINAL_PROMPT=0",
+		"GIT_AUTHOR_DATE="+date,
+		"GIT_COMMITTER_DATE="+date,
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v\n%s", err, out)
+	}
+}
+
+// The listing's format string carries three fields per branch now, and the date is
+// the one the ordering rests on — so parse it end to end against a real repo: the
+// current-branch marker must survive the extra fields, and the order must come out
+// grouped by prefix, each group at its newest member's date.
+func TestListBranchesOrderedByActivity(t *testing.T) {
+	dir, r := initRepoOn(t, "main")
+	firstCommit(t, dir)
+	for _, b := range []struct{ name, date string }{
+		{"abc/old", "2021-01-01T00:00:00Z"},
+		{"abc/new", "2023-01-01T00:00:00Z"},
+		{"xyz/mid", "2022-01-01T00:00:00Z"},
+	} {
+		gitCmd(t, dir, "checkout", "-q", "main")
+		gitCmd(t, dir, "checkout", "-q", "-b", b.name)
+		commitAtDate(t, dir, strings.ReplaceAll(b.name, "/", "-")+".txt", b.date)
+	}
+	// Remote-tracking refs go through a second format string, and the origin/HEAD
+	// symref among them is a pointer rather than a branch.
+	gitCmd(t, dir, "update-ref", "refs/remotes/origin/main", "main")
+	gitCmd(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	branches, err := r.ListBranches()
+	if err != nil {
+		t.Fatalf("ListBranches: %v", err)
+	}
+	var got []string
+	for _, b := range branches {
+		got = append(got, b.Name)
+		if b.LastCommit == "" {
+			t.Errorf("branch %q carries no lastCommit date", b.Name)
+		}
+	}
+	want := []string{"main", "abc/new", "abc/old", "xyz/mid", "origin/main"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("ListBranches order = %v, want %v", got, want)
+	}
+	// xyz/mid is the checked-out branch (the loop left it there).
+	for _, b := range branches {
+		if b.IsCurrent != (b.Name == "xyz/mid") {
+			t.Errorf("isCurrent wrong on %q: %v", b.Name, b.IsCurrent)
+		}
+	}
+}

@@ -37,11 +37,15 @@ import { api } from "./api";
 import { readDiffViewPref } from "./storage";
 import { useReview } from "./useReview";
 
-const branch = (name: string, o: { current?: boolean; main?: boolean; remote?: boolean } = {}) => ({
+const branch = (
+  name: string,
+  o: { current?: boolean; main?: boolean; remote?: boolean; lastCommit?: string } = {}
+) => ({
   name,
   isCurrent: !!o.current,
   isMain: !!o.main,
   isRemote: !!o.remote,
+  lastCommit: o.lastCommit ?? "",
 });
 const mainOnly = { main: "main", branches: [branch("main", { current: true, main: true })] };
 

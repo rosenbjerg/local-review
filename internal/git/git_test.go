@@ -310,3 +310,103 @@ func TestParseDiffOverlongLine(t *testing.T) {
 		t.Fatal("parseDiff of an over-long line should error, got nil (files silently truncated)")
 	}
 }
+
+// The branch pickers order by last activity, but grouped by prefix: a prefix's
+// branches stay adjacent and the group sits at its newest member's date. Ordering
+// the branches flatly instead would scatter "abc/*" through the list, and ordering
+// the groups by anything but their newest member (their oldest, say) would sink an
+// active prefix below a stale one. Pinned trunks stay on top whatever their date,
+// and locals stay ahead of remotes.
+func TestSortBranches(t *testing.T) {
+	at := func(name, date string) Branch { return Branch{Name: name, LastCommit: date} }
+	remote := func(name, date string) Branch {
+		return Branch{Name: name, LastCommit: date, IsRemote: true}
+	}
+	branches := []Branch{
+		at("abc/old", "2026-01-02T00:00:00Z"),
+		remote("origin/abc/x", "2026-04-01T00:00:00Z"),
+		at("zzz/only", "2026-02-01T00:00:00Z"),
+		at("main", "2025-01-01T00:00:00Z"), // pinned, and the oldest thing here
+		at("solo", "2026-03-01T00:00:00Z"),
+		at("abc/new", "2026-05-01T00:00:00Z"),
+		remote("origin/main", "2026-01-01T00:00:00Z"),    // pinned, and the oldest remote
+		remote("origin/staging", "2026-01-01T00:00:00Z"), // pinned lower than main
+	}
+	sortBranches(branches)
+	got := make([]string, len(branches))
+	for i, b := range branches {
+		got[i] = b.Name
+	}
+	want := []string{
+		"main",           // pinned first, despite being the oldest
+		"abc/new",        // "abc" leads: its newest member is the newest branch
+		"abc/old",        // and it keeps its prefix's company rather than its date's
+		"solo",           // slashless branches take their own place by date
+		"zzz/only",       //
+		"origin/main",    // remotes after every local, but their trunks first —
+		"origin/staging", // ranked on the name after the remote, in pinned order —
+		"origin/abc/x",   // even though this one is the newest remote by a month
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("sortBranches = %v, want %v", got, want)
+		}
+	}
+}
+
+// A branch with no committer date (git reported none, or an unparseable one) must
+// still sort — oldest — rather than reorder the list unpredictably.
+func TestSortBranchesUndatedSortsLast(t *testing.T) {
+	branches := []Branch{
+		{Name: "undated"},
+		{Name: "dated", LastCommit: "2020-01-01T00:00:00Z"},
+	}
+	sortBranches(branches)
+	if branches[0].Name != "dated" {
+		t.Errorf("undated branch sorted ahead of a dated one: %v", branches)
+	}
+}
+
+// The remote name is neither the prefix that groups a remote branch nor part of the
+// name that ranks it: origin/abc/* groups as "origin/abc", and origin/main has to
+// rank as the trunk "main" does, or the base picker buries it by date.
+func TestBranchRank(t *testing.T) {
+	main := branchRank(Branch{Name: "main"})
+	cases := []struct {
+		b    Branch
+		want int
+	}{
+		{Branch{Name: "origin/main", IsRemote: true}, main},
+		{Branch{Name: "upstream/main", IsRemote: true}, main},
+		{Branch{Name: "origin/development", IsRemote: true}, branchRank(Branch{Name: "development"})},
+		{Branch{Name: "origin/abc/main", IsRemote: true}, len(pinnedBranches)}, // not a trunk
+		{Branch{Name: "origin/main"}, len(pinnedBranches)},                     // a *local* by that name isn't one either
+		{Branch{Name: "feature/x"}, len(pinnedBranches)},
+	}
+	for _, c := range cases {
+		if got := branchRank(c.b); got != c.want {
+			t.Errorf("branchRank(%q, remote=%v) = %d, want %d", c.b.Name, c.b.IsRemote, got, c.want)
+		}
+	}
+	if branchRank(Branch{Name: "origin/staging", IsRemote: true}) <= main {
+		t.Error("origin/staging must rank below origin/main, as staging does below main")
+	}
+}
+
+func TestBranchGroup(t *testing.T) {
+	cases := []struct {
+		b    Branch
+		want string
+	}{
+		{Branch{Name: "abc/feature"}, "abc"},
+		{Branch{Name: "solo"}, "solo"},
+		{Branch{Name: "origin/abc/feature", IsRemote: true}, "origin/abc"},
+		{Branch{Name: "origin/main", IsRemote: true}, "origin/main"},
+		{Branch{Name: "weird", IsRemote: true}, "weird"},
+	}
+	for _, c := range cases {
+		if got := branchGroup(c.b); got != c.want {
+			t.Errorf("branchGroup(%q, remote=%v) = %q, want %q", c.b.Name, c.b.IsRemote, got, c.want)
+		}
+	}
+}
