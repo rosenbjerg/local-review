@@ -1818,6 +1818,21 @@ kbd {
   cursor: pointer;
 }
 
+/* Second head row of the agent-prompt modal: which review focus is being edited.
+   Its own row rather than more buttons in .modal-head — the group toggle, four
+   focuses, Copy and Close don't fit one row at .modal-md's width. */
+.modal-subhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.prompt-author {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 /* Agent-prompt editor: the modal body is an editable textarea rather than a preview,
    so it owns the scroll (flex:1 + min-height:0) and the Reset/Save pair sits in a
    foot below it. Borderless — the head's and foot's rules already frame it. */

@@ -98,7 +98,8 @@ web/src/
   useUnseenActivity.ts   count agent comments/replies that arrived while the tab was hidden
   useCommentRefs.ts      delegated click/hover/focus handling for those `#<id>` links
   useFocusTrap.ts        modal focus hook: focus-in, Tab trap, restore on close
-  prompts.ts             the two agent prompts as {{placeholder}} templates + renderPrompt
+  prompts.ts             the agent prompts (one per review focus) as {{placeholder}}
+                         templates + renderPrompt
   storage.ts             typed, error-swallowing localStorage helpers + the lr.* keys
   components/
     TopBar.tsx           repo / head / base / from pickers, the two diff-scope checkboxes,
@@ -129,9 +130,11 @@ web/src/
                          rendered-markdown views, which each held that flag before)
     MarkdownView.tsx     rendered (as-published) view of a .md file + file-level comments
     ExportModal.tsx      rendered-markdown preview (via Markdown) + Raw toggle + copy/download
-    AgentPromptsModal.tsx  the agent prompts (Address-the-review / Do-a-review) in an
-                         editable textarea: ViewToggle to switch, Copy the rendered
-                         draft, Reset/Save the shown one per repo
+    AgentPromptsModal.tsx  the agent prompts in an editable textarea: a group
+                         ViewToggle (Address the review / Do a review) over a second
+                         row that picks the review focus and names the author it
+                         files as, Copy the rendered draft, Reset/Save the shown one
+                         per repo
     AddFileModal.tsx     typeahead over the repo's tracked files (GET /api/files), to open a
                          file the branch didn't change and comment on it
     HelpModal.tsx        the keyboard-shortcuts overlay (`?`)
@@ -317,26 +320,31 @@ web/src/
   last body/type edit, which the UI surfaces as an `(edited)` marker (`time.ts`
   `wasEdited`), and resolving isn't an edit (it has its own flag). Keep it that
   way if you touch `SetCommentResolved`, or the marker will fire on resolve.
-- **Comments and replies carry an `author`.** Three identities the server tells
+- **Comments and replies carry an `author`.** The identities the server tells
   apart purely by this field (there's no auth/session): `"reviewer"` — the human,
   tagged explicitly by the browser app (`api.ts`); `"agent"` — the coding agent
-  addressing the review, which is the API default so it needn't set it; and
-  `"review-agent"` — the adversarial reviewer, which the *Do-a-review* prompt has
-  it send on every comment and reply so its findings and follow-ups stay distinct
-  from the coding agent's replies to them. The columns' DDL/migration default is
+  addressing the review, which is the API default so it needn't set it; and one
+  **`"<focus>-review-agent"` per review focus** (`correctness`, `security`, `design`,
+  `test`), which the matching *Do-a-review* prompt sends on every comment and reply
+  so each pass's findings stay distinct from the other passes' and from the coding
+  agent's replies to them. The shared `-review-agent` suffix keeps that family
+  recognisable in the pane, in the export headings and to a future "any review agent"
+  filter; the authors themselves must stay **distinct**, or two focuses collapse into
+  one filter choice and one `?author=` poll (`prompts.test.ts` pins both). The
+  columns' DDL/migration default is
   `'reviewer'`, so rows created before the field existed backfill as the
   reviewer's. Author shows in the thread meta and in the export heading/reply lines.
 - **`GET /api/reviews/{id}/comments`** returns a review's comments as JSON with
   the same live annotation as `GetReview` (anchor status, replies nested), and an
   optional `?author=` narrows to one root author. It's the read side for an
-  *adversarial-review* agent: `?author=review-agent` gives it only the threads it
-  started — its own comments plus any reviewer/coding-agent replies — without the
-  reviewer's separate comments or the reviewed-file list. Pure API-layer filter over
+  *adversarial-review* agent: `?author=security-review-agent` gives that focus only
+  the threads it started — its own comments plus any reviewer/coding-agent replies —
+  without the other focuses' comments, the reviewer's own, or the reviewed-file list. Pure API-layer filter over
   `GetReview`+`annotateReview` (no store/SQL change); empty result is `[]`, not
   null. Distinct from the reply-oriented markdown `export`, which is the
   reviewer→coding-agent artifact.
 - **`#<id>` in a comment or reply body links to that comment** (`commentRef.ts`):
-  with three identities writing, threads end up referring to one another, and a bare
+  with several identities writing, threads end up referring to one another, and a bare
   "see #42" that isn't clickable makes the reader hunt. Detection is a markdown-it
   **core rule** over text tokens, which is what makes it skip inline code and fenced
   blocks for free; it also skips text already inside a link, so a ref in a markdown
@@ -799,7 +807,7 @@ web/src/
   count as activity, since `SetCommentResolved` deliberately doesn't bump
   `updated_at`. The time sorts show the sorted-on timestamp on each item so the
   order explains itself. Purely client-side over data the pane already has.
-- **A thread has a turn** (`web/src/commentTurn.ts`): with three identities writing
+- **A thread has a turn** (`web/src/commentTurn.ts`): with several identities writing
   comments, the pane is a two-way conversation, and the question a sort can't answer
   is which threads have come back to *you*. `turnOf` derives it from who spoke last —
   the newest reply's author, else the root's — as `you` (they spoke last), `them`
@@ -825,8 +833,8 @@ web/src/
   practice (a resolved thread has no turn) and a fourth select would crowd the row
   for a combination nobody wants; the two turn values need no resolved check of
   their own, since `turnOf` already calls a resolved thread `none`. With
-  three identities writing comments (see *author*, above), "only what `review-agent`
-  found" is the view a sort can't give. Like the sort it feeds **both** the pane and
+  several identities writing comments (see *author*, above), "only what
+  `security-review-agent` found" is the view a sort can't give. Like the sort it feeds **both** the pane and
   `orderedCommentIds`, so `n`/`p` steps what's on screen; unlike the sort it is
   **not persisted** — a filter remembered from a previous session would open the
   pane already hiding comments — and it **resets when `review.id` changes**, since a
@@ -962,6 +970,23 @@ web/src/
   rule, since a stored blank would leave the editor with no default left to fall back
   to. `App` keys the modal on `repo` so a switch remounts it instead of saving one
   repo's drafts under another's key. Covered by `web/src/agentPromptsModal.test.tsx`.
+  **"Do a review" is one prompt per focus** — Correctness, Security, Design, Tests —
+  and deliberately **one focus per run**: they differ by how the agent *traverses* the
+  code (security follows untrusted input inward from the entry points, design reads
+  well outside the diff, tests enumerate behaviours and look for the assertions), and
+  merging several into one brief collapses those distinct traversals into a single
+  cheap pass over the diff, with an undefined finding budget. Run several by running
+  the agent several times — they file into the same review under different authors, so
+  the pane filters them apart. Only the brief differs, so `reviewTemplate` composes
+  each from a shared head and API block; what a reviewer *saves* is still one complete
+  self-contained template per focus, under its own key. Correctness keeps the original
+  `review` key, so a template saved before the focuses existed still resolves — `kind`
+  is deliberately independent of both `label` and `author` for that reason. And the
+  author is `{{author}}`, never a literal: each review prompt names it three times (the
+  POST body, the `?author=` poll, the reply body), and an agent filing under one name
+  while polling another would see none of its own threads and report nothing to answer.
+  `renderPrompt` takes the review's values plus the *selected prompt's* author, which
+  is why `PromptVars` extends `ReviewVars` and the modal merges the two at copy time.
 - Go's build cache has occasionally embedded a **stale `web/dist`**; if the served
   bundle doesn't match disk, `rm` the binary and rebuild. `start.sh` (vite → go)
   is the reliable path.

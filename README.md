@@ -150,14 +150,18 @@ two copyable prompts, one per direction:
   the markdown itself (`POST /api/reviews/{id}/export`) and replies to comments by
   id. Best for iterating: add or change a comment and the agent just re-fetches — no
   re-paste.
-- **Do a review** — sends an agent at the branch to review it adversarially and file
-  what it finds as comments, tagged `review-agent` so its findings stay distinct from
-  yours and from the agent addressing them. It reads back only its own threads
-  (`GET /api/reviews/{id}/comments?author=review-agent`).
+- **Do a review** — sends an agent at the branch to review it and file what it finds
+  as comments. Pick a **focus**: *Correctness*, *Security*, *Design* or *Tests* — each
+  briefs the agent to read the code a different way, and one focus per run beats one
+  merged checklist. Each files under its own author (`security-review-agent` and so
+  on), so the passes stay distinct from each other, from yours, and from the agent
+  addressing them — and the comments pane filters by author. Each reads back only its
+  own threads (`GET /api/reviews/{id}/comments?author=security-review-agent`).
 
 Both are editable, and **Save** keeps your version for that repo — house rules, the
 test command to run, conventions to respect. The review-specific bits stay as
-placeholders (`{{origin}}`, `{{reviewId}}`, `{{headRef}}`, `{{baseRef}}`) and are
+placeholders (`{{origin}}`, `{{reviewId}}`, `{{headRef}}`, `{{baseRef}}`,
+`{{author}}`) and are
 filled in when you copy, so a saved prompt still works on the next review. **Reset**
 brings back the built-in one.
 
