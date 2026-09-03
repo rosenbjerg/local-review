@@ -1,0 +1,36 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { expect, test } from "vitest";
+
+import { THEMES } from "./theme";
+
+// Read off disk: vitest replaces .css imports with empty modules (query or not).
+const css = readFileSync(join(__dirname, "styles.css"), "utf8");
+
+function blockFor(id: string): string | null {
+  const m = css.match(new RegExp(`:root\\[data-theme="${id}"\\]\\s*\\{([^}]*)\\}`));
+  return m ? m[1] : null;
+}
+
+function tokensOf(block: string): string[] {
+  return [...block.matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1]).sort();
+}
+
+// A theme is a full restatement of the default block. A token missing from one theme
+// wouldn't fall back to the default's value — custom properties inherit from the
+// parent element, and <html> has none — so every rule using it would paint the
+// browser's initial color, in that theme only. Same for a THEMES entry with no block:
+// the bare :root would paint it github-dark under another name.
+test("every theme has a token block, and every block defines every token", () => {
+  const base = blockFor("github-dark");
+  expect(base).not.toBeNull();
+  const want = tokensOf(base!);
+  expect(want.length).toBeGreaterThan(20);
+
+  for (const t of THEMES) {
+    const block = blockFor(t.id);
+    expect(block, `${t.id} has no :root[data-theme] block`).not.toBeNull();
+    expect(tokensOf(block!), `${t.id} defines a different token set`).toEqual(want);
+    expect(block, `${t.id} sets no color-scheme`).toMatch(/color-scheme:\s*(dark|light)\s*;/);
+  }
+});

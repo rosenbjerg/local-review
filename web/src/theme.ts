@@ -7,11 +7,12 @@ import { LS, getString, setString } from "./storage";
 // that bring their own palettes — Shiki (syntax token colors) and mermaid (diagram
 // fills) — are mapped per theme by name, so a theme is complete only when all three
 // agree.
-export type ThemeId = "github-dark" | "github-light";
+export type ThemeId = "github-dark" | "github-light" | "darcula";
 
-// The Shiki themes highlight.ts bundles. A name added here without its JSON
-// registered there is a compile error, not a blank highlight.
-export type ShikiTheme = "github-dark" | "github-light";
+// The Shiki themes highlight.ts bundles — Shiki's own, or a hand-written one under
+// themes/. A name added here without its registration there is a compile error, not
+// a blank highlight.
+export type ShikiTheme = "github-dark" | "github-light" | "darcula";
 export type MermaidTheme = NonNullable<MermaidConfig["theme"]>;
 
 export interface Theme {
@@ -24,6 +25,7 @@ export interface Theme {
 export const THEMES: readonly Theme[] = [
   { id: "github-dark", label: "GitHub Dark", shiki: "github-dark", mermaid: "dark" },
   { id: "github-light", label: "GitHub Light", shiki: "github-light", mermaid: "default" },
+  { id: "darcula", label: "JetBrains Darcula", shiki: "darcula", mermaid: "dark" },
 ];
 
 export const DEFAULT_THEME: ThemeId = "github-dark";

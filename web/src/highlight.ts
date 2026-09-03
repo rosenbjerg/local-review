@@ -2,12 +2,13 @@ import {
   createHighlighterCore,
   type HighlighterCore,
   type ThemedToken,
-  type ThemeRegistration,
+  type ThemeRegistrationAny,
 } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { bundledLanguages, bundledLanguagesInfo, type BundledLanguage } from "shiki/langs";
 import githubDark from "@shikijs/themes/github-dark";
 import githubLight from "@shikijs/themes/github-light";
+import { darcula } from "./themes/darcula";
 import { themeOf, type ShikiTheme, type ThemeId } from "./theme";
 
 export type Token = ThemedToken;
@@ -15,9 +16,10 @@ export type Token = ThemedToken;
 // Every Shiki theme a theme.ts entry can name, all loaded up front — they're a few
 // KB each, and a token's color is resolved at tokenize time, so the theme has to be
 // registered before the first file is highlighted under it.
-const SHIKI_THEMES: Record<ShikiTheme, ThemeRegistration> = {
+const SHIKI_THEMES: Record<ShikiTheme, ThemeRegistrationAny> = {
   "github-dark": githubDark,
   "github-light": githubLight,
+  darcula,
 };
 
 const ALIAS_TO_ID = new Map<string, string>();

@@ -104,6 +104,8 @@ web/src/
   theme.ts               the theme registry (one entry per theme, naming its Shiki and
                          mermaid themes) + the active-theme store (useTheme/setTheme),
                          which owns <html data-theme>
+  themes/darcula.ts      JetBrains Darcula's editor scheme as a hand-written TextMate
+                         theme for Shiki (which ships no JetBrains theme)
   components/
     TopBar.tsx           repo / head / base / from pickers, the two diff-scope checkboxes,
                          the changed-file count + `+N -M` badge and compareTitle, reload,
@@ -736,8 +738,16 @@ web/src/
   cache on the theme, and declines to cache an SVG a mid-render switch may have
   recolored. The opaque word marks and `--sel-bg` are hand-picked per theme (they
   sit on row shades a translucent tint vanishes against), and `color-scheme` flips
-  with the block so native controls follow. `theme.test.ts`, `topBar.test.tsx` and
-  `diffView.test.tsx` pin the store, the picker and the re-tokenize.
+  with the block so native controls follow. **A theme's Shiki side is either one of
+  Shiki's own or a hand-written TextMate theme under `themes/`** — Shiki ships no
+  JetBrains themes, and an IDE scheme is ~20 colors, so `themes/darcula.ts` maps each
+  `.icls` attribute onto the scopes the bundled grammars emit for it; most identifiers
+  deliberately stay the default color, which is what makes it read as the IDE's.
+  `theme.test.ts`, `topBar.test.tsx` and `diffView.test.tsx` pin the store, the picker
+  and the re-tokenize; `themeBlocks.test.ts` parses `styles.css` and fails if a
+  `THEMES` entry has no block or a block skips a token (a skipped token doesn't fall
+  back to the default's value — `<html>` has no parent to inherit from — it paints
+  the browser's initial color, in that theme only).
 - **Mermaid diagrams** (`mermaid.ts`): a second enhancement pass over rendered
   markdown, same `(html) => Promise<string | null>` shape as `highlightBlocks`
   and chained after it in `Markdown`, so it applies **everywhere** `Markdown`

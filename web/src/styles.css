@@ -108,6 +108,46 @@
   color-scheme: light;
 }
 
+/* JetBrains Darcula: the editor scheme's values — editor #2b2b2b, panels #3c3f41,
+   selection #214283, and the diff's rows, where a deletion is grey rather than red
+   (that is the look). Three departures, each for legibility on our surfaces: --text
+   is the scheme's panel-label grey (#bbbbbb) rather than its bluish editor text,
+   since it paints UI as well as plain code; --muted sits a step above the IDE's
+   #808080, which falls under 3:1 on a panel; and the occurrence highlight is a
+   muted gold — the IDE's is green and would vanish on an added row. */
+:root[data-theme="darcula"] {
+  --bg: #2b2b2b;
+  --bg-elev: #3c3f41;
+  --bg-hover: #4c5052;
+  --border: #515151;
+  --text: #bbbbbb;
+  --muted: #a0a0a0;
+  --accent: #4a88c7;
+  --accent-hover: #589df6;
+  --add-bg: #294436;
+  --add-border: #629755;
+  --del-bg: #484a4a;
+  --add-word-bg: #406a54;
+  --del-word-bg: #666969;
+  --sel-bg: #214283;
+  --occ-bg: rgba(187, 181, 41, 0.22);
+  --occ-bg-active: rgba(187, 181, 41, 0.45);
+  --danger: #ff6b68;
+  --danger-border: #bc3f3c;
+  --success: #629755;
+  --success-border: #4e7a44;
+  --warn: #bbb529;
+  --warn-border: #be9117;
+  --info: #6897bb;
+  --info-border: #4a88c7;
+  --danger-soft: rgba(255, 107, 104, 0.12);
+  --on-accent: #fff;
+  --checker-bg: #2b2b2b;
+  --checker-fg: #3c3f41;
+  --backdrop: rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
 }

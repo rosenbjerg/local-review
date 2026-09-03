@@ -53,7 +53,7 @@ One binary: Go backend with the React frontend embedded, nothing to install but
   commits made outside the UI, and the tab title counts what an agent said while you
   were away.
 - **Reads like a proper diff viewer.** Word-level intra-line diffs, ~235 languages
-  highlighted (in GitHub's dark or light theme), expandable context between hunks, rendered markdown (mermaid
+  highlighted (GitHub dark or light, or JetBrains Darcula), expandable context between hunks, rendered markdown (mermaid
   included), before/after previews for images, and find-in-file on any word you
   select — with lazy rendering so a huge branch stays responsive.
 - **Keyboard-driven.** `j`/`k` between files, `n`/`p` between comments, `v` to mark
