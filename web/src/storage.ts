@@ -11,6 +11,7 @@ export const LS = {
   exportInstructions: "lr.exportInstructions",
   commentSort: "lr.commentSort",
   agentPromptsByRepo: "lr.agentPromptsByRepo",
+  theme: "lr.theme",
 } as const;
 
 export function getString(key: string, def = ""): string {

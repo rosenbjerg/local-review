@@ -1,5 +1,5 @@
-import { beforeEach, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 // DiffView renders the full-file source it fetches separately from the diff, and keys
 // the add/context syntax tokens by new-side line number — so a source that no longer
@@ -20,7 +20,8 @@ vi.mock("./api", () => ({
 // highlightBlocks is stubbed too, since a rendered comment thread runs its body
 // through Markdown, which chains it after markdown-it.
 vi.mock("./highlight", () => ({
-  langForPath: () => null,
+  // Only a .ts fixture tokenizes; the rest of the file's fixtures are .txt.
+  langForPath: (p: string) => (p.endsWith(".ts") ? "typescript" : null),
   tokenize: vi.fn(async () => null),
   highlightBlocks: vi.fn(async () => null),
   langForInfo: () => null,
@@ -28,6 +29,8 @@ vi.mock("./highlight", () => ({
 vi.mock("./mermaid", () => ({ renderMermaid: vi.fn(async () => null) }));
 
 import { api } from "./api";
+import { tokenize } from "./highlight";
+import { DEFAULT_THEME, setTheme } from "./theme";
 import { DiffView } from "./components/DiffView";
 import type { FileDiff } from "./types";
 
@@ -55,6 +58,7 @@ const content = (text: string, worktree = false) => ({
 });
 
 beforeEach(() => vi.clearAllMocks());
+afterEach(() => setTheme(DEFAULT_THEME));
 
 // A file the branch didn't touch, opened to comment on, is synthesized with no hunks
 // and a fixed status/path — so a key built from those alone never moves, and the card
@@ -391,4 +395,22 @@ test("existing file-level comments render below the table, not as leftovers", as
   const body = await screen.findByText("whole-file remark");
   expect(body.closest(".file-comments")).not.toBeNull();
   expect(body.closest("table")).toBeNull();
+});
+
+// Shiki tokens carry the theme's resolved colors, so the cached tokens are only good
+// for the theme they were cut under: a switch has to re-tokenize the same source.
+test("a theme switch re-tokenizes the source under the new theme", async () => {
+  const file = (): FileDiff => ({ oldPath: "a.ts", newPath: "a.ts", status: "unchanged", hunks: [] });
+  vi.mocked(api.file).mockResolvedValue({ ...content("const a = 1;"), path: "a.ts" });
+  render(<DiffView {...props} headRef="feature" file={file()} />);
+  await waitFor(() =>
+    expect(vi.mocked(tokenize)).toHaveBeenCalledWith("const a = 1;", "typescript", "github-dark")
+  );
+
+  act(() => setTheme("github-light"));
+  await waitFor(() =>
+    expect(vi.mocked(tokenize)).toHaveBeenCalledWith("const a = 1;", "typescript", "github-light")
+  );
+  // Same source both times — only the theme moved, so the file wasn't refetched.
+  expect(vi.mocked(api.file).mock.calls.length).toBe(1);
 });

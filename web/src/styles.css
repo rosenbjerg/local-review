@@ -1,4 +1,22 @@
 :root {
+  /* Corner-radius scale: sm for inline chips (labels, code, kbd, thumbnails),
+     md for controls & cards (buttons, inputs, threads, code blocks), lg for
+     large surfaces (file cards, modals), pill for count/type badges. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-pill: 999px;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Color themes: one block per theme, selected by the data-theme attribute theme.ts
+   keeps on <html>. Every color the UI paints is a token below — Shiki's syntax
+   colors and mermaid's fills are the only ones that aren't, and theme.ts maps those
+   per theme by name. The default block also matches a bare :root, so a missing or
+   unknown data-theme paints github-dark rather than nothing. The dark block
+   documents each token's role; the others only restate the values. */
+:root,
+:root[data-theme="github-dark"] {
   --bg: #0d1117;
   --bg-elev: #161b22;
   --bg-hover: #1c2333;
@@ -6,22 +24,23 @@
   --text: #e6edf3;
   --muted: #8b949e;
   --accent: #2f81f7;
-  /* Brighter accent for the hover state of saturated accent fills (primary
-     buttons), so they lift on hover instead of falling through to the grey
-     .btn:hover surface. */
+  /* The hover shade of saturated accent fills (primary buttons) — brighter here,
+     darker on a light theme — so they lift on hover instead of falling through
+     to the grey .btn:hover surface. */
   --accent-hover: #4b93f9;
   --add-bg: #12261e;
   --add-border: #238636;
   --del-bg: #25171c;
   /* The parts of a changed line that actually changed, sitting on top of the
-     row shade above. Opaque and clearly brighter than their row, since against
-     --add-bg/--del-bg a translucent tint is almost invisible. */
+     row shade above. Opaque and clearly distinct from their row, since against
+     --add-bg/--del-bg a translucent tint is almost invisible. Hand-picked per
+     theme for the same reason: they can't be derived from the row shade. */
   --add-word-bg: #205c33;
   --del-word-bg: #6b2b33;
-  /* Range-select highlight — a dark accent-family blue so selecting lines
-     matches the blue gutter-hover, rather than the old olive that belonged to
-     neither the add/del shades nor the accent. Opaque like its siblings; it
-     fully overrides the row shade it sits on. */
+  /* Range-select highlight — an accent-family blue so selecting lines matches
+     the blue gutter-hover, rather than an olive that belonged to neither the
+     add/del shades nor the accent. Opaque like its siblings; it fully overrides
+     the row shade it sits on. */
   --sel-bg: #1c2e4a;
   /* Every other occurrence of the word you selected. Translucent so the syntax
      colors stay readable through it, and warm because none of the row shades it
@@ -51,16 +70,42 @@
   --checker-fg: #262c36;
   /* Scrim behind modals. */
   --backdrop: rgba(0, 0, 0, 0.6);
-  /* Corner-radius scale: sm for inline chips (labels, code, kbd, thumbnails),
-     md for controls & cards (buttons, inputs, threads, code blocks), lg for
-     large surfaces (file cards, modals), pill for count/type badges. */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-pill: 999px;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   /* Render native controls (checkboxes, selects, default scrollbars) dark. */
   color-scheme: dark;
+}
+
+/* GitHub's light palette (Primer), matched token for token to the dark block. */
+:root[data-theme="github-light"] {
+  --bg: #ffffff;
+  --bg-elev: #f6f8fa;
+  --bg-hover: #eaeef2;
+  --border: #d0d7de;
+  --text: #1f2328;
+  --muted: #656d76;
+  --accent: #0969da;
+  --accent-hover: #0860ca;
+  --add-bg: #e6ffec;
+  --add-border: #1f883d;
+  --del-bg: #ffebe9;
+  --add-word-bg: #abf2bc;
+  --del-word-bg: #ffc1c0;
+  --sel-bg: #ddf4ff;
+  --occ-bg: rgba(191, 135, 0, 0.25);
+  --occ-bg-active: rgba(191, 135, 0, 0.5);
+  --danger: #d1242f;
+  --danger-border: #cf222e;
+  --success: #1a7f37;
+  --success-border: #1f883d;
+  --warn: #9a6700;
+  --warn-border: #bf8700;
+  --info: #0969da;
+  --info-border: #0969da;
+  --danger-soft: rgba(209, 36, 47, 0.1);
+  --on-accent: #fff;
+  --checker-bg: #ffffff;
+  --checker-fg: #d8dee4;
+  --backdrop: rgba(0, 0, 0, 0.4);
+  color-scheme: light;
 }
 
 * {

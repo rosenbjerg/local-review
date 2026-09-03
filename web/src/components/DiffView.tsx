@@ -6,6 +6,7 @@ import { buildRows, planRows, type PlannedRow, type Row } from "../diffRows";
 import { EXPAND_STEP, type Gap, type Reveal } from "../hunkGaps";
 import { hunkWordRanges, splitPieces, type Segment } from "../wordDiff";
 import { langForPath, tokenize, type Token } from "../highlight";
+import { useTheme } from "../theme";
 import type { Comment, CommentType, FileDiff, LineKind, Side } from "../types";
 import { sideLabel as labelForSide } from "../types";
 import { CommentComposer } from "./CommentComposer";
@@ -135,6 +136,8 @@ export const DiffView = memo(function DiffView({
 
   const path = file.newPath || file.oldPath;
   const lang = langForPath(path);
+  // Tokens carry resolved colors, so both tokenize effects re-run on a theme switch.
+  const theme = useTheme();
   const openCount = comments.filter((c) => !c.resolved).length;
 
   const svg = isSvg(path);
@@ -212,7 +215,7 @@ export const DiffView = memo(function DiffView({
       return;
     }
     let cancelled = false;
-    tokenize(source.join("\n"), lang).then((toks) => {
+    tokenize(source.join("\n"), lang, theme).then((toks) => {
       if (cancelled || !toks) return;
       const m = new Map<number, Token[]>();
       toks.forEach((t, i) => m.set(i + 1, t));
@@ -221,7 +224,7 @@ export const DiffView = memo(function DiffView({
     return () => {
       cancelled = true;
     };
-  }, [source, lang]);
+  }, [source, lang, theme]);
 
   // Tokenize deleted (old-side) lines individually, keyed by content.
   useEffect(() => {
@@ -239,7 +242,7 @@ export const DiffView = memo(function DiffView({
       return;
     }
     let cancelled = false;
-    tokenize(contents.join("\n"), lang).then((toks) => {
+    tokenize(contents.join("\n"), lang, theme).then((toks) => {
       if (cancelled || !toks) return;
       const m = new Map<string, Token[]>();
       contents.forEach((c, i) => m.set(c, toks[i] ?? []));
@@ -248,7 +251,7 @@ export const DiffView = memo(function DiffView({
     return () => {
       cancelled = true;
     };
-  }, [file, lang]);
+  }, [file, lang, theme]);
 
   useEffect(() => {
     if (dragAnchor === null) return;

@@ -101,10 +101,14 @@ web/src/
   prompts.ts             the agent prompts (one per review focus) as {{placeholder}}
                          templates + renderPrompt
   storage.ts             typed, error-swallowing localStorage helpers + the lr.* keys
+  theme.ts               the theme registry (one entry per theme, naming its Shiki and
+                         mermaid themes) + the active-theme store (useTheme/setTheme),
+                         which owns <html data-theme>
   components/
     TopBar.tsx           repo / head / base / from pickers, the two diff-scope checkboxes,
-                         the changed-file count + `+N -M` badge and compareTitle, reload, and
-                         the review-scoped buttons (agent prompts, export, reset, help)
+                         the changed-file count + `+N -M` badge and compareTitle, reload,
+                         the review-scoped buttons (agent prompts, export, reset), the
+                         theme picker and help
     FileExplorer.tsx     left pane: hierarchical file tree, collapse, reviewed toggle,
                          per-file +/- counts, reviewed-progress bar (the head's bottom edge)
     DiffView.tsx         center: per-file diff — fetches the source, tokenizes, owns the
@@ -145,6 +149,8 @@ web/src/
     ViewToggle.tsx       data-driven segmented control (Changed/Full, Text/Image,
                          Code/Rendered, Preview/Raw)
     CopyButton.tsx       clipboard button with idle/ok/fail state (lazy text builder)
+    ThemePicker.tsx      the toolbar's theme select; reads and writes the theme store
+                         directly, since the theme isn't review state
     ErrorBoundary.tsx    the app's only class component: shows a render-time throw plus a
                          reload and a "clear the lr.* keys" escape hatch
     (small shared UI primitives: Chevron, CommentCount, DiffStatBadge, AnchorBadge,
@@ -647,7 +653,9 @@ web/src/
   (line-0) comments, like the image view. Line-anchored commenting stays in Code
   view; the Changed/Full toggle is hidden while rendered. Default is Code.
 - **Syntax highlighting** (`highlight.ts`): Shiki with the **JS regex engine**
-  (not oniguruma — avoids a browser wasm-load failure) and `github-dark`. All
+  (not oniguruma — avoids a browser wasm-load failure) and one Shiki theme per
+  UI theme (see *Themes*), all registered up front since a token's color is
+  resolved at tokenize time. All
   ~235 grammars are available, each lazily fetched per file. Extensions resolve
   to language ids via Shiki's own alias metadata (+ a tiny extras map). `DiffView`
   tokenizes the whole file once and renders tokens per line (avoids per-line
@@ -707,6 +715,29 @@ web/src/
   commenting, occurrence highlighting, and inline threads all work in them for
   free. Reveal state resets with `contentKey`, alongside the cached source it reads
   — the two describe the same side and must move together.
+- **Themes are one token block plus two renderer names** (`theme.ts`, `styles.css`).
+  Every color the UI paints is a `--*` token, so a theme is a
+  `:root[data-theme="<id>"]` block restating all of them, plus a `THEMES` entry
+  naming the Shiki theme (token colors) and the mermaid theme (diagram fills) that go
+  with it — the two renderers that bring their own palettes, and the only colors the
+  tokens don't reach. Three rules. **The store owns `<html data-theme>`**: `theme.ts`
+  is a module store (`useTheme`/`setTheme` over `useSyncExternalStore`) rather than
+  App state, because `DiffView`, `Markdown` and the picker each need it where they
+  are, and threading it would add a prop to every card and rendered body (the
+  memoised `DiffView` included); it applies the attribute at import and on every set,
+  so the attribute and the React value can't disagree. **The default block also
+  matches a bare `:root`** (`:root, :root[data-theme="github-dark"]`), and
+  `readStoredTheme` trusts `lr.theme` only if it names a theme, so a removed or
+  misspelt id paints github-dark rather than nothing. **Rendered colors are keyed on
+  the theme**: Shiki tokens carry resolved hex, so both `tokenize` effects in
+  `DiffView` and the highlight + mermaid passes in `Markdown` take the theme and list
+  it in their deps; mermaid's theme is global config, so `renderMermaid`
+  re-initializes when the wanted theme differs from the configured one, keys its
+  cache on the theme, and declines to cache an SVG a mid-render switch may have
+  recolored. The opaque word marks and `--sel-bg` are hand-picked per theme (they
+  sit on row shades a translucent tint vanishes against), and `color-scheme` flips
+  with the block so native controls follow. `theme.test.ts`, `topBar.test.tsx` and
+  `diffView.test.tsx` pin the store, the picker and the re-tokenize.
 - **Mermaid diagrams** (`mermaid.ts`): a second enhancement pass over rendered
   markdown, same `(html) => Promise<string | null>` shape as `highlightBlocks`
   and chained after it in `Markdown`, so it applies **everywhere** `Markdown`
@@ -943,7 +974,8 @@ web/src/
   handler that returns a list initializes the slice so it marshals as `[]`, not `null`.
 - Frontend: strict TS (`noUnusedLocals`/`noUnusedParameters` on) — no dead code.
   Match the existing component style; keep CSS in `web/src/styles.css` (no CSS-in-JS).
-- CSS colors come from the `:root` custom properties — never raw hex in a rule.
+- CSS colors come from the per-theme token blocks at the top of `styles.css` — never
+  raw hex in a rule, and a new token needs a value in **every** theme's block.
   Surfaces (`--bg`, `--bg-elev`, `--bg-hover`, `--border`, `--text`, `--muted`,
   `--accent`), the diff-row shades (`--add-bg`/`--add-border`/`--del-bg`/
   `--sel-bg`) plus the intra-line word marks (`--add-word-bg`/`--del-word-bg`, opaque
@@ -960,10 +992,10 @@ web/src/
   chips — status labels, code, kbd, thumbnails), `--radius-md` (controls & cards
   — buttons, inputs, threads, code blocks), `--radius-lg` (large surfaces — file
   cards, modals), `--radius-pill` (count/type badges).
-- Persisted UI prefs (panel widths, selected repo, comment sort, the export's
-  instructions checkbox, and the per-repo base branch, diff-view axes and agent
-  prompts) go in `localStorage` under `lr.*` keys, via
-  `storage.ts`. Validate a stored value on read (`isCommentSort`, `normalizeDiffView`,
+- Persisted UI prefs (panel widths, selected repo, comment sort, color theme, the
+  export's instructions checkbox, and the per-repo base branch, diff-view axes and
+  agent prompts) go in `localStorage` under `lr.*` keys, via
+  `storage.ts`. Validate a stored value on read (`isCommentSort`, `isThemeId`, `normalizeDiffView`,
   `readPromptOverride`'s non-blank-string check) so a stale or impossible one falls
   back to the default rather than reaching the app.
 - Modals (`.modal` inside a `.modal-backdrop`) close on Escape and backdrop

@@ -1,11 +1,24 @@
-import { createHighlighterCore, type HighlighterCore, type ThemedToken } from "shiki/core";
+import {
+  createHighlighterCore,
+  type HighlighterCore,
+  type ThemedToken,
+  type ThemeRegistration,
+} from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { bundledLanguages, bundledLanguagesInfo, type BundledLanguage } from "shiki/langs";
 import githubDark from "@shikijs/themes/github-dark";
+import githubLight from "@shikijs/themes/github-light";
+import { themeOf, type ShikiTheme, type ThemeId } from "./theme";
 
 export type Token = ThemedToken;
 
-const THEME = "github-dark";
+// Every Shiki theme a theme.ts entry can name, all loaded up front — they're a few
+// KB each, and a token's color is resolved at tokenize time, so the theme has to be
+// registered before the first file is highlighted under it.
+const SHIKI_THEMES: Record<ShikiTheme, ThemeRegistration> = {
+  "github-dark": githubDark,
+  "github-light": githubLight,
+};
 
 const ALIAS_TO_ID = new Map<string, string>();
 for (const info of bundledLanguagesInfo) {
@@ -43,7 +56,7 @@ let hlPromise: Promise<HighlighterCore> | null = null;
 function highlighter(): Promise<HighlighterCore> {
   if (!hlPromise) {
     hlPromise = createHighlighterCore({
-      themes: [githubDark],
+      themes: Object.values(SHIKI_THEMES),
       langs: [],
       // Pure-JS regex engine — no wasm to load in the browser. `forgiving`
       // skips the few oniguruma-only patterns instead of throwing.
@@ -55,7 +68,13 @@ function highlighter(): Promise<HighlighterCore> {
 
 const loaded = new Set<string>();
 
-export async function tokenize(code: string, lang: string): Promise<Token[][] | null> {
+// Tokens carry the theme's resolved colors, so a caller keeps its tokens only as
+// long as the theme they were cut for — re-tokenize when the theme changes.
+export async function tokenize(
+  code: string,
+  lang: string,
+  theme: ThemeId
+): Promise<Token[][] | null> {
   if (!(lang in bundledLanguages)) return null;
   try {
     const hl = await highlighter();
@@ -63,17 +82,17 @@ export async function tokenize(code: string, lang: string): Promise<Token[][] | 
       await hl.loadLanguage(bundledLanguages[lang as BundledLanguage]);
       loaded.add(lang);
     }
-    return hl.codeToTokens(code, { lang: lang as any, theme: THEME }).tokens;
+    return hl.codeToTokens(code, { lang: lang as any, theme: themeOf(theme).shiki }).tokens;
   } catch {
     return null;
   }
 }
 
 // Second pass over rendered-markdown HTML: swap each fenced block's plain text
-// for Shiki's github-dark colored spans (the same tokens the diff view renders).
-// Async because grammars load lazily; callers show the plain text until it
-// resolves. Returns null when nothing was highlighted (no known-language fence).
-export async function highlightBlocks(baseHtml: string): Promise<string | null> {
+// for Shiki's colored spans in the active theme (the same tokens the diff view
+// renders). Async because grammars load lazily; callers show the plain text until
+// it resolves. Returns null when nothing was highlighted (no known-language fence).
+export async function highlightBlocks(baseHtml: string, theme: ThemeId): Promise<string | null> {
   const doc = new DOMParser().parseFromString(baseHtml, "text/html");
   const blocks = [...doc.querySelectorAll("pre > code[class*='language-']")];
   let changed = false;
@@ -82,7 +101,7 @@ export async function highlightBlocks(baseHtml: string): Promise<string | null> 
       const cls = [...code.classList].find((c) => c.startsWith("language-"));
       const lang = cls && langForInfo(cls.slice("language-".length));
       if (!lang) return;
-      const lines = await tokenize(code.textContent ?? "", lang);
+      const lines = await tokenize(code.textContent ?? "", lang, theme);
       if (!lines) return;
       code.replaceChildren();
       lines.forEach((line, i) => {

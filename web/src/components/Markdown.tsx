@@ -3,6 +3,7 @@ import MarkdownIt from "markdown-it";
 import { highlightBlocks } from "../highlight";
 import { renderMermaid } from "../mermaid";
 import { commentRefPlugin } from "../commentRef";
+import { useTheme } from "../theme";
 
 // html:false — bodies are injected via dangerouslySetInnerHTML, so raw HTML must
 // stay escaped. `md` renders comment bodies (soft newlines → <br>, GFM-style);
@@ -41,21 +42,23 @@ export function Markdown({
     [source, inline, softBreaks, commentIds]
   );
   const [html, setHtml] = useState(base);
+  // Both passes bake the theme's colors into the HTML, so a switch re-runs them.
+  const theme = useTheme();
 
   useEffect(() => {
     setHtml(base);
     if (inline) return;
     let cancelled = false;
-    highlightBlocks(base).then(async (enhanced) => {
+    highlightBlocks(base, theme).then(async (enhanced) => {
       if (cancelled) return;
       if (enhanced) setHtml(enhanced);
-      const drawn = await renderMermaid(enhanced ?? base);
+      const drawn = await renderMermaid(enhanced ?? base, theme);
       if (!cancelled && drawn) setHtml(drawn);
     });
     return () => {
       cancelled = true;
     };
-  }, [base, inline]);
+  }, [base, inline, theme]);
 
   return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />;
 }

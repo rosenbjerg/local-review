@@ -1,5 +1,6 @@
 import { Combobox, type ComboOption } from "./Combobox";
 import { DiffStatBadge } from "./DiffStatBadge";
+import { ThemePicker } from "./ThemePicker";
 import type { DiffStat } from "../diffStats";
 import type { Review } from "../types";
 
@@ -99,7 +100,7 @@ function fileCountTitle(s: Selection, st: TopBarStatus): string {
 }
 
 // The top toolbar: repo/head/base pickers, the diff-view controls, reload, and the
-// review-scoped actions (agent prompts / export / reset) plus help & repo links.
+// review-scoped actions (agent prompts / export / reset) plus theme, help & repo links.
 export function TopBar({ selection: s, actions, status }: Props) {
   return (
     <header className="topbar">
@@ -212,6 +213,7 @@ export function TopBar({ selection: s, actions, status }: Props) {
           </button>
         </>
       )}
+      <ThemePicker />
       <button
         className="btn btn-icon"
         onClick={actions.onShowHelp}
