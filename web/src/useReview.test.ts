@@ -95,20 +95,27 @@ test("changing head resets the 'from' picker to all", async () => {
   expect(result.current.from).toBe("all");
 });
 
-// `side` is the anchor side sent with comments/reviewed marks; it must derive from
-// uncommitted + unstaged when head is the checked-out branch. One value, so the
-// mutually-exclusive pair it replaced can no longer disagree with itself.
-test("side derives from uncommitted + unstaged", async () => {
+// `side` is the anchor side sent with comments/reviewed marks, and what the toolbar
+// control picks. It's one value over the API's two booleans, so the mapping between
+// them lives in changeSide alone — including the pref write, which as two writes (one
+// per axis) persisted the other axis's pre-update value.
+test("changeSide moves both axes, and persists them together", async () => {
   const { result } = renderHook(() => useReview());
   await waitFor(() => expect(result.current.head).toBe("main")); // headIsCurrent
 
   expect(result.current.side).toBe("head");
 
-  act(() => result.current.changeUncommitted(true));
-  expect(result.current.side).toBe("worktree"); // uncommitted + unstaged(default)
+  act(() => result.current.changeSide("worktree"));
+  expect(result.current.side).toBe("worktree");
+  expect(readDiffViewPref("A")).toEqual({ uncommitted: true, unstaged: true });
 
-  act(() => result.current.changeUnstaged(false));
-  expect(result.current.side).toBe("index"); // uncommitted + !unstaged
+  act(() => result.current.changeSide("index"));
+  expect(result.current.side).toBe("index");
+  expect(readDiffViewPref("A")).toEqual({ uncommitted: true, unstaged: false });
+
+  act(() => result.current.changeSide("head"));
+  expect(result.current.side).toBe("head");
+  expect(readDiffViewPref("A")).toEqual({ uncommitted: false, unstaged: true });
 });
 
 // Regression for the stale 'from' after an out-of-band rebase (commit 464d949): an SSE
@@ -189,10 +196,10 @@ test("diffOpts maps the view axes to the api.diff params", async () => {
     expect(lastOpts()).toMatchObject({ from: "all", base: "main", uncommitted: false, unstaged: true })
   );
 
-  act(() => result.current.changeUncommitted(true)); // working tree (staged + unstaged)
+  act(() => result.current.changeSide("worktree")); // working tree (staged + unstaged)
   await waitFor(() => expect(lastOpts()).toMatchObject({ from: "all", uncommitted: true, unstaged: true }));
 
-  act(() => result.current.changeUnstaged(false)); // staged only → git index
+  act(() => result.current.changeSide("index")); // staged only → git index
   await waitFor(() => expect(lastOpts()).toMatchObject({ uncommitted: true, unstaged: false }));
 
   act(() => result.current.setFrom("c1")); // since a commit → base dropped
@@ -216,9 +223,8 @@ test("uncommitted turns off when head isn't the checked-out branch", async () =>
   act(() => result.current.changeHead("feature")); // head=feature, current=main → not current
   await waitFor(() => expect(result.current.headIsCurrent).toBe(false));
 
-  act(() => result.current.changeUncommitted(true));
-  await waitFor(() => expect(result.current.uncommitted).toBe(false)); // guard turns it back off
-  expect(result.current.side).toBe("head");
+  act(() => result.current.changeSide("worktree"));
+  await waitFor(() => expect(result.current.side).toBe("head")); // guard turns it back off
 });
 
 // The view axes are remembered per repo, so reopening a repo lands on the side you
@@ -227,18 +233,14 @@ test("the view axes are restored per repo", async () => {
   const { result } = renderHook(() => useReview());
   await waitFor(() => expect(result.current.head).toBe("main"));
 
-  act(() => result.current.changeUncommitted(true));
-  act(() => result.current.changeUnstaged(false));
+  act(() => result.current.changeSide("index"));
 
   act(() => result.current.changeRepo("B"));
   await waitFor(() => expect(result.current.head).toBe("main"));
-  expect(result.current.uncommitted).toBe(false); // B has no pref of its own
-  expect(result.current.unstaged).toBe(true);
+  expect(result.current.side).toBe("head"); // B has no pref of its own
 
   act(() => result.current.changeRepo("A"));
-  await waitFor(() => expect(result.current.uncommitted).toBe(true));
-  expect(result.current.unstaged).toBe(false);
-  expect(result.current.side).toBe("index");
+  await waitFor(() => expect(result.current.side).toBe("index"));
 });
 
 // Only a reviewer's toggle is a preference: the checked-out-branch guard also moves
@@ -252,9 +254,9 @@ test("the checked-out-branch guard doesn't overwrite the stored axes", async () 
   const { result } = renderHook(() => useReview());
   await waitFor(() => expect(result.current.head).toBe("main"));
 
-  act(() => result.current.changeUncommitted(true));
+  act(() => result.current.changeSide("worktree"));
   act(() => result.current.changeHead("feature"));
-  await waitFor(() => expect(result.current.uncommitted).toBe(false)); // forced off, not chosen
+  await waitFor(() => expect(result.current.side).toBe("head")); // forced off, not chosen
 
   expect(readDiffViewPref("A")).toEqual({ uncommitted: true, unstaged: true });
 });
@@ -294,7 +296,7 @@ test("a ping's diff is dropped when a view axis moved while it was in flight", a
     head: "h",
     files: [{ newPath: "FRESH", oldPath: "FRESH", status: "modified", hunks: [] }],
   });
-  act(() => result.current.changeUncommitted(true));
+  act(() => result.current.changeSide("worktree"));
   await waitFor(() => expect(result.current.files.map((f) => f.newPath)).toEqual(["FRESH"]));
   expect(result.current.side).toBe("worktree");
 
@@ -336,7 +338,7 @@ test("a ping still applies review state when its diff is dropped", async () => {
   });
   await waitFor(() => expect(vi.mocked(api.diff).mock.calls.length).toBe(2));
 
-  act(() => result.current.changeUncommitted(true)); // supersedes the ping's git state
+  act(() => result.current.changeSide("worktree")); // supersedes the ping's git state
   await act(async () => {
     release?.();
     await Promise.resolve();

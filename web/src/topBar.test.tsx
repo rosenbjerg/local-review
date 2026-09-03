@@ -25,10 +25,8 @@ const selection: Selection = {
   fromOptions: [],
   onFromChange: () => {},
   headIsCurrent: true,
-  uncommitted: false,
-  onUncommittedChange: () => {},
-  unstaged: true,
-  onUnstagedChange: () => {},
+  side: "head",
+  onSideChange: () => {},
   loading: false,
   onReload: () => {},
 };
@@ -83,24 +81,55 @@ test("a picked commit reads as inclusive, against its parent", () => {
   expect(title).toContain("own changes are included");
 });
 
-test("the uncommitted axes name the side they read", () => {
+test("the side control names the side it reads", () => {
   const { rerender } = render(
-    <TopBar
-      selection={{ ...selection, uncommitted: true, unstaged: true }}
-      actions={actions}
-      status={status}
-    />
+    <TopBar selection={{ ...selection, side: "worktree" }} actions={actions} status={status} />
   );
   expect(titleOf("5 files")).toContain("your working tree");
 
   rerender(
+    <TopBar selection={{ ...selection, side: "index" }} actions={actions} status={status} />
+  );
+  expect(titleOf("5 files")).toContain("the git index");
+});
+
+// The three reachable states used to be two dependent checkboxes, the second only
+// appearing once the first was on. As one control they're one click apart, and the
+// value it reports is the `Side` the rest of the app already speaks — so what each
+// segment maps to is worth pinning.
+test("each segment picks its side, and the group is one control", () => {
+  const picked: string[] = [];
+  render(
     <TopBar
-      selection={{ ...selection, uncommitted: true, unstaged: false }}
+      selection={{ ...selection, side: "head", onSideChange: (v) => picked.push(v) }}
       actions={actions}
       status={status}
     />
   );
-  expect(titleOf("5 files")).toContain("the git index");
+  const group = screen.getByRole("group", { name: "diff side" });
+  expect(screen.getByText("Committed").getAttribute("aria-pressed")).toBe("true");
+
+  fireEvent.click(screen.getByText("Staged"));
+  fireEvent.click(screen.getByText("Working tree"));
+  fireEvent.click(screen.getByText("Committed"));
+  expect(picked).toEqual(["index", "worktree", "head"]);
+  expect(group.querySelectorAll("button")).toHaveLength(3);
+});
+
+// Off the checked-out branch there is no working tree or index to read, so the whole
+// group is disabled rather than the two unreachable segments — a partly-live group
+// would still present them as a choice.
+test("the side control is disabled off the checked-out branch", () => {
+  render(
+    <TopBar
+      selection={{ ...selection, headIsCurrent: false }}
+      actions={actions}
+      status={status}
+    />
+  );
+  for (const label of ["Committed", "Staged", "Working tree"]) {
+    expect((screen.getByText(label) as HTMLButtonElement).disabled).toBe(true);
+  }
 });
 
 afterEach(() => setThemePref(DEFAULT_PREF));

@@ -7,6 +7,7 @@ import { CommentComposer } from "./CommentComposer";
 import { AnchorBadge } from "./AnchorBadge";
 import { Markdown } from "./Markdown";
 import { MetaTimestamps } from "./MetaTimestamps";
+import { IconCheck, IconReply } from "./icons";
 
 // Wrap the captured snippet in a fenced code block for <Markdown>, tagged with the
 // file's language and using a fence longer than any backtick run inside it so the
@@ -61,7 +62,9 @@ function ReplyItem({
   return (
     <div className="reply" id={`reply-${reply.id}`}>
       <div className="reply-meta">
-        <span className="muted meta-id">↳ #{reply.id}</span>
+        <span className="muted meta-id">
+          <IconReply />#{reply.id}
+        </span>
         <MetaTimestamps
           author={reply.author}
           createdAt={reply.createdAt}
@@ -172,7 +175,11 @@ export function CommentThread({ comment, actions, expandSignal, commentIds }: Pr
           createdAt={comment.createdAt}
           updatedAt={comment.updatedAt}
         />
-        {comment.resolved && <span className="badge badge-resolved">✓ resolved</span>}
+        {comment.resolved && (
+          <span className="badge badge-resolved">
+            <IconCheck /> resolved
+          </span>
+        )}
         {collapsed && replies.length > 0 && (
           <span className="muted thread-reply-count">
             {replies.length} repl{replies.length === 1 ? "y" : "ies"}

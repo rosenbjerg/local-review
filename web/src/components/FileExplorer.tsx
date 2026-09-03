@@ -4,6 +4,7 @@ import { type Comment, type FileDiff, effectivePath } from "../types";
 import { Chevron } from "./Chevron";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { HighlightMatch } from "./HighlightMatch";
+import { IconX } from "./icons";
 
 interface Props {
   files: FileDiff[];
@@ -338,7 +339,7 @@ export function FileExplorer({
                   searchRef?.current?.focus();
                 }}
               >
-                ×
+                <IconX size={13} />
               </button>
             )}
           </div>

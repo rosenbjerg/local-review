@@ -1,8 +1,9 @@
 import { Combobox, type ComboOption } from "./Combobox";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { ThemePicker } from "./ThemePicker";
+import { ViewToggle } from "./ViewToggle";
 import type { DiffStat } from "../diffStats";
-import type { Review } from "../types";
+import type { Review, Side } from "../types";
 
 // Repo/head/base pickers + the diff-view controls + reload.
 export interface Selection {
@@ -20,13 +21,25 @@ export interface Selection {
   fromOptions: ComboOption[];
   onFromChange: (v: string) => void;
   headIsCurrent: boolean;
-  uncommitted: boolean;
-  onUncommittedChange: (v: boolean) => void;
-  unstaged: boolean;
-  onUnstagedChange: (v: boolean) => void;
+  side: Side;
+  onSideChange: (v: Side) => void;
   loading: boolean;
   onReload: () => void;
 }
+
+// The diff's after end, as one three-valued control rather than the two dependent
+// checkboxes ("uncommitted", then "unstaged" appearing beside it) this used to be:
+// the three reachable combinations are exactly `Side`, which is what the diff, the
+// comment anchors and the reviewed marks all already speak.
+const SIDE_OPTIONS: { value: Side; label: string; title: string }[] = [
+  { value: "head", label: "Committed", title: "Only what's committed on the branch" },
+  { value: "index", label: "Staged", title: "Committed, plus what you've staged" },
+  {
+    value: "worktree",
+    label: "Working tree",
+    title: "Committed, plus every edit on disk — staged, unstaged and untracked",
+  },
+];
 
 // The review-scoped buttons.
 export interface TopBarActions {
@@ -62,7 +75,8 @@ interface Props {
 function viewLabel(s: Selection): string {
   const parts: string[] = [];
   if (s.from !== "all") parts.push(`from ${s.from.slice(0, 7)}`);
-  if (s.uncommitted && s.headIsCurrent) parts.push(s.unstaged ? "uncommitted" : "staged");
+  if (s.side === "worktree") parts.push("working tree");
+  if (s.side === "index") parts.push("staged");
   return parts.join(" · ");
 }
 
@@ -81,11 +95,11 @@ function rangeLines(s: Selection, st: TopBarStatus): string {
       ? `${sha}the merge-base with ${s.base || "the main branch"}, so the diff is everything ${s.head} adds`
       : `${sha}the parent of ${s.from.slice(0, 7)}, so that commit's own changes are included`;
   const to =
-    s.uncommitted && s.headIsCurrent
-      ? s.unstaged
-        ? "your working tree — staged and unstaged edits, plus untracked files"
-        : "the git index — staged changes only"
-      : `${s.head}${st.shortSha ? ` at ${st.shortSha}` : ""}`;
+    s.side === "worktree"
+      ? "your working tree — staged and unstaged edits, plus untracked files"
+      : s.side === "index"
+        ? "the git index — staged changes only"
+        : `${s.head}${st.shortSha ? ` at ${st.shortSha}` : ""}`;
   return `From: ${from}\nTo: ${to}`;
 }
 
@@ -105,8 +119,12 @@ export function TopBar({ selection: s, actions, status }: Props) {
   return (
     <header className="topbar">
       <span className="logo">local-review</span>
-      <label>
-        repo
+      {/* What's being compared, as one breadcrumb: the pickers carry their own
+          values, so the labels this used to put in front of each ("repo", "head",
+          "base") only said again what the value shows. The separators say the rest —
+          `/` for the repo the branch lives in, `→` for the comparison — and each
+          picker keeps its aria-label for anyone not reading the shape. */}
+      <div className="crumbs">
         <Combobox
           ariaLabel="repository"
           value={s.repo}
@@ -115,9 +133,9 @@ export function TopBar({ selection: s, actions, status }: Props) {
           disabled={s.loading}
           emptyText="(none found)"
         />
-      </label>
-      <label>
-        head
+        <span className="crumb-sep" aria-hidden="true">
+          /
+        </span>
         <Combobox
           ariaLabel="head branch"
           value={s.head}
@@ -125,10 +143,9 @@ export function TopBar({ selection: s, actions, status }: Props) {
           onChange={s.onHeadChange}
           disabled={s.loading}
         />
-      </label>
-      <span className="arrow">→</span>
-      <label>
-        base
+        <span className="crumb-sep" aria-hidden="true">
+          →
+        </span>
         <Combobox
           ariaLabel="base branch"
           value={s.base}
@@ -136,63 +153,57 @@ export function TopBar({ selection: s, actions, status }: Props) {
           onChange={s.onBaseChange}
           disabled={s.loading || !s.baseRelevant}
         />
-      </label>
-      <label title="Start the diff at one of the branch's own commits — that commit's own changes are included, so picking the oldest one is the same as All.">
-        from
-        <Combobox
-          ariaLabel="diff from"
-          value={s.from}
-          options={s.fromOptions}
-          onChange={s.onFromChange}
-          disabled={s.loading}
-        />
-      </label>
-      <label
-        className="checkbox"
-        title={
-          s.headIsCurrent
-            ? "Include uncommitted changes (working tree / index) on top of the selected range"
-            : "Only available when reviewing the branch you have checked out"
-        }
-      >
-        <input
-          type="checkbox"
-          checked={s.uncommitted && s.headIsCurrent}
-          onChange={(e) => s.onUncommittedChange(e.target.checked)}
-          disabled={s.loading || !s.headIsCurrent}
-        />
-        uncommitted
-      </label>
-      {s.uncommitted && s.headIsCurrent && (
-        <label className="checkbox" title="Include unstaged edits; uncheck to show only staged changes">
-          <input
-            type="checkbox"
-            checked={s.unstaged}
-            onChange={(e) => s.onUnstagedChange(e.target.checked)}
+      </div>
+      {/* The range's two remaining knobs: where the diff starts, and which side its
+          after end reads. Kept together, and apart from the breadcrumb above, because
+          neither names a ref — they narrow the comparison the breadcrumb states. */}
+      <div className="topbar-group">
+        <label title="Start the diff at one of the branch's own commits — that commit's own changes are included, so picking the oldest one is the same as All.">
+          from
+          <Combobox
+            ariaLabel="diff from"
+            value={s.from}
+            options={s.fromOptions}
+            onChange={s.onFromChange}
             disabled={s.loading}
           />
-          unstaged
         </label>
-      )}
-      <button
-        className="btn"
-        onClick={s.onReload}
-        disabled={s.loading || !s.repo || !s.head}
-        title="Re-run the review to pick up new commits"
-      >
-        {s.loading ? "Loading…" : "Reload"}
-      </button>
+        <span
+          title={
+            s.headIsCurrent
+              ? undefined
+              : "Staged and working-tree changes are only available when reviewing the branch you have checked out"
+          }
+        >
+          <ViewToggle
+            ariaLabel="diff side"
+            value={s.side}
+            options={SIDE_OPTIONS}
+            onChange={s.onSideChange}
+            disabled={s.loading || !s.headIsCurrent}
+          />
+        </span>
+        <button
+          className="btn"
+          onClick={s.onReload}
+          disabled={s.loading || !s.repo || !s.head}
+          title="Re-run the review to pick up new commits"
+        >
+          {s.loading ? "Loading…" : "Reload"}
+        </button>
+      </div>
       <span className="spacer" />
       {status.review && (
         <>
-          <span className="muted" title={compareTitle(s, status)}>
-            {status.shortSha}
-            {viewLabel(s) && ` · ${viewLabel(s)}`}
-          </span>
-          <span className="muted" title={fileCountTitle(s, status)}>
-            {plural(status.fileCount, "file")}
-          </span>
-          <DiffStatBadge stat={status.stat} title="Lines added and removed in this diff" />
+          <div className="topbar-readout">
+            <span className="readout-sha" title={compareTitle(s, status)}>
+              {status.shortSha}
+              {viewLabel(s) && ` · ${viewLabel(s)}`}
+            </span>
+            <span title={fileCountTitle(s, status)}>{plural(status.fileCount, "file")}</span>
+            <DiffStatBadge stat={status.stat} title="Lines added and removed in this diff" />
+          </div>
+          <div className="topbar-group">
           <button
             className="btn"
             onClick={actions.onShowPrompts}
@@ -211,6 +222,7 @@ export function TopBar({ selection: s, actions, status }: Props) {
           >
             Reset
           </button>
+          </div>
         </>
       )}
       <ThemePicker />

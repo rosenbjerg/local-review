@@ -12,6 +12,14 @@ import { LazyFile } from "./components/LazyFile";
 import { ResetConfirmModal } from "./components/ResetConfirmModal";
 import { ReviewSummary } from "./components/ReviewSummary";
 import { TopBar } from "./components/TopBar";
+import { EmptyState } from "./components/EmptyState";
+import {
+  IconFileDiff,
+  IconFolder,
+  IconGitBranch,
+  IconGitCommit,
+  IconX,
+} from "./components/icons";
 import { useActiveFile } from "./useActiveFile";
 import { useCommentActions } from "./useCommentActions";
 import { useCommentRefs } from "./useCommentRefs";
@@ -54,15 +62,12 @@ export default function App() {
     reviewedFiles,
     from,
     setFrom,
-    uncommitted,
-    changeUncommitted,
-    unstaged,
-    changeUnstaged,
     headIsCurrent,
     loading,
     error,
     setError,
     side,
+    changeSide,
     shortSha,
     repoOptions,
     headOptions,
@@ -323,10 +328,8 @@ export default function App() {
           fromOptions,
           onFromChange: setFrom,
           headIsCurrent,
-          uncommitted,
-          onUncommittedChange: changeUncommitted,
-          unstaged,
-          onUnstagedChange: changeUnstaged,
+          side,
+          onSideChange: changeSide,
           loading,
           onReload: startReview,
         }}
@@ -358,7 +361,7 @@ export default function App() {
             title="Dismiss"
             aria-label="Dismiss error"
           >
-            ×
+            <IconX />
           </button>
         </div>
       )}
@@ -375,24 +378,34 @@ export default function App() {
         </div>
       )}
 
-      {!review && !error && (
-        <div className="empty">
-          {!reposLoaded ? (
-            <>
-              <span className="spinner" aria-hidden="true" />
-              Loading…
-            </>
-          ) : repos.length === 0 ? (
-            "No git repositories found under the served folder."
-          ) : branchesLoaded && branches.length === 0 ? (
-            // A repo with no commits has no branches to pick, so "select a branch"
-            // would send the reviewer looking for a control that can't be filled.
-            `${repo} has no commits yet — there is nothing to review.`
-          ) : (
-            "Select a branch to start a review."
-          )}
-        </div>
-      )}
+      {!review &&
+        !error &&
+        (!reposLoaded ? (
+          <div className="empty">
+            <span className="spinner" aria-hidden="true" />
+            Loading…
+          </div>
+        ) : repos.length === 0 ? (
+          <EmptyState
+            icon={<IconFolder />}
+            title="No git repositories found"
+            hint="local-review serves every git repository directly under the folder it was started with. Restart it with -root pointing at a folder that contains some."
+          />
+        ) : branchesLoaded && branches.length === 0 ? (
+          // A repo with no commits has no branches to pick, so "select a branch"
+          // would send the reviewer looking for a control that can't be filled.
+          <EmptyState
+            icon={<IconGitCommit />}
+            title={`${repo} has no commits yet`}
+            hint="There is nothing to review until the repository has at least one commit."
+          />
+        ) : (
+          <EmptyState
+            icon={<IconGitBranch />}
+            title="Select a branch to start a review"
+            hint="Pick the head branch you want to review in the toolbar above. The base defaults to the repository's main branch."
+          />
+        ))}
 
       {review && (
         <div
@@ -434,7 +447,11 @@ export default function App() {
                 </div>
               )}
               {allFiles.length === 0 && !loading && (
-                <div className="empty">No changes between base and head.</div>
+                <EmptyState
+                  icon={<IconFileDiff />}
+                  title="No changes to review"
+                  hint="Nothing differs between the two ends of this comparison. Widen it from the toolbar — a different base, an earlier commit to start from, or the staged / working-tree side."
+                />
               )}
               {orderedDiffFiles.map((f) => {
                 const path = f.newPath || f.oldPath;

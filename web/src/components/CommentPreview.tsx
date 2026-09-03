@@ -3,6 +3,7 @@ import type { Comment } from "../types";
 import { lineLabel } from "../types";
 import { AnchorBadge } from "./AnchorBadge";
 import { CommentCount } from "./CommentCount";
+import { IconCheck } from "./icons";
 import { Markdown } from "./Markdown";
 
 // The compact read-only view of a comment — id, type, line, anchor state, reply
@@ -27,7 +28,9 @@ export function CommentPreview({
         <span className={`badge badge-${comment.type}`}>{comment.type}</span>
         <span className="muted">{lineLabel(comment)}</span>
         <AnchorBadge comment={comment} compact />
-        {comment.resolved && <span className="muted">✓</span>}
+        {comment.resolved && <span className="muted meta-icon" title="resolved">
+            <IconCheck />
+          </span>}
         {(comment.replies?.length ?? 0) > 0 && <CommentCount n={comment.replies.length} label="reply" />}
         {stamp && (
           <span className="muted comment-nav-time" title={absoluteTime(stamp)}>

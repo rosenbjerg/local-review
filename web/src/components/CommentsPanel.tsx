@@ -15,6 +15,7 @@ import type { Comment } from "../types";
 import { effectivePath } from "../types";
 import { CommentPreview } from "./CommentPreview";
 import { HighlightMatch } from "./HighlightMatch";
+import { IconX } from "./icons";
 
 interface Props {
   // Already filtered and sorted — the same list the n/p shortcuts step through.
@@ -133,7 +134,7 @@ export function CommentsPanel({
                   searchRef.current?.focus();
                 }}
               >
-                ×
+                <IconX size={13} />
               </button>
             )}
           </div>
@@ -212,7 +213,7 @@ export function CommentsPanel({
                 aria-label="Delete comment"
                 onClick={() => onDelete(c.id)}
               >
-                ×
+                <IconX />
               </button>
             </div>
           ))}

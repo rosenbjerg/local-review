@@ -1,12 +1,95 @@
+/* Bundled webfonts. Vendored under web/src/fonts (with each licence — all three are
+   SIL OFL 1.1) and referenced by url() so Vite hashes them into web/dist, which
+   go:embed then ships inside the binary: this tool has no network at runtime, so a
+   font it doesn't carry is a font it doesn't have.
+   Deliberately woff2 only (every browser that can run this app reads it, so a woff
+   sibling would be dead weight in the binary) and deliberately **not subsetted** —
+   a diff can contain any character at all, and a code font missing glyphs shows the
+   reviewer tofu where the file has text.
+   font-display: swap rather than block: if a face ever fails to resolve, swap keeps
+   the text readable in the fallback instead of hiding it for three seconds. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/InterVariable.woff2") format("woff2");
+}
+/* A real italic, not a synthesized shear: markdown emphasis is common in comment
+   bodies, and Inter's italic has its own letterforms. */
+@font-face {
+  font-family: "Inter";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/InterVariable-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Monaspace Neon";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("./fonts/MonaspaceNeonVar.woff2") format("woff2");
+}
+/* JetBrains Mono ships no variable woff2, only a variable .ttf, so these are the two
+   static weights the UI actually asks for: 400 everywhere and 700 on the explorer's
+   status letter. Anything between resolves to the nearer of the two. */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/JetBrainsMono-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/JetBrainsMono-Bold.woff2") format("woff2");
+}
+
 :root {
   /* Corner-radius scale: sm for inline chips (labels, code, kbd, thumbnails),
      md for controls & cards (buttons, inputs, threads, code blocks), lg for
      large surfaces (file cards, modals), pill for count/type badges. */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
   --radius-pill: 999px;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Elevation: two steps, composed here once from the two colors each theme
+     brings. A drop shadow alone only reads on a light surface — on #0d1117 a
+     black blur is invisible — so both steps also carry a 1px inset top
+     highlight, which is what makes a raised surface read as raised in the dark
+     themes. sm lifts a bar off what scrolls under it (topbar, sticky headers);
+     lg is for surfaces that float free of the page (modal, dropdown, popover). */
+  --elev-1: inset 0 1px 0 var(--highlight-color), 0 1px 3px var(--shadow-color);
+  --elev-2: inset 0 1px 0 var(--highlight-color), 0 2px 6px var(--shadow-color),
+    0 12px 32px var(--shadow-color);
+
+  /* Soft tints: the translucent fill of a semantic color, used behind badges,
+     status chips and the hover/active states of controls that carry that color.
+     Derived from the semantic tokens with color-mix rather than hand-picked per
+     theme — they're the same formula in every palette, and one that a theme can
+     get subtly wrong (the three hand-written --danger-soft values differed only
+     by rounding). A new semantic color gets its -soft here, not in three blocks. */
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  /* The halo around a keyboard focus ring — wider and fainter than the ring. */
+  --accent-ring: color-mix(in srgb, var(--accent) 32%, transparent);
+  --danger-soft: color-mix(in srgb, var(--danger) 12%, transparent);
+  --success-soft: color-mix(in srgb, var(--success) 14%, transparent);
+  --warn-soft: color-mix(in srgb, var(--warn) 14%, transparent);
+  --info-soft: color-mix(in srgb, var(--info) 14%, transparent);
+  --muted-soft: color-mix(in srgb, var(--muted) 14%, transparent);
+
+  /* The UI face. --font-mono is deliberately *not* here: it belongs to the theme
+     (see the blocks below), since a theme that borrows an editor's colors should
+     borrow the code face that editor is designed around. Each stack keeps the old
+     system fallbacks behind the bundled family, so a face that fails to load
+     degrades to what the app used before rather than to Times. */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
+    sans-serif;
 }
 
 /* Color themes: one block per theme, selected by the data-theme attribute theme.ts
@@ -31,6 +114,7 @@
   --add-bg: #12261e;
   --add-border: #238636;
   --del-bg: #25171c;
+  --del-border: #da3633;
   /* The parts of a changed line that actually changed, sitting on top of the
      row shade above. Opaque and clearly distinct from their row, since against
      --add-bg/--del-bg a translucent tint is almost invisible. Hand-picked per
@@ -59,9 +143,11 @@
   --warn-border: #9e6a03;
   --info: #58a6ff;
   --info-border: #1f6feb;
-  /* Translucent tint of --danger for hover fills on danger controls and the
-     error banner background. */
-  --danger-soft: rgba(248, 81, 73, 0.12);
+  /* The two colors elevation is built from (see --elev-1/--elev-2): the drop
+     shadow, and the 1px inset top highlight that carries the lift on a dark
+     surface where the shadow can't. */
+  --shadow-color: rgba(0, 0, 0, 0.45);
+  --highlight-color: rgba(255, 255, 255, 0.06);
   /* Foreground on saturated accent/success fills (primary button, active
      toggle, hovered gutter) where --text would lack contrast. */
   --on-accent: #fff;
@@ -70,6 +156,9 @@
   --checker-fg: #262c36;
   /* Scrim behind modals. */
   --backdrop: rgba(0, 0, 0, 0.6);
+  /* GitHub's own code face. */
+  --font-mono: "Monaspace Neon", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    monospace;
   /* Render native controls (checkboxes, selects, default scrollbars) dark. */
   color-scheme: dark;
 }
@@ -87,6 +176,7 @@
   --add-bg: #e6ffec;
   --add-border: #1f883d;
   --del-bg: #ffebe9;
+  --del-border: #cf222e;
   --add-word-bg: #abf2bc;
   --del-word-bg: #ffc1c0;
   --sel-bg: #ddf4ff;
@@ -100,11 +190,15 @@
   --warn-border: #bf8700;
   --info: #0969da;
   --info-border: #0969da;
-  --danger-soft: rgba(209, 36, 47, 0.1);
+  --shadow-color: rgba(31, 35, 40, 0.13);
+  --highlight-color: rgba(255, 255, 255, 0.7);
   --on-accent: #fff;
   --checker-bg: #ffffff;
   --checker-fg: #d8dee4;
   --backdrop: rgba(0, 0, 0, 0.4);
+  /* GitHub's own code face. */
+  --font-mono: "Monaspace Neon", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    monospace;
   color-scheme: light;
 }
 
@@ -127,6 +221,7 @@
   --add-bg: #294436;
   --add-border: #629755;
   --del-bg: #484a4a;
+  --del-border: #6c6f6f;
   --add-word-bg: #406a54;
   --del-word-bg: #666969;
   --sel-bg: #214283;
@@ -140,11 +235,15 @@
   --warn-border: #be9117;
   --info: #6897bb;
   --info-border: #4a88c7;
-  --danger-soft: rgba(255, 107, 104, 0.12);
+  --shadow-color: rgba(0, 0, 0, 0.45);
+  --highlight-color: rgba(255, 255, 255, 0.05);
   --on-accent: #fff;
   --checker-bg: #2b2b2b;
   --checker-fg: #3c3f41;
   --backdrop: rgba(0, 0, 0, 0.6);
+  /* The IDE this scheme comes from ships its own code face; use it. */
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    monospace;
   color-scheme: dark;
 }
 
@@ -191,7 +290,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans);
   font-size: 14px;
 }
 
@@ -209,6 +308,7 @@ body {
   padding: 10px 16px;
   background: var(--bg-elev);
   border-bottom: 1px solid var(--border);
+  box-shadow: var(--elev-1);
   flex-wrap: wrap;
 }
 .logo {
@@ -222,15 +322,53 @@ body {
   color: var(--muted);
   font-size: 12px;
 }
-.topbar label.checkbox,
-.topbar label.checkbox input {
-  cursor: pointer;
+/* One cluster of controls: tighter than the topbar's own gap, so the groups read
+   as groups without a divider rule between them. */
+.topbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
-.arrow {
+/* The repo/head/base breadcrumb. Its pickers wear no chrome at rest — the values
+   and the separators between them are the sentence, and three bordered boxes in a
+   row made the toolbar read as a form. The border comes back on hover and focus,
+   where the control is actually being used; the caret is always visible, so it
+   still reads as a picker at rest. */
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.crumbs .combobox-input {
+  background: transparent;
+  border-color: transparent;
+  font-size: 13px;
+  font-weight: 500;
+}
+.crumbs .combobox-input:hover:not(:disabled),
+.crumbs .combobox-input:focus {
+  background: var(--bg);
+  border-color: var(--border);
+}
+.crumb-sep {
   color: var(--muted);
+  user-select: none;
 }
 .spacer {
   flex: 1;
+}
+/* The review's readout — sha, view, file count, +/- — as one unit rather than three
+   loose spans, since they describe one comparison. Each keeps its own title: the
+   file count has more to explain than the range does. */
+.topbar-readout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.readout-sha {
+  font-family: var(--font-mono);
 }
 select {
   background: var(--bg);
@@ -285,7 +423,7 @@ select {
   background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px var(--backdrop);
+  box-shadow: var(--elev-2);
 }
 .combobox-option {
   display: flex;
@@ -343,8 +481,11 @@ select {
 }
 
 /* Shared interactive-state polish. Subtle hover/press feedback so controls
-   don't snap, and a consistent keyboard focus ring drawn inset (outline-offset
-   negative) so it stays visible even inside the overflow:hidden .view-toggle. */
+   don't snap, and one keyboard focus ring everywhere: the accent outline sits
+   just off the control with a wider, fainter halo behind it, so focus reads at a
+   glance on any of our surfaces rather than hugging the border it's drawn over.
+   Inputs are matched by element, not by class — every text field in the app
+   should ring the same way, including ones added later. */
 .btn,
 .btn-icon,
 .link,
@@ -375,10 +516,19 @@ select {
 .comment-nav-delete:focus-visible,
 .banner-dismiss:focus-visible,
 .gutter-click:focus-visible,
+input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
   outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px var(--accent-ring);
+}
+/* The one control that can't take the offset ring: .view-toggle clips to its
+   rounded ends with overflow:hidden, which would cut both the offset outline and
+   the halo, so its buttons keep the inset ring. */
+.view-toggle button:focus-visible {
   outline-offset: -2px;
+  box-shadow: none;
 }
 @media (prefers-reduced-motion: reduce) {
   .btn:active:not(:disabled) {
@@ -433,21 +583,41 @@ textarea:focus-visible {
   grid-template-columns: 260px 6px 1fr 6px 380px;
   overflow: hidden;
 }
+/* The 6px track is the grab target, not the divider: the divider is the 1px
+   hairline drawn down its middle, which thickens and takes the accent while
+   grabbed. Filling the whole track (what this used to do) put a 6px bar of
+   --border on each side of the diff, and since the panes carried their own edge
+   as well it read as a 7px grey slab — hence no border on .explorer-column or
+   .side-column below either: those panes are --bg-elev against the diff's --bg,
+   so the surface change already separates them and this hairline lands between.
+   Focus is drawn inset, since the panes on both sides clip their overflow. */
 .resizer {
-  background: var(--border);
   cursor: col-resize;
+  display: flex;
+  justify-content: center;
 }
-.resizer:hover,
-.resizer:active,
-.resizer:focus-visible {
+.resizer::before {
+  content: "";
+  width: 1px;
+  background: var(--border);
+  transition: background-color 0.12s ease;
+}
+.resizer:hover::before,
+.resizer:active::before,
+.resizer:focus-visible::before {
+  width: 3px;
   background: var(--accent);
 }
 .resizer:focus-visible {
   outline: 1px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: -1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .resizer::before {
+    transition: none;
+  }
 }
 .explorer-column {
-  border-right: 1px solid var(--border);
   overflow-y: auto;
   background: var(--bg-elev);
 }
@@ -490,22 +660,54 @@ textarea:focus-visible {
   /* No top padding: the file headers are sticky at top:0, so a top padding
      would leave a band where scrolling content shows above the stuck header.
      The ::before restores the top gap as scrollable space instead. */
-  padding: 0 16px 16px;
+  padding: 0 8px 8px;
 }
+/* This is the diff column's top padding — keep it equal to the horizontal value
+   above, or the first file card sits closer to the top than to the sides. */
 .diff-column::before {
   content: "";
   display: block;
-  height: 16px;
+  height: 8px;
 }
 .side-column {
-  border-left: 1px solid var(--border);
   overflow-y: auto;
   background: var(--bg-elev);
 }
+/* Empty states (see EmptyState.tsx): a centred stack — a large, faint icon over a
+   one-line statement and a hint saying what to do about it. The loading variants
+   use the bare .empty with a spinner, which stacks the same way. */
 .empty {
-  padding: 40px;
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   text-align: center;
   color: var(--muted);
+}
+/* The spinner's margin is for its inline use (in the add-file modal); in this
+   centred column it would just pull the disc off centre. */
+.empty .spinner {
+  margin-right: 0;
+}
+.empty-icon {
+  color: var(--muted);
+  opacity: 0.45;
+  margin-bottom: 4px;
+}
+.empty-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.empty-hint {
+  margin: 0;
+  /* Held to a readable measure: these hints name refs and flags, and centred text
+     running the width of the diff column is hard to come back to line by line. */
+  max-width: 52ch;
+  font-size: 13px;
+  line-height: 1.5;
 }
 /* Indeterminate spinner for load states (diff column, initial repo discovery). */
 .spinner {
@@ -557,6 +759,7 @@ textarea:focus-visible {
   position: sticky;
   top: 0;
   z-index: 1;
+  box-shadow: var(--elev-1);
 }
 /* Collapsed file (header is the only child) — round all corners. */
 .file-header:last-child {
@@ -643,33 +846,51 @@ textarea:focus-visible {
   background: var(--accent);
   color: var(--on-accent);
 }
+/* A group with only one reachable value (the side toggle off the checked-out
+   branch) dims whole, active segment included — dimming only the unavailable ones
+   would read as "these three are still a choice". */
+.view-toggle:has(button:disabled) {
+  opacity: 0.5;
+}
+.view-toggle button:disabled {
+  cursor: not-allowed;
+}
 
+/* File-status and comment-type marks are tinted fills, not outlines: at rest the
+   UI shows a dozen of these at once (a status per file card, a type per thread,
+   the anchor-drift badges), and an outline on each is a dozen more hairlines
+   competing with the borders that actually divide the layout. The fill is the
+   mark's own -soft tint, so the color still carries the meaning; the transparent
+   border only holds the metrics the outlined version had. */
 .status {
   font-size: 11px;
   text-transform: uppercase;
+  letter-spacing: 0.02em;
   padding: 1px 6px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
+  background: var(--muted-soft);
   color: var(--muted);
 }
 .status-added {
   color: var(--success);
-  border-color: var(--success-border);
+  background: var(--success-soft);
 }
 .status-deleted {
   color: var(--danger);
-  border-color: var(--danger-border);
+  background: var(--danger-soft);
 }
 .status-renamed {
   color: var(--warn);
-  border-color: var(--warn-border);
+  background: var(--warn-soft);
 }
 .status-modified {
   color: var(--info);
-  border-color: var(--info-border);
+  background: var(--info-soft);
 }
 .status-unchanged {
   color: var(--muted);
+  background: var(--muted-soft);
 }
 
 /* File explorer */
@@ -684,6 +905,7 @@ textarea:focus-visible {
   top: 0;
   z-index: 1;
   background: var(--bg-elev);
+  box-shadow: var(--elev-1);
 }
 .explorer-head {
   display: flex;
@@ -737,13 +959,14 @@ textarea:focus-visible {
   right: 4px;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: none;
   color: var(--muted);
   cursor: pointer;
-  font-size: 15px;
-  line-height: 1;
-  padding: 2px 5px;
+  padding: 3px;
   border-radius: var(--radius-sm);
 }
 .search-clear:hover {
@@ -843,8 +1066,7 @@ textarea:focus-visible {
   flex: none;
   font-size: 11px;
   color: var(--muted);
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--muted-soft);
   border-radius: var(--radius-pill);
   padding: 0 6px;
 }
@@ -979,16 +1201,35 @@ textarea:focus-visible {
   border-collapse: collapse;
   font-family: var(--font-mono);
   font-size: 12.5px;
+  /* A fixed row height, not a ratio: the gutter, the code and the smaller-type
+     hunk headers all have to sit on the same baseline grid, and a unitless
+     line-height would give the 11.5px hunk row a shorter line than the 12.5px
+     code beside it. 19px at this size is the density an editor uses — the ~15px
+     a default line-height gave was tight enough to read as a wall. */
+  line-height: 19px;
 }
+/* No padding reset here, deliberately. `.diff td` is specificity (0,1,1) and the
+   cell rules below (.gutter, .line-content, .gap-gutter) are all (0,1,0), so a
+   `padding: 0` on this selector silently beat every one of them — the gutter and
+   the code have been running flush against their borders, and four rounds of
+   editing .gutter's padding changed nothing at all. Nothing needs the reset: the
+   UA stylesheet gives a td no padding of its own, and cells that want none
+   (.thread-gutter) simply don't ask for any. */
 .diff td {
-  padding: 0;
   vertical-align: top;
 }
 .gutter {
   width: 1%;
   min-width: 42px;
   text-align: right;
-  padding: 0 8px;
+  /* Weighted left, and that's the non-obvious part. The numbers are right-aligned,
+     so padding-right is the gap to the rule the cell ends in — but any slack from
+     min-width above lands on the *left*, which is the gap to the card edge (first
+     cell) or to the old/new divider (second). Widening padding-right therefore
+     makes the left gap worse: past ~42px total the column stops being min-width
+     and the numbers get pinned to padding-left. Keep the right side small so the
+     slack stays on the left. */
+  padding: 0 4px 0 14px;
   color: var(--muted);
   user-select: none;
   white-space: nowrap;
@@ -1002,14 +1243,28 @@ textarea:focus-visible {
   color: var(--on-accent);
 }
 .line-content {
-  padding: 0 8px;
+  /* Both sides match .sign's right padding, so one gap size runs the whole row:
+     change bar to +/-, +/- to code, and code to the row's end. Keep the two rules
+     in step if either moves. */
+  padding: 0 3px;
   white-space: pre-wrap;
   word-break: break-word;
   width: 100%;
 }
+/* The +/- column stays muted grey on every row, deliberately: the row's fill and
+   the change bar on its gutter already say added or deleted, and a third green or
+   red mark on the same row read as noise rather than emphasis. Padding on the right
+   only: .line-content's own 8px already holds the sign off the change bar, so a
+   left padding here would just push the code further in. Every code row renders a
+   .sign (a context row's is a space), so the content column shifts by the same
+   amount and nothing misaligns.
+   box-sizing has to be content-box: the global border-box would take the padding
+   *out* of the 1ch cell, shrinking the glyph's box instead of spacing it. */
 .sign {
   display: inline-block;
+  box-sizing: content-box;
   width: 1ch;
+  padding: 0 3px 0 0;
   color: var(--muted);
 }
 .row-add .word-diff {
@@ -1030,6 +1285,21 @@ textarea:focus-visible {
 }
 .row-del {
   background: var(--del-bg);
+}
+/* The change bar: the hairline already dividing the gutter from the code carries
+   the row's status, so a changed row is marked at its edge as well as by its
+   fill — which is what lets the eye find the changes in a long hunk without the
+   fill having to shout. Deliberately just the 1px border it recolors: widened to
+   2px (with an inset shadow, since a border-width that differed by row would
+   shift the code column a pixel on every add) it read as a stripe down the diff
+   rather than an edge on a row.
+   Not on the gutter's *left* edge: .row-commented / .row-comment-active own that
+   one, and a row can be both commented and changed. */
+.row-add .gutter {
+  border-right-color: var(--add-border);
+}
+.row-del .gutter {
+  border-right-color: var(--del-border);
 }
 .row-hunk {
   background: var(--bg-elev);
@@ -1101,19 +1371,25 @@ textarea:focus-visible {
 .thread-gutter {
   background: var(--bg);
 }
+/* Just padding: the thread inside is a raised card, so the cell it sits in needs
+   no fill or rules of its own. Banding the whole cell (what this used to do) drew
+   two more full-width hairlines across the diff and made the thread read as a
+   strip spliced into the table rather than a card sitting on it. */
 .thread-cell {
   padding: 8px 12px 8px 24px;
-  background: var(--bg-elev);
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
 }
+/* A raised card, not a bordered box: the fill is a step up from the diff behind
+   it and --elev-1 lifts it, so the shape needs no outline. That also makes the
+   thread read the same in both places it renders — inline in the diff, and in the
+   file-level list under a markdown or media view, where the surface behind it is
+   --bg either way. */
 .thread {
-  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 8px 10px;
   margin: 6px 0;
-  background: var(--bg);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg-elev);
+  box-shadow: var(--elev-1);
+  font-family: var(--font-sans);
 }
 /* Every block in a thread — the root comment and each reply — is a header band
    over a body, so "a block starts here" is a shape rather than a gap. The band
@@ -1121,9 +1397,11 @@ textarea:focus-visible {
    card's own padding (hence the coupling: .thread-meta's -8px/-10px mirror
    .thread's 8px 10px, .reply-meta's -6px/-8px mirror .reply's 6px 8px), which is
    what makes it read as a header strip instead of an inset rule. One token fills
-   both: --bg-hover is a step up from --bg (.thread) and from --bg-elev (.reply)
-   alike. Deliberately no author-hue here — the type and anchor-drift badges in
-   this same row already own the semantic palette. */
+   both: --bg-hover is a step up from --bg-elev (.thread) and from --bg (.reply)
+   alike — and the fill change *is* the boundary, so neither band needs a rule
+   under it. Deliberately no author-hue here — the type and anchor-drift badges in
+   this same row already own the semantic palette, and .meta-author already leads
+   the row on weight and contrast. */
 .thread-meta {
   display: flex;
   align-items: center;
@@ -1135,7 +1413,6 @@ textarea:focus-visible {
   margin: -8px -10px 8px;
   padding: 6px 10px;
   background: var(--bg-hover);
-  border-bottom: 1px solid var(--border);
   border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 .thread-toggle {
@@ -1182,10 +1459,11 @@ textarea:focus-visible {
    first reply's top edge is then where the root ends, and the gap between two
    cards is where one reply ends and the next begins. A single shared left rail
    (what this used to be) can only bracket the whole run — it says nothing about
-   the boundaries inside it. The indent carries the nesting instead.
-   The fill is --bg-elev rather than the more contrasty --bg-hover because
-   .md-body code chips are --bg-hover: inline code in a reply body would sink
-   into its own card. */
+   the boundaries inside it. The indent carries the nesting instead. Borderless
+   like the thread: a reply is recessed to --bg against the thread's --bg-elev, so
+   the fill still draws each card's edges — and it puts the .md-body code chips
+   (--bg-hover) two steps clear of the body behind them, where against the old
+   --bg-elev fill they nearly sank into it. */
 .thread-replies {
   margin-top: 8px;
   margin-left: 12px;
@@ -1195,9 +1473,8 @@ textarea:focus-visible {
 }
 .reply {
   padding: 6px 8px;
-  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--bg-elev);
+  background: var(--bg);
 }
 .reply-meta {
   display: flex;
@@ -1207,7 +1484,6 @@ textarea:focus-visible {
   margin: -6px -8px 6px;
   padding: 5px 8px;
   background: var(--bg-hover);
-  border-bottom: 1px solid var(--border);
   border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 .reply-body {
@@ -1402,8 +1678,6 @@ textarea:focus-visible {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--danger);
-  font-size: 17px;
-  line-height: 1;
   cursor: pointer;
 }
 .comment-nav-delete:hover {
@@ -1452,9 +1726,8 @@ textarea:focus-visible {
 
 /* Review summary */
 .review-summary {
-  padding: 16px 16px 0;
+  padding: 8px 8px 12px;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 12px;
 }
 .review-summary-head {
   display: flex;
@@ -1489,7 +1762,7 @@ textarea:focus-visible {
 
 /* Comments panel */
 .comments-panel {
-  padding: 16px;
+  padding: 8px;
 }
 .comments-panel-header {
   display: flex;
@@ -1581,61 +1854,74 @@ textarea:focus-visible {
   margin-left: auto;
   font-size: 11px;
 }
+/* Anything holding an icon beside (or instead of) a label centres it optically:
+   an inline svg otherwise sits on the text baseline and hangs a descender's worth
+   too low. .badge is in the list because the resolved badge leads with a check. */
+.badge,
+.meta-id,
+.meta-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
 .badge {
   font-size: 11px;
   padding: 1px 7px;
   border-radius: var(--radius-pill);
   text-transform: lowercase;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
+  background: var(--muted-soft);
+  color: var(--muted);
 }
 .badge-bug {
   color: var(--danger);
-  border-color: var(--danger-border);
+  background: var(--danger-soft);
 }
 .badge-suggestion {
   color: var(--success);
-  border-color: var(--success-border);
+  background: var(--success-soft);
 }
 .badge-question {
   color: var(--warn);
-  border-color: var(--warn-border);
+  background: var(--warn-soft);
 }
 .badge-nit {
   color: var(--muted);
+  background: var(--muted-soft);
 }
 .badge-resolved {
   color: var(--success);
-  border-color: var(--success-border);
+  background: var(--success-soft);
   text-transform: none;
 }
 /* Anchor-drift badges: the commented code moved (relocated to a new line) or
    went outdated (snippet no longer at head). */
 .badge-moved {
   color: var(--info);
-  border-color: var(--info-border);
+  background: var(--info-soft);
   text-transform: none;
 }
 .badge-outdated {
   color: var(--warn);
-  border-color: var(--warn-border);
+  background: var(--warn-soft);
   text-transform: none;
 }
 /* The outdated badge doubles as a toggle for the original-code snippet: reset the
-   button chrome so it reads as the badge, with a chevron affordance. */
+   button chrome so it reads as the badge, with a chevron affordance. Deliberately
+   sets no background — .badge already covers the UA button chrome, and a `none`
+   here would win on source order and strip the tint off this one badge. */
 .badge-toggle {
   font-family: inherit;
-  background: none;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
 }
 
 /* The composer's comment-type picker: the type badges above, made clickable, so
    each pill already wears the color it will show in the thread. Deliberately
    built on .badge/.badge-<type> rather than restated, or the two would drift.
-   The selected pill fills with that type's -border shade — the darker,
-   fill-suitable half of each semantic pair. */
+   Each pill therefore already wears its type's tint at rest; what the pills add
+   is a hairline in their own color (faint, full on hover) so they read as
+   controls, and a solid fill in that type's -border shade — the darker,
+   fill-suitable half of each semantic pair — for the selected one. */
 .type-pills {
   display: flex;
   flex-wrap: wrap;
@@ -1643,28 +1929,32 @@ textarea:focus-visible {
 }
 .type-pill {
   font-family: inherit;
-  background: var(--bg);
   cursor: pointer;
+  border-color: color-mix(in srgb, currentColor 35%, transparent);
 }
 .type-pill:hover:not(.active) {
-  background: var(--bg-hover);
+  border-color: currentColor;
 }
 .type-pill.active {
   color: var(--on-accent);
 }
 .type-pill.badge-bug.active {
   background: var(--danger-border);
+  border-color: var(--danger-border);
 }
 .type-pill.badge-suggestion.active {
   background: var(--success-border);
+  border-color: var(--success-border);
 }
 .type-pill.badge-question.active {
   background: var(--warn-border);
+  border-color: var(--warn-border);
 }
 /* nit has no color of its own (it reads muted everywhere else), so its selected
    state is a neutral fill rather than a borrowed semantic one. */
 .type-pill.badge-nit.active {
   background: var(--border);
+  border-color: var(--border);
   color: var(--text);
 }
 
@@ -1692,7 +1982,7 @@ textarea:focus-visible {
   background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow: 0 6px 20px var(--backdrop);
+  box-shadow: var(--elev-2);
   pointer-events: none;
 }
 .comment-ref-popover .comment-preview {
@@ -1746,6 +2036,47 @@ textarea:focus-visible {
   padding-left: 8px;
 }
 
+/* Entrance motion. Only surfaces that appear because the reviewer just did
+   something get it — a modal, a dropdown, the hover popover, a composer.
+   Deliberately not threads, diff rows or comment items: those re-render on every
+   SSE ping (every comment, reply and reviewed mark, plus the ~1.5s filesystem
+   poller), so an entrance there would fire continuously the whole time an agent
+   is working. Short and small: 120-160ms and a 4-8px rise — long enough to read
+   as motion, short enough that it never stands between a click and the result. */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes surface-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+}
+.combobox-list,
+.comment-ref-popover {
+  animation: surface-in 120ms ease-out;
+}
+.composer {
+  animation: surface-in 140ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .combobox-list,
+  .comment-ref-popover,
+  .composer,
+  .modal-backdrop,
+  .modal {
+    animation: none;
+  }
+}
+
 /* Modal */
 .modal-backdrop {
   position: fixed;
@@ -1755,6 +2086,7 @@ textarea:focus-visible {
   align-items: center;
   justify-content: center;
   z-index: 10;
+  animation: fade-in 120ms ease-out;
 }
 .modal {
   background: var(--bg-elev);
@@ -1765,6 +2097,8 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-shadow: var(--elev-2);
+  animation: dialog-in 160ms ease-out;
 }
 .modal-head {
   display: flex;
@@ -2057,12 +2391,13 @@ kbd {
 }
 .banner-dismiss {
   flex: none;
+  display: flex;
+  align-items: center;
   background: none;
   border: none;
   color: var(--danger);
-  font-size: 18px;
-  line-height: 1;
-  padding: 0 4px;
+  padding: 2px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 .banner-dismiss:hover {
@@ -2071,10 +2406,9 @@ kbd {
 
 /* The last-resort crash screen (ErrorBoundary). Deliberately plain: it renders
    when the app itself failed, so it leans only on the base tokens. */
+/* The crash panel is an .empty with more air between its parts and full-contrast
+   text — it's an error, not an absence. */
 .crash {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   gap: 16px;
   color: var(--text);
 }

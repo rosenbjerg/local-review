@@ -1,5 +1,7 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
 
+import { IconChevronLeft, IconChevronRight, IconX } from "./icons";
+
 interface Props {
   term: string;
   count: number;
@@ -43,7 +45,7 @@ export function FindBar({
         title="Previous match (Shift+Enter)"
         aria-label="Previous match"
       >
-        ‹
+        <IconChevronLeft />
       </button>
       <button
         className="btn btn-icon"
@@ -53,7 +55,7 @@ export function FindBar({
         title="Next match (Enter)"
         aria-label="Next match"
       >
-        ›
+        <IconChevronRight />
       </button>
       {changedOnly && (
         <button
@@ -73,7 +75,7 @@ export function FindBar({
         title="Clear (Esc)"
         aria-label="Clear highlight"
       >
-        ×
+        <IconX />
       </button>
     </div>
   );

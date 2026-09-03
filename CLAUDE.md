@@ -107,8 +107,14 @@ web/src/
                          and the theme it resolves to; owns <html data-theme>
   themes/darcula.ts      JetBrains Darcula's editor scheme as a hand-written TextMate
                          theme for Shiki (which ships no JetBrains theme)
+  fonts/                 the bundled woff2 faces + their licences (all SIL OFL 1.1):
+                         Inter (UI, roman + italic), Monaspace Neon (code, GitHub
+                         themes), JetBrains Mono (code, Darcula) — see the @font-face
+                         block at the top of styles.css
   components/
-    TopBar.tsx           repo / head / base / from pickers, the two diff-scope checkboxes,
+    TopBar.tsx           the repo / head / base breadcrumb (chrome-less pickers, `/`
+                         and `→` between), the from picker + the three-way diff-side
+                         toggle (Committed / Staged / Working tree),
                          the changed-file count + `+N -M` badge and compareTitle, reload,
                          the review-scoped buttons (agent prompts, export, reset), the
                          theme picker and help
@@ -150,12 +156,21 @@ web/src/
     Combobox.tsx         searchable single-select — a native <select> can't filter, which
                          gets unwieldy with many branches
     ViewToggle.tsx       data-driven segmented control (Changed/Full, Text/Image,
-                         Code/Rendered, Preview/Raw)
+                         Code/Rendered, Preview/Raw, the diff side); `disabled`
+                         dims the whole group, never single options
     CopyButton.tsx       clipboard button with idle/ok/fail state (lazy text builder)
     ThemePicker.tsx      the toolbar's theme select; reads and writes the theme store
                          directly, since the theme isn't review state
     ErrorBoundary.tsx    the app's only class component: shows a render-time throw plus a
                          reload and a "clear the lr.* keys" escape hatch
+    EmptyState.tsx       the shape every empty state takes: a large faint icon, a
+                         one-line statement, a hint saying what to do — and no
+                         action button, since the controls they point at are all
+                         in the toolbar
+    icons.tsx            the inline icon set: one 24-grid, stroked in currentColor,
+                         sized by prop — replaces the × ‹ › ↳ ✓ glyphs the chrome
+                         was built from (each rendered at whatever weight and
+                         baseline the platform font gave it)
     (small shared UI primitives: Chevron, CommentCount, DiffStatBadge, AnchorBadge,
      MetaTimestamps, HighlightMatch — <mark>s a needle in a plain string, shared by
      the explorer's file search and the comments pane's,
@@ -454,19 +469,25 @@ web/src/
   The response `base` is the resolved `from` ref (the merge-base, or the picked
   commit's **parent**) — what `/api/blob`'s "before" image uses.
   The `uncommitted` axis is only meaningful when head is the checked-out branch, so
-  it's gated on that (the UI disables the checkbox otherwise). `useReview` holds the
-  `from`/`uncommitted`/`unstaged` state and derives `effectiveUncommitted`
+  it's gated on that (the UI disables the whole side toggle otherwise). `useReview`
+  holds the `from`/`uncommitted`/`unstaged` state and derives `effectiveUncommitted`
   (`uncommitted && headIsCurrent`) plus the single `side: Side` (`"head"` unless
   uncommitted, then `"worktree"`/`"index"` by `unstaged`) threaded into add-comment /
   set-reviewed / file / blob calls and into `DiffView`/`MediaView` as one prop.
+  **The reviewer picks that `Side`, not the two booleans.** The three reachable
+  combinations *are* `Side`, so the toolbar is one segmented control over it and
+  `useReview.changeSide` is the single place it becomes the two axes the API takes —
+  which also makes the pref one write. As two dependent checkboxes (the second only
+  appearing once the first was on) it took two clicks to reach the index and a write
+  per axis persisted the other axis's pre-update value.
   **`uncommitted`/`unstaged` are remembered per repo** (`lr.diffViewByRepo`, keyed by
   repo alone — they describe how you look at a repo, not at a branch or review);
   `from` stays per-session, since a sha belongs to one head's history. The restore
   happens in the *branch-load* `.then`, in the same update as `head`: the guard above
   clears `uncommitted` whenever head isn't the checked-out branch, and while branches
-  are loading it never is. And only the reviewer's toggles write
-  (`changeUncommitted`/`changeUnstaged`) — persisting from an effect on the state
-  would let that guard, or the `unstaged` reset, erase the stored choice.
+  are loading it never is. And only the reviewer's own pick writes (`changeSide`) —
+  persisting from an effect on the state would let that guard, or the `unstaged`
+  reset, erase the stored choice.
 - **A file the branch didn't change can still carry comments.** `GET /api/files`
   (the repo's tracked files at head) backs a typeahead (`AddFileModal`), and the chosen
   path becomes a synthetic `unchanged` `FileDiff` in `App`'s `allFiles` — no hunks,
@@ -663,6 +684,51 @@ web/src/
   to language ids via Shiki's own alias metadata (+ a tiny extras map). `DiffView`
   tokenizes the whole file once and renders tokens per line (avoids per-line
   breakage on multi-line constructs); deleted lines are highlighted per-line.
+- **A changed row is marked at its edge, not just by its fill.** The hairline that
+  divides the gutter from the code carries the row's status — `--border` on a context
+  row, `--add-border`/`--del-border` on a changed one — so the eye can find the
+  changes in a long hunk without the row fill having to shout. The `+`/`-` sign
+  stays **muted grey** on every row: the fill and the bar already say added or
+  deleted, and colouring the sign to match made a third mark on the same row that
+  read as noise. It stays the **1px** border it recolors — widened to 2px (with an
+  inset shadow, since a border-width that differed by row would shift the code column
+  a pixel on every add) it read as a stripe down the diff rather than an edge on a
+  row. `.sign` is padded on the right only (`0 3px 0 0`) to stand off the code — as
+  `content-box`, since the global `border-box` would take the padding out of its
+  `1ch` cell rather than adding to it; on its left, `.line-content`'s own padding
+  already holds it clear of the bar — and both of that rule's sides are the same
+  3px, so one gap size runs the whole row. Every code row renders a sign (a context row's
+  is a space), so the shift is uniform. The bar sits on the gutter's
+  **right** edge because
+  `.row-commented`/`.row-comment-active` own the left one and a row can be both
+  commented and changed. `--del-border` is per theme rather than derived from
+  `--danger` because Darcula's deletion is deliberately grey.
+  The table's `line-height` is a **fixed 19px**, not a ratio: the gutter, the code
+  and the smaller-type hunk headers have to share one baseline grid, and a unitless
+  line-height would give the 11.5px hunk row a shorter line than the 12.5px code
+  beside it.
+- **Nothing in the diff table may reset padding on a bare `td`.** `.diff td` is
+  specificity (0,1,1) and every cell rule — `.gutter`, `.line-content`,
+  `.gap-gutter` — is (0,1,0), so a `padding: 0` there silently beats all of them and
+  the gutter and the code run flush against their borders. It did, for a long time,
+  and the symptom is invisible in the source: editing `.gutter`'s padding changes
+  nothing whatsoever. Cells that want no padding just don't ask for any (a `td` has
+  none from the UA stylesheet). The same trap is still live one level down —
+  `.thread-row > td { padding: 0 }` voids `.thread-cell`'s padding — left alone only
+  because switching it on now would indent every inline thread.
+- **A thread is a raised card, and the fill ladder is what draws it.** Nothing in a
+  thread has a border: `.thread` is `--bg-elev` + `--elev-1` over the diff, its meta
+  band steps up to `--bg-hover`, and a `.reply` is recessed to `--bg` — so every
+  edge is a fill change. Three things that ladder is holding up. `.thread-cell` is
+  bare padding, because banding the whole cell drew two more full-width hairlines
+  across the diff and made the thread read as a strip spliced into the table rather
+  than a card on it. The thread's fill has to differ from **both** surfaces it
+  renders on (inline in the diff, and in the file-level list under a markdown or
+  media view — `--bg` in both cases), which is why it's the raised one. And a reply
+  at `--bg` puts the `.md-body` code chips (`--bg-hover`) two steps clear of the body
+  behind them, where against the old `--bg-elev` reply fill they nearly sank in.
+  Replies stay **one card each** rather than becoming a shared left rail: a rail can
+  only bracket the whole run, saying nothing about the boundaries inside it.
 - **Word-level intra-line diff** (`wordDiff.ts`): a one-character edit rendered as
   a whole line deleted and a whole line added makes the reader diff it by eye, so
   a changed line shades only the spans that changed. Pure and covered by
@@ -718,7 +784,8 @@ web/src/
   commenting, occurrence highlighting, and inline threads all work in them for
   free. Reveal state resets with `contentKey`, alongside the cached source it reads
   — the two describe the same side and must move together.
-- **Themes are one token block plus two renderer names** (`theme.ts`, `styles.css`).
+- **Themes are one token block plus two renderer names and a code face** (`theme.ts`,
+  `styles.css`).
   Every color the UI paints is a `--*` token, so a theme is a
   `:root[data-theme="<id>"]` block restating all of them, plus a `THEMES` entry
   naming the Shiki theme (token colors) and the mermaid theme (diagram fills) that go
@@ -1000,13 +1067,59 @@ web/src/
   `--sel-bg`) plus the intra-line word marks (`--add-word-bg`/`--del-word-bg`, opaque
   rather than tinted — over the row shades a translucent one is almost invisible), the
   occurrence highlight (`--occ-bg`/`--occ-bg-active`), and the semantic status palette
-  (`--danger`/`--success`/`--warn`/`--info`, each with a matching `-border` shade) used
-  by `.status-*`/`.fstat-*`/`.badge-*` and danger controls. Plus a few derived/utility
-  tokens: `--accent-hover` (brighter accent for the hover state of `.btn-primary`),
-  `--danger-soft` (translucent danger tint for hover fills + the error banner),
-  `--on-accent` (foreground on saturated accent/success fills), `--backdrop`
-  (modal scrim), `--checker-bg`/`--checker-fg` (transparent-image checkerboard) and
-  `--font-mono`. Add a var rather than reintroduce a literal.
+  (`--danger`/`--success`/`--warn`/`--info`, each with a matching `-border` shade — the
+  darker, fill-suitable half) and the two elevation colors (`--shadow-color` plus the
+  `--highlight-color` that carries a lift where a shadow can't, on a dark surface).
+  Plus a few derived/utility tokens, which live in the **shared** `:root` at the top
+  rather than in each theme's block, since they're the same formula in every palette:
+  `--accent-hover` (brighter accent for the hover state of `.btn-primary`), the
+  `-soft` tints (`--accent-soft`/`--danger-soft`/`--success-soft`/`--warn-soft`/
+  `--info-soft`/`--muted-soft` — a semantic color at ~12-14% alpha via `color-mix`,
+  the fill behind every `.status-*`/`.badge-*` mark and the hover of a control that
+  carries that color), `--accent-ring` (the wider, fainter halo behind the focus
+  outline), the two elevation steps (`--elev-1` for a bar that something scrolls
+  under, `--elev-2` for a surface floating free of the page — modal, dropdown,
+  popover), `--on-accent` (foreground on saturated accent/success fills),
+  `--backdrop` (modal scrim), `--checker-bg`/`--checker-fg` (transparent-image
+  checkerboard) and `--font-sans`. Add a var rather than reintroduce a literal — and
+  a derived one belongs in the shared block, so three themes can't round it three
+  ways (which is what the hand-written `--danger-soft` values did).
+- **Status and type marks are tinted fills, not outlines.** `.status-*`, `.badge-*`
+  and `.explorer-count` paint their color's `-soft` tint with a transparent border
+  (kept only for the metrics): a dozen of these show at rest, and an outline on each
+  competes with the borders that actually divide the layout. `.type-pill` builds on
+  `.badge-<type>`, so a pill already wears its tint — what it adds is a hairline in
+  its own color and a solid `-border` fill when selected.
+- **The resizer is the divider between two panes, and the only one.** Its 6px track
+  is the grab target and the 1px hairline down the middle is the edge (3px and accent
+  while grabbed) — so `.explorer-column` and `.side-column` carry no border of their
+  own: they're `--bg-elev` against the diff's `--bg`, so the surface change already
+  separates them and the hairline lands between. Filling the whole track *and*
+  keeping the pane borders (what this was) put a 7px grey slab on each side of the
+  diff. Its focus ring is drawn inset, since the panes on both sides clip overflow.
+- **Entrance motion is only for surfaces the reviewer just summoned** — the modal,
+  the combobox dropdown, the `#<id>` popover, a composer (`fade-in`/`surface-in`/
+  `dialog-in`, 120-160ms, a 4-8px rise, all off under `prefers-reduced-motion`).
+  Deliberately **not** threads, diff rows or comment items: those re-render on every
+  SSE ping — every comment, reply and reviewed mark, plus the ~1.5s filesystem
+  poller — so an entrance there would fire continuously the whole time an agent is
+  working.
+- **Fonts ship in the binary, and `--font-mono` belongs to the theme.** The faces are
+  vendored under `web/src/fonts` and pulled in by `url()` from the `@font-face` block
+  at the top of `styles.css`, so Vite hashes them into `web/dist` and `go:embed`
+  carries them — the tool has no network at runtime, so a font it doesn't carry is a
+  font it doesn't have. `--font-sans` (Inter) is shared, but **`--font-mono` is a
+  per-theme token**: a theme that borrows an editor's colors should borrow the code
+  face that editor is designed around, so the GitHub themes get Monaspace Neon and
+  Darcula gets JetBrains Mono. Every stack keeps the old system fallbacks behind the
+  bundled family, so a face that fails to load degrades to what the app used before.
+  Three rules for adding one: **woff2 only** (every browser that runs this app reads
+  it, so a woff sibling is dead weight in the binary); **never subsetted** — a diff
+  can contain any character at all, and a code font missing glyphs shows the reviewer
+  tofu where the file has text; and **`font-display: swap`**, so a face that fails to
+  resolve leaves readable fallback text instead of hiding it for three seconds.
+  JetBrains Mono is the one static pair (400 + 700) rather than a variable face —
+  upstream ships no variable woff2, only a variable `.ttf`.
 - Corner radii come from a fixed scale, never a literal: `--radius-sm` (inline
   chips — status labels, code, kbd, thumbnails), `--radius-md` (controls & cards
   — buttons, inputs, threads, code blocks), `--radius-lg` (large surfaces — file

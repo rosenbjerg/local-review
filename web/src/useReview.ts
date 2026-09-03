@@ -176,23 +176,27 @@ export function useReview() {
     if (!headIsCurrent && uncommitted) setUncommitted(false);
   }, [headIsCurrent, uncommitted]);
 
-  // Re-enabling uncommitted should start from the default (both staged + unstaged),
-  // so reset `unstaged` whenever the uncommitted axis is off.
+  // Only the forced-off path above can now leave `unstaged` where a re-enable would
+  // inherit it (changeSide always sets both axes together), and re-enabling should
+  // start from the default — both staged and unstaged edits in.
   useEffect(() => {
     if (!uncommitted) setUnstaged(true);
   }, [uncommitted]);
 
-  // Persist from the toggles, not from an effect on the state: the two effects above
-  // also move these values, and a forced-off (head left the checked-out branch) or a
-  // reset must not overwrite what the reviewer actually chose for this repo.
-  function changeUncommitted(v: boolean) {
-    setUncommitted(v);
-    writeDiffViewPref(repo, { uncommitted: v, unstaged });
-  }
-
-  function changeUnstaged(v: boolean) {
-    setUnstaged(v);
-    writeDiffViewPref(repo, { uncommitted, unstaged: v });
+  // The reviewer picks a `Side`, not two booleans: which side the diff's after end
+  // reads from is the same three-valued thing comments and reviewed marks anchor to,
+  // so that's what the control speaks and this is where it becomes the two axes the
+  // API takes. Both axes move in one update and one pref write carries both — a
+  // write per axis would persist the other axis's pre-update value.
+  // Persisted from here rather than from an effect on the state: the guard effect
+  // above also moves these, and a forced-off (head left the checked-out branch) must
+  // not overwrite what the reviewer actually chose for this repo.
+  function changeSide(next: Side) {
+    const nextUncommitted = next !== "head";
+    const nextUnstaged = next !== "index";
+    setUncommitted(nextUncommitted);
+    setUnstaged(nextUnstaged);
+    writeDiffViewPref(repo, { uncommitted: nextUncommitted, unstaged: nextUnstaged });
   }
 
   // Change head via `changeHead` (below), which resets `from` in the same update —
@@ -564,15 +568,12 @@ export function useReview() {
     reviewedFiles,
     from,
     setFrom,
-    uncommitted,
-    changeUncommitted,
-    unstaged,
-    changeUnstaged,
     loading,
     error,
     setError,
     headIsCurrent,
     side,
+    changeSide,
     shortSha,
     repoOptions,
     headOptions,

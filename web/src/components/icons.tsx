@@ -1,0 +1,121 @@
+import type { ReactNode } from "react";
+
+// The app's inline icon set. One 24-grid, stroked in currentColor, sized by prop —
+// so an icon takes the color and the size of the control it sits in, and the whole
+// set stays visually one family.
+//
+// These replace the text glyphs the chrome used to be built from (× ‹ › ↳ ✓), which
+// render at whatever weight, size and baseline the platform's font happens to give
+// them: the same `×` was 15px in the search field, 17px in the comments pane and
+// 18px in the error banner, each optically centred by hand. A stroked path has none
+// of that — one `strokeWidth` sets the weight everywhere.
+//
+// Inline rather than an icon font or a dependency: there are a handful of them, they
+// ship inside the one binary, and `currentColor` is all the theming they need.
+function Icon({ size, children }: { size: number; children: ReactNode }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.25}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {children}
+    </svg>
+  );
+}
+
+// Close / clear. Every caller is a button that already carries its own aria-label,
+// which is why the svg above is aria-hidden throughout.
+export function IconX({ size = 14 }: { size?: number }) {
+  return (
+    <Icon size={size}>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </Icon>
+  );
+}
+
+export function IconChevronLeft({ size = 14 }: { size?: number }) {
+  return (
+    <Icon size={size}>
+      <path d="m15 18-6-6 6-6" />
+    </Icon>
+  );
+}
+
+export function IconChevronRight({ size = 14 }: { size?: number }) {
+  return (
+    <Icon size={size}>
+      <path d="m9 18 6-6-6-6" />
+    </Icon>
+  );
+}
+
+export function IconCheck({ size = 12 }: { size?: number }) {
+  return (
+    <Icon size={size}>
+      <path d="M20 6 9 17l-5-5" />
+    </Icon>
+  );
+}
+
+// The "this is a reply" marker in a reply's meta row: the branch down and to the
+// right that the ↳ glyph was standing in for.
+export function IconReply({ size = 12 }: { size?: number }) {
+  return (
+    <Icon size={size}>
+      <path d="M4 4v7a4 4 0 0 0 4 4h12" />
+      <path d="m15 10 5 5-5 5" />
+    </Icon>
+  );
+}
+
+// Larger, decorative icons — the empty states' subjects. Same grid and stroke as
+// the rest, so a 40px one reads as the same family as a 13px one.
+export function IconFolder({ size = 40 }: { size?: number }) {
+  return (
+    <Icon size={size}>
+      <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+    </Icon>
+  );
+}
+
+export function IconGitBranch({ size = 40 }: { size?: number }) {
+  return (
+    <Icon size={size}>
+      <path d="M6 3v12" />
+      <circle cx="18" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M18 9a9 9 0 0 1-9 9" />
+    </Icon>
+  );
+}
+
+export function IconGitCommit({ size = 40 }: { size?: number }) {
+  return (
+    <Icon size={size}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M3 12h6" />
+      <path d="M15 12h6" />
+    </Icon>
+  );
+}
+
+export function IconFileDiff({ size = 40 }: { size?: number }) {
+  return (
+    <Icon size={size}>
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M12 8v6" />
+      <path d="M9 11h6" />
+      <path d="M9 17h6" />
+    </Icon>
+  );
+}
