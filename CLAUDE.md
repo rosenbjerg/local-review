@@ -102,8 +102,9 @@ web/src/
                          templates + renderPrompt
   storage.ts             typed, error-swallowing localStorage helpers + the lr.* keys
   theme.ts               the theme registry (one entry per theme, naming its Shiki and
-                         mermaid themes) + the active-theme store (useTheme/setTheme),
-                         which owns <html data-theme>
+                         mermaid themes) + the theme store: the stored preference (a
+                         theme, or "system" = GitHub Dark/Light by prefers-color-scheme)
+                         and the theme it resolves to; owns <html data-theme>
   themes/darcula.ts      JetBrains Darcula's editor scheme as a hand-written TextMate
                          theme for Shiki (which ships no JetBrains theme)
   components/
@@ -727,10 +728,18 @@ web/src/
   App state, because `DiffView`, `Markdown` and the picker each need it where they
   are, and threading it would add a prop to every card and rendered body (the
   memoised `DiffView` included); it applies the attribute at import and on every set,
-  so the attribute and the React value can't disagree. **The default block also
-  matches a bare `:root`** (`:root, :root[data-theme="github-dark"]`), and
-  `readStoredTheme` trusts `lr.theme` only if it names a theme, so a removed or
-  misspelt id paints github-dark rather than nothing. **Rendered colors are keyed on
+  so the attribute and the React value can't disagree. **What's stored is a
+  preference, not a theme**: `lr.theme` holds a theme id or `system` — the default,
+  resolving to GitHub Dark or Light by `prefers-color-scheme` and following the OS
+  live (a `change` listener on the media query) until a theme is picked outright, at
+  which point the pick stays put when the desktop flips. The picker shows the
+  preference (`useThemePref`), so System stays visibly selected; everything that
+  renders reads the resolved theme (`useTheme`). No `matchMedia` — jsdom, or any
+  browser we'd not want to paint light unasked — resolves dark. **The default block
+  also matches a bare `:root`** (`:root, :root[data-theme="github-dark"]`), and
+  `readStoredPref` trusts `lr.theme` only if it names a theme or `system`, so a
+  removed or misspelt id falls back to `system` rather than painting nothing.
+  **Rendered colors are keyed on
   the theme**: Shiki tokens carry resolved hex, so both `tokenize` effects in
   `DiffView` and the highlight + mermaid passes in `Markdown` take the theme and list
   it in their deps; mermaid's theme is global config, so `renderMermaid`
@@ -1005,7 +1014,7 @@ web/src/
 - Persisted UI prefs (panel widths, selected repo, comment sort, color theme, the
   export's instructions checkbox, and the per-repo base branch, diff-view axes and
   agent prompts) go in `localStorage` under `lr.*` keys, via
-  `storage.ts`. Validate a stored value on read (`isCommentSort`, `isThemeId`, `normalizeDiffView`,
+  `storage.ts`. Validate a stored value on read (`isCommentSort`, `isThemePref`, `normalizeDiffView`,
   `readPromptOverride`'s non-blank-string check) so a stale or impossible one falls
   back to the default rather than reaching the app.
 - Modals (`.modal` inside a `.modal-backdrop`) close on Escape and backdrop

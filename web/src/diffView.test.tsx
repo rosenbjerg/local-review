@@ -30,7 +30,7 @@ vi.mock("./mermaid", () => ({ renderMermaid: vi.fn(async () => null) }));
 
 import { api } from "./api";
 import { tokenize } from "./highlight";
-import { DEFAULT_THEME, setTheme } from "./theme";
+import { DEFAULT_PREF, setThemePref } from "./theme";
 import { DiffView } from "./components/DiffView";
 import type { FileDiff } from "./types";
 
@@ -58,7 +58,7 @@ const content = (text: string, worktree = false) => ({
 });
 
 beforeEach(() => vi.clearAllMocks());
-afterEach(() => setTheme(DEFAULT_THEME));
+afterEach(() => setThemePref(DEFAULT_PREF));
 
 // A file the branch didn't touch, opened to comment on, is synthesized with no hunks
 // and a fixed status/path — so a key built from those alone never moves, and the card
@@ -407,7 +407,7 @@ test("a theme switch re-tokenizes the source under the new theme", async () => {
     expect(vi.mocked(tokenize)).toHaveBeenCalledWith("const a = 1;", "typescript", "github-dark")
   );
 
-  act(() => setTheme("github-light"));
+  act(() => setThemePref("github-light"));
   await waitFor(() =>
     expect(vi.mocked(tokenize)).toHaveBeenCalledWith("const a = 1;", "typescript", "github-light")
   );

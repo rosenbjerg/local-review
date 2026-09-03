@@ -28,44 +28,83 @@ export const THEMES: readonly Theme[] = [
   { id: "darcula", label: "JetBrains Darcula", shiki: "darcula", mermaid: "dark" },
 ];
 
-export const DEFAULT_THEME: ThemeId = "github-dark";
+// What the picker stores: a theme, or "system" — GitHub Dark or Light by the OS
+// setting, followed live until a theme is picked outright. It's the default, so a
+// reviewer who never opens the picker gets the scheme their desktop already uses.
+export type ThemePref = ThemeId | "system";
+export const DEFAULT_PREF: ThemePref = "system";
 
 export function isThemeId(v: unknown): v is ThemeId {
   return THEMES.some((t) => t.id === v);
+}
+
+export function isThemePref(v: unknown): v is ThemePref {
+  return v === "system" || isThemeId(v);
 }
 
 export function themeOf(id: ThemeId): Theme {
   return THEMES.find((t) => t.id === id) ?? THEMES[0];
 }
 
-// A stored value counts only if it names a theme: a removed or misspelt id falls back
-// to the default rather than leaving <html> with a data-theme no token block matches.
-export function readStoredTheme(): ThemeId {
+// A stored value counts only if it names a theme or "system": a removed or misspelt
+// id falls back to the default rather than leaving <html> with a data-theme no token
+// block matches.
+export function readStoredPref(): ThemePref {
   const v = getString(LS.theme);
-  return isThemeId(v) ? v : DEFAULT_THEME;
+  return isThemePref(v) ? v : DEFAULT_PREF;
+}
+
+const DARK_QUERY = "(prefers-color-scheme: dark)";
+
+// No answer reads as dark: jsdom has no matchMedia, and neither does any browser
+// we'd want to paint light unasked.
+function systemTheme(): ThemeId {
+  return typeof matchMedia === "function" && !matchMedia(DARK_QUERY).matches
+    ? "github-light"
+    : "github-dark";
+}
+
+export function resolveTheme(pref: ThemePref): ThemeId {
+  return pref === "system" ? systemTheme() : pref;
 }
 
 // The active theme lives outside React. DiffView, Markdown and the picker each read
 // it where they are, so it needn't be threaded from App through every card and every
 // rendered body — and the store owns the <html> attribute, so the two can't disagree.
-let current: ThemeId = readStoredTheme();
+let pref: ThemePref = readStoredPref();
+let current: ThemeId = resolveTheme(pref);
 const listeners = new Set<() => void>();
 
-function apply(id: ThemeId): void {
+function paint(id: ThemeId): void {
+  current = id;
   document.documentElement.dataset.theme = id;
+  for (const l of listeners) l();
 }
-apply(current);
+paint(current);
+
+// Follow the OS only while the preference is "system": a theme picked outright stays
+// put when the desktop flips.
+if (typeof matchMedia === "function") {
+  matchMedia(DARK_QUERY).addEventListener("change", () => {
+    if (pref === "system") paint(systemTheme());
+  });
+}
 
 export function getTheme(): ThemeId {
   return current;
 }
 
-export function setTheme(id: ThemeId): void {
-  if (id === current) return;
-  current = id;
-  apply(id);
-  setString(LS.theme, id);
-  for (const l of listeners) l();
+export function getThemePref(): ThemePref {
+  return pref;
+}
+
+// One notification serves both snapshots: a consumer whose own (theme or pref)
+// didn't change bails out of the re-render.
+export function setThemePref(next: ThemePref): void {
+  if (next === pref) return;
+  pref = next;
+  setString(LS.theme, next);
+  paint(resolveTheme(next));
 }
 
 function subscribe(l: () => void): () => void {
@@ -73,6 +112,12 @@ function subscribe(l: () => void): () => void {
   return () => listeners.delete(l);
 }
 
+// The resolved theme — what the tokens, Shiki and mermaid render.
 export function useTheme(): ThemeId {
   return useSyncExternalStore(subscribe, getTheme);
+}
+
+// The stored choice — what the picker shows.
+export function useThemePref(): ThemePref {
+  return useSyncExternalStore(subscribe, getThemePref);
 }
