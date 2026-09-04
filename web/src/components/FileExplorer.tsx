@@ -4,7 +4,7 @@ import { type Comment, type FileDiff, effectivePath } from "../types";
 import { Chevron } from "./Chevron";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { HighlightMatch } from "./HighlightMatch";
-import { IconX } from "./icons";
+import { IconChevronLeft, IconX } from "./icons";
 
 interface Props {
   files: FileDiff[];
@@ -15,6 +15,7 @@ interface Props {
   onToggleReviewed: (path: string, reviewed: boolean) => void;
   onToggleFolder: (paths: string[], reviewed: boolean) => void;
   onAddFile: () => void;
+  onCollapse: () => void;
   searchRef?: RefObject<HTMLInputElement>;
 }
 
@@ -103,6 +104,7 @@ export function FileExplorer({
   onToggleReviewed,
   onToggleFolder,
   onAddFile,
+  onCollapse,
   searchRef,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -291,6 +293,15 @@ export function FileExplorer({
             aria-label="Add a file to comment on"
           >
             +
+          </button>
+          <button
+            className="btn btn-icon pane-collapse"
+            onClick={onCollapse}
+            title="Hide the files panel ( [ )"
+            aria-label="Hide the files panel"
+            aria-expanded
+          >
+            <IconChevronLeft />
           </button>
         </div>
         <div

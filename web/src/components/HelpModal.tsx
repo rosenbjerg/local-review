@@ -53,6 +53,12 @@ export function HelpModal({ onClose }: { onClose: () => void }) {
             </tr>
             <tr>
               <td>
+                <kbd>[</kbd> / <kbd>]</kbd>
+              </td>
+              <td>Show or hide the files / comments panel</td>
+            </tr>
+            <tr>
+              <td>
                 <kbd>?</kbd>
               </td>
               <td>Toggle this help</td>

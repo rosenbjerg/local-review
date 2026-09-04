@@ -9,6 +9,7 @@ import { FileExplorer, orderedFiles } from "./components/FileExplorer";
 import { FindBar } from "./components/FindBar";
 import { HelpModal } from "./components/HelpModal";
 import { LazyFile } from "./components/LazyFile";
+import { PaneRail } from "./components/PaneRail";
 import { ResetConfirmModal } from "./components/ResetConfirmModal";
 import { ReviewSummary } from "./components/ReviewSummary";
 import { TopBar } from "./components/TopBar";
@@ -102,7 +103,18 @@ export default function App() {
   // re-rendering when this changes, so it needn't live outside React.
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
-  const { leftW, rightW, mainRef, startResize, onResizeKey } = usePanelResize();
+  const {
+    leftW,
+    rightW,
+    leftOpen,
+    rightOpen,
+    toggleLeft,
+    toggleRight,
+    gridTemplateColumns,
+    mainRef,
+    startResize,
+    onResizeKey,
+  } = usePanelResize();
   // Highlight the file scrolled to the top of the diff, not just the last-clicked
   // one; suppress it during programmatic scrolls so it doesn't flicker en route.
   const { suppress: suppressActiveFile } = useActiveFile(diffColRef, setSelectedFile, review?.id);
@@ -297,7 +309,17 @@ export default function App() {
     onMarkReviewed: markReviewedAndAdvance,
     onOpenHelp: () => setShowHelp(true),
     onCloseHelp: () => setShowHelp(false),
-    onFocusSearch: () => explorerSearchRef.current?.focus(),
+    // `/` reaches the search even with the pane shut: open it, then focus on the
+    // frame after the commit, since the input doesn't exist until then.
+    onFocusSearch: () => {
+      if (leftOpen) explorerSearchRef.current?.focus();
+      else {
+        toggleLeft();
+        requestAnimationFrame(() => explorerSearchRef.current?.focus());
+      }
+    },
+    onToggleFilesPane: toggleLeft,
+    onToggleCommentsPane: toggleRight,
     hasHighlight: highlight.term !== null,
     onNextMatch: highlight.next,
     onPrevMatch: highlight.prev,
@@ -408,35 +430,39 @@ export default function App() {
         ))}
 
       {review && (
-        <div
-          className="main"
-          ref={mainRef}
-          style={{ gridTemplateColumns: `${leftW}px 6px 1fr 6px ${rightW}px` }}
-        >
-          <aside className="explorer-column">
-            <FileExplorer
-              files={allFiles}
-              comments={comments}
-              reviewed={reviewedFiles}
-              selected={selectedFile}
-              onSelect={jumpToFile}
-              onToggleReviewed={toggleReviewed}
-              onToggleFolder={setReviewedPaths}
-              onAddFile={() => setShowAddFile(true)}
-              searchRef={explorerSearchRef}
-            />
+        <div className="main" ref={mainRef} style={{ gridTemplateColumns }}>
+          <aside className={`explorer-column${leftOpen ? "" : " pane-collapsed"}`}>
+            {!leftOpen && (
+              <PaneRail label="Files" count={allFiles.length} side="left" onExpand={toggleLeft} />
+            )}
+            {leftOpen && (
+              <FileExplorer
+                files={allFiles}
+                comments={comments}
+                reviewed={reviewedFiles}
+                selected={selectedFile}
+                onSelect={jumpToFile}
+                onToggleReviewed={toggleReviewed}
+                onToggleFolder={setReviewedPaths}
+                onAddFile={() => setShowAddFile(true)}
+                onCollapse={toggleLeft}
+                searchRef={explorerSearchRef}
+              />
+            )}
           </aside>
+          {/* A shut pane's resizer is inert: dragging it would clamp the stored
+              width back up to the minimum while the pane stayed collapsed. */}
           <div
-            className="resizer"
+            className={`resizer${leftOpen ? "" : " resizer-inert"}`}
             role="separator"
             aria-orientation="vertical"
             aria-label="Resize files panel"
             aria-valuemin={160}
             aria-valuemax={560}
             aria-valuenow={leftW}
-            tabIndex={0}
-            onMouseDown={(e) => startResize(e, "left")}
-            onKeyDown={(e) => onResizeKey(e, "left")}
+            tabIndex={leftOpen ? 0 : -1}
+            onMouseDown={leftOpen ? (e) => startResize(e, "left") : undefined}
+            onKeyDown={leftOpen ? (e) => onResizeKey(e, "left") : undefined}
           />
           <div className="diff-pane">
             <div className="diff-column" ref={diffColRef}>
@@ -498,34 +524,47 @@ export default function App() {
             )}
           </div>
           <div
-            className="resizer"
+            className={`resizer${rightOpen ? "" : " resizer-inert"}`}
             role="separator"
             aria-orientation="vertical"
             aria-label="Resize comments panel"
             aria-valuemin={220}
             aria-valuemax={640}
             aria-valuenow={rightW}
-            tabIndex={0}
-            onMouseDown={(e) => startResize(e, "right")}
-            onKeyDown={(e) => onResizeKey(e, "right")}
+            tabIndex={rightOpen ? 0 : -1}
+            onMouseDown={rightOpen ? (e) => startResize(e, "right") : undefined}
+            onKeyDown={rightOpen ? (e) => onResizeKey(e, "right") : undefined}
           />
-          <aside className="side-column">
-            <ReviewSummary summary={review.summary} onSave={setSummary} />
-            <CommentsPanel
-              comments={sortedComments}
-              total={comments.length}
-              awaitingYou={awaitingYou}
-              sort={commentSort}
-              onSortChange={(v) => {
-                setCommentSort(v);
-                setString(LS.commentSort, v);
-              }}
-              filter={commentFilter}
-              onFilterChange={setCommentFilter}
-              authors={commentAuthors}
-              onJump={jumpTo}
-              onDelete={handleDelete}
-            />
+          <aside className={`side-column${rightOpen ? "" : " pane-collapsed"}`}>
+            {!rightOpen && (
+              <PaneRail
+                label="Comments"
+                count={comments.length}
+                side="right"
+                onExpand={toggleRight}
+              />
+            )}
+            {rightOpen && (
+              <>
+                <ReviewSummary summary={review.summary} onSave={setSummary} />
+                <CommentsPanel
+                  comments={sortedComments}
+                  total={comments.length}
+                  awaitingYou={awaitingYou}
+                  sort={commentSort}
+                  onSortChange={(v) => {
+                    setCommentSort(v);
+                    setString(LS.commentSort, v);
+                  }}
+                  filter={commentFilter}
+                  onFilterChange={setCommentFilter}
+                  authors={commentAuthors}
+                  onJump={jumpTo}
+                  onDelete={handleDelete}
+                  onCollapse={toggleRight}
+                />
+              </>
+            )}
           </aside>
         </div>
       )}

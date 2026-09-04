@@ -19,6 +19,8 @@ function setup() {
     onOpenHelp: vi.fn(),
     onCloseHelp: vi.fn(),
     onFocusSearch: vi.fn(),
+    onToggleFilesPane: vi.fn(),
+    onToggleCommentsPane: vi.fn(),
     onNextMatch: vi.fn(),
     onPrevMatch: vi.fn(),
     onDismissHighlight: vi.fn(),
@@ -65,4 +67,22 @@ test("a button outside the composer still fires them", () => {
 
   fireEvent.keyDown(elsewhere, { key: "v" });
   expect(h.onMarkReviewed).toHaveBeenCalled();
+});
+
+// The pane toggles are ordinary single-key shortcuts, so they have to obey the
+// same bail as the rest — a `]` typed into a comment is a bracket, not a command.
+test("[ and ] toggle the panes, and not from inside a composer", () => {
+  const h = setup();
+  const elsewhere = target(`<div class="file-header"><button>Reply</button></div>`);
+  const inComposer = target(`<div class="composer"><button>Cancel</button></div>`);
+
+  fireEvent.keyDown(elsewhere, { key: "[" });
+  fireEvent.keyDown(elsewhere, { key: "]" });
+  expect(h.onToggleFilesPane).toHaveBeenCalledTimes(1);
+  expect(h.onToggleCommentsPane).toHaveBeenCalledTimes(1);
+
+  fireEvent.keyDown(inComposer, { key: "[" });
+  fireEvent.keyDown(inComposer, { key: "]" });
+  expect(h.onToggleFilesPane).toHaveBeenCalledTimes(1);
+  expect(h.onToggleCommentsPane).toHaveBeenCalledTimes(1);
 });

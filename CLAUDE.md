@@ -155,6 +155,8 @@ web/src/
     Modal.tsx            shared dialog shell: backdrop, focus trap, Escape, dialog aria
     Combobox.tsx         searchable single-select — a native <select> can't filter, which
                          gets unwieldy with many branches
+    PaneRail.tsx         the 28px stub a collapsed side pane leaves behind: the
+                         reopen button, the pane's name set vertically, its count
     ViewToggle.tsx       data-driven segmented control (Changed/Full, Text/Image,
                          Code/Rendered, Preview/Raw, the diff side); `disabled`
                          dims the whole group, never single options
@@ -901,6 +903,18 @@ web/src/
   else resets that state. Covered by `web/src/diffView.test.tsx` — including that a
   no-op diff refetch still *keeps* the source, or every ping would refetch every
   expanded file.
+- **Either side pane collapses to a 28px rail, never to zero.** A pane with no
+  edge left on screen is one the reviewer has no way back to, and the 6px resizer
+  beside it is a hairline that says nothing about what it hides — so `PaneRail`
+  holds the reopen button, the pane's name and the count it was showing.
+  `usePanelResize` owns the two open flags alongside the two widths, and a
+  collapsed pane **keeps its stored width**, so reopening restores it instead of
+  snapping to the default. Three things that go with it: its resizer turns inert
+  while it's shut (`resizer-inert`, `tabIndex -1`, handlers dropped) — a drag
+  would otherwise clamp the stored width back up to the minimum while the pane
+  stayed collapsed; `/` **opens** the files pane before focusing its search, on
+  the frame after the commit, since the input doesn't exist until then; and both
+  flags persist (`lr.leftOpen`/`lr.rightOpen`), like the widths beside them.
 - **Large change-sets stay responsive** via: `LazyFile` viewport-mounting (only
   near-viewport files fetch/tokenize/render), files > `LARGE_FILE_LINES` (500)
   auto-collapse, files > 2000 lines skip highlighting, and panel resize writes
@@ -1039,7 +1053,9 @@ web/src/
   order via `orderedCommentIds`, stepping from `activeComment`), `v` mark the
   selected file reviewed and jump to the next unreviewed one (`nextUnreviewed` in
   `reviewNav.ts`; unmarking deliberately stays put), `e` export, `r`
-  reload, `/` focus the file search, `?` help overlay, `Enter`/`Shift+Enter` next/prev
+  reload, `/` focus the file search, `?` help overlay, `[`/`]` show or hide the files /
+  comments pane (the brackets sit either side of the diff the way the panes do),
+  `Enter`/`Shift+Enter` next/prev
   occurrence match (only while a highlight is live, and never from a focused
   button/link, so it can't steal the key from a control), `Escape` clear an occurrence
   highlight. The handler bails when the target is an input/textarea/select
@@ -1076,7 +1092,11 @@ web/src/
   `-soft` tints (`--accent-soft`/`--danger-soft`/`--success-soft`/`--warn-soft`/
   `--info-soft`/`--muted-soft` — a semantic color at ~12-14% alpha via `color-mix`,
   the fill behind every `.status-*`/`.badge-*` mark and the hover of a control that
-  carries that color), `--accent-ring` (the wider, fainter halo behind the focus
+  carries that color), `--control-border` (the outline of a small control that has
+  to be findable on its own — the checkbox: `--border` is a *divider* colour, and
+  at ~1.4:1 on `--bg-elev` it disappears entirely at the bottom of the luminance
+  range, so this pulls it two thirds of the way to `--muted` for ~3:1 in every
+  theme), `--accent-ring` (the wider, fainter halo behind the focus
   outline), the two elevation steps (`--elev-1` for a bar that something scrolls
   under, `--elev-2` for a surface floating free of the page — modal, dropdown,
   popover), `--on-accent` (foreground on saturated accent/success fills),
@@ -1120,11 +1140,37 @@ web/src/
   resolve leaves readable fallback text instead of hiding it for three seconds.
   JetBrains Mono is the one static pair (400 + 700) rather than a variable face —
   upstream ships no variable woff2, only a variable `.ttf`.
-- Corner radii come from a fixed scale, never a literal: `--radius-sm` (inline
-  chips — status labels, code, kbd, thumbnails), `--radius-md` (controls & cards
-  — buttons, inputs, threads, code blocks), `--radius-lg` (large surfaces — file
-  cards, modals), `--radius-pill` (count/type badges).
-- Persisted UI prefs (panel widths, selected repo, comment sort, color theme, the
+- Corner radii come from a fixed scale, never a literal: `--radius-xs` (controls
+  too small for anything larger — the 14px checkbox, where `--radius-sm` leaves a
+  2px straight edge, i.e. a circle, and a checkbox that reads as a radio is worse
+  than a square one), `--radius-sm` (inline chips — status labels, code, kbd,
+  thumbnails), `--radius-md` (controls & cards — buttons, inputs, threads, code
+  blocks), `--radius-lg` (large surfaces — file cards, modals), `--radius-pill`
+  (count/type badges).
+- **Checkboxes are drawn here, not by the platform.** `appearance: none` on the
+  bare `input[type="checkbox"]`, with the tick and the indeterminate bar as
+  `::after` — a native one ignores every token but `color-scheme`, sizes itself
+  differently per browser, and lands at a weight that has nothing to do with the
+  tinted chips around it. The real `<input>` stays, so the wrapping `<label>`s and
+  the tree's `indeterminate` property still work. Two traps: the `*` reset at the
+  top doesn't match pseudo-elements and `box-sizing` isn't inherited, so the tick
+  states `border-box` itself or its borders overhang the box; and the fill is
+  `--accent`, not `--success` — the latter is spoken for by the reviewed-progress
+  bar sitting right above those rows, and white clears the greens by less.
+- **Both side panes reveal their per-row marks on pane hover, not row hover** —
+  the explorer's unchecked boxes on `.explorer-column:hover`, the comments pane's
+  delete buttons on `.side-column:hover`. Each of those is a pass down the list
+  (mark off the files you've read; decide which threads to drop), and a mark that
+  only exists under the pointer makes every item a separate act of aiming — while
+  five always-on marks per tree row, or a `--danger` glyph on every comment card,
+  is noise down a narrow column. `opacity`, never `display`, so nothing reflows
+  under the pointer, and `:focus-within`/`:focus-visible` carries the keyboard,
+  which has no hover. A *checked* or indeterminate box always shows: that one is
+  state rather than an affordance — which is also why the explorer's reveals need
+  an `.explorer-list` in the selector, or they lose on specificity to the
+  `:not(:checked):not(:indeterminate)` rule and the box never appears at all.
+- Persisted UI prefs (panel widths and open/collapsed flags, selected repo,
+  comment sort, color theme, the
   export's instructions checkbox, and the per-repo base branch, diff-view axes and
   agent prompts) go in `localStorage` under `lr.*` keys, via
   `storage.ts`. Validate a stored value on read (`isCommentSort`, `isThemePref`, `normalizeDiffView`,

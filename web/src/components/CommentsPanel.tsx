@@ -15,7 +15,7 @@ import type { Comment } from "../types";
 import { effectivePath } from "../types";
 import { CommentPreview } from "./CommentPreview";
 import { HighlightMatch } from "./HighlightMatch";
-import { IconX } from "./icons";
+import { IconChevronRight, IconX } from "./icons";
 
 interface Props {
   // Already filtered and sorted — the same list the n/p shortcuts step through.
@@ -31,6 +31,7 @@ interface Props {
   authors: string[];
   onJump: (id: number) => void;
   onDelete: (id: number) => void;
+  onCollapse: () => void;
 }
 
 // `comments` arrives sorted (see commentSort.sortComments), which keeps each
@@ -57,6 +58,7 @@ export function CommentsPanel({
   authors,
   onJump,
   onDelete,
+  onCollapse,
 }: Props) {
   const narrowed = isFiltered(filter);
   const needle = queryNeedle(filter.query);
@@ -70,6 +72,15 @@ export function CommentsPanel({
     <div className="comments-panel">
       <div className="comments-panel-header">
         <div className="comments-title">
+          <button
+            className="btn btn-icon pane-collapse"
+            onClick={onCollapse}
+            title="Hide the comments panel ( ] )"
+            aria-label="Hide the comments panel"
+            aria-expanded
+          >
+            <IconChevronRight />
+          </button>
           <h2>
             Comments{" "}
             <span className="muted">({narrowed ? `${comments.length} of ${total}` : total})</span>

@@ -18,6 +18,8 @@ export interface Shortcuts {
   onOpenHelp: () => void;
   onCloseHelp: () => void;
   onFocusSearch: () => void;
+  onToggleFilesPane: () => void;
+  onToggleCommentsPane: () => void;
   // An occurrence highlight is live, so Enter steps through its matches.
   hasHighlight: boolean;
   onNextMatch: () => void;
@@ -100,6 +102,15 @@ export function useKeyboardShortcuts(opts: Shortcuts) {
         case "/":
           e.preventDefault();
           o.onFocusSearch();
+          break;
+        // The bracket keys sit either side of the diff the way the panes do.
+        case "[":
+          e.preventDefault();
+          o.onToggleFilesPane();
+          break;
+        case "]":
+          e.preventDefault();
+          o.onToggleCommentsPane();
           break;
         // Only claimed while a highlight is live, and never from a control that
         // Enter would otherwise activate.

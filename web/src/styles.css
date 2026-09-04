@@ -50,9 +50,13 @@
 }
 
 :root {
-  /* Corner-radius scale: sm for inline chips (labels, code, kbd, thumbnails),
-     md for controls & cards (buttons, inputs, threads, code blocks), lg for
-     large surfaces (file cards, modals), pill for count/type badges. */
+  /* Corner-radius scale: xs for controls too small for anything larger (the 14px
+     checkbox — sm's 6px leaves a 2px straight edge, i.e. a circle, and a checkbox
+     that reads as a radio is worse than a square one), sm for inline chips
+     (labels, code, kbd, thumbnails), md for controls & cards (buttons, inputs,
+     threads, code blocks), lg for large surfaces (file cards, modals), pill for
+     count/type badges. */
+  --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
@@ -82,6 +86,16 @@
   --warn-soft: color-mix(in srgb, var(--warn) 14%, transparent);
   --info-soft: color-mix(in srgb, var(--info) 14%, transparent);
   --muted-soft: color-mix(in srgb, var(--muted) 14%, transparent);
+
+  /* The outline of a small control that has to be findable on its own — the
+     checkbox. --border is a *divider* colour, picked to separate two surfaces
+     without drawing attention, which is the opposite requirement: on --bg-elev it
+     lands at ~1.4:1 in all three themes, and at the bottom of the luminance range
+     (github-dark's #30363d on #161b22) that reads as nothing at all. Pulling it
+     two thirds of the way to --muted puts every theme at ~3:1, the non-text
+     contrast floor for a UI component, without making the box shout. Derived from
+     the two tokens rather than hand-picked per theme, so the three can't drift. */
+  --control-border: color-mix(in srgb, var(--border) 35%, var(--muted));
 
   /* The UI face. --font-mono is deliberately *not* here: it belongs to the theme
      (see the blocks below), since a theme that borrows an editor's colors should
@@ -251,12 +265,73 @@
   box-sizing: border-box;
 }
 
-/* Checkboxes: tint the checked state with the accent instead of the OS blue. */
+/* Checkboxes are drawn here, not by the platform. A native one is OS-painted:
+   it ignores every token but color-scheme, sizes itself differently per browser,
+   and lands at a visual weight that has nothing to do with the tinted chips and
+   bordered controls around it — which is what made it the most dated element in
+   the app. `appearance: none` keeps the real <input> (so the wrapping <label>,
+   the :checked state and the tree's `indeterminate` property all still work) and
+   leaves us the box; the mark is a ::after — a rotated L for the check, a bar for
+   indeterminate — so a row costs no icon component and no extra SVG. */
 input[type="checkbox"] {
-  accent-color: var(--accent);
+  appearance: none;
+  flex: none;
+  position: relative;
   width: 14px;
   height: 14px;
+  margin: 0;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-xs);
+  background: var(--bg);
   cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
+}
+input[type="checkbox"]:hover:not(:checked):not(:indeterminate) {
+  border-color: var(--text);
+}
+/* --accent, not --success: this is "on", and --success is spoken for by the
+   explorer's reviewed-progress fill right above these rows. White on the accent
+   also clears the greens on contrast, which matters for a 2px glyph. */
+input[type="checkbox"]:checked,
+input[type="checkbox"]:indeterminate {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+/* The tick: a 3x7 box showing only its right and bottom edges, turned 45°. Sized
+   in px against the 14px box rather than in relative units — at this size a
+   fractional stroke is the difference between a crisp mark and a grey smudge. */
+input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  /* The `*` reset above doesn't match pseudo-elements and box-sizing isn't
+     inherited, so this one states it: without it the borders are added to the
+     4x8 and the tick overhangs the box. */
+  box-sizing: border-box;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--on-accent);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+/* Partial (a folder with some of its files reviewed). Last, so it wins over the
+   tick above on the impossible-in-practice checked+indeterminate pair. */
+input[type="checkbox"]:indeterminate::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 50%;
+  margin-top: -1px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--on-accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  input[type="checkbox"] {
+    transition: none;
+  }
 }
 
 /* Slim, theme-matched scrollbars. */
@@ -499,7 +574,8 @@ select {
 .comment-nav,
 .comment-nav-delete,
 .banner-dismiss {
-  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease,
+    opacity 0.12s ease;
 }
 .btn:active:not(:disabled) {
   transform: translateY(1px);
@@ -672,6 +748,75 @@ textarea:focus-visible {
 .side-column {
   overflow-y: auto;
   background: var(--bg-elev);
+}
+
+/* A collapsed pane keeps a 28px stub rather than going to zero (see RAIL_WIDTH
+   in usePanelResize): a pane with no edge left on screen is one the reviewer has
+   no way back to, and the 6px resizer beside it is a hairline that says nothing
+   about what it hides. overflow:hidden rather than the panes' own auto — at 28px
+   a scrollbar would be most of the pane. */
+.pane-collapsed {
+  overflow: hidden;
+}
+.pane-rail {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+}
+.pane-rail:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+/* Inset, like the resizer's: the column clips its overflow, so an offset ring
+   would be cut off on three sides. */
+.pane-rail:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* The pane's name, read top-to-bottom down the rail. It takes the leftover
+   height and clips, so a short window loses the tail of the word rather than
+   pushing the chevron and count out of the pane. */
+.pane-rail-label {
+  writing-mode: vertical-rl;
+  min-height: 0;
+  overflow: hidden;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.pane-rail-count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  background: var(--muted-soft);
+  border-radius: var(--radius-pill);
+  padding: 0 5px;
+}
+/* The divider beside a collapsed pane is still the edge, but no longer a handle:
+   a drag would clamp the stored width back up to the minimum while the pane
+   stayed shut. */
+.resizer-inert {
+  pointer-events: none;
+  cursor: default;
+}
+/* The collapse control in each pane's header. Quiet — it's the pane's escape
+   hatch, not one of its tools — so it drops .btn's surface and border and only
+   takes a fill on hover. */
+.pane-collapse {
+  padding: 3px 4px;
+  background: none;
+  border-color: transparent;
+}
+.pane-collapse:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 /* Empty states (see EmptyState.tsx): a centred stack — a large, faint icon over a
    one-line statement and a hint saying what to do about it. The loading variants
@@ -1040,8 +1185,12 @@ textarea:focus-visible {
 .fstat-unchanged {
   color: var(--muted);
 }
+/* No font-family: the tree is a list of names, not code, and that's the call every
+   IDE's file pane makes. It also puts files and folders in one face — .tree-folder
+   was already inheriting the UI sans — where the mono set the two apart for no
+   reason the reader could act on. The mono face stays where the characters have to
+   line up: the status letter beside it, the +/- counts, the diff itself. */
 .fname {
-  font-family: var(--font-mono);
   font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
@@ -1093,6 +1242,24 @@ textarea:focus-visible {
 .tree-dir:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+}
+/* An unmarked check target stays out of the way until the reviewer reaches for
+   the pane. At rest a tree row shows what it is — status letter, name, +/-
+   counts, comment count — and five always-on marks per row was four too many.
+   Revealed for the whole pane at once rather than per row, the same bargain the
+   comments pane's delete buttons make: marking off a pass of files is a run down
+   the list, and a box that only exists under the pointer makes each one a
+   separate act of aiming. Opacity, never display, so nothing reflows under the
+   pointer, and a checked or indeterminate box always shows: that one is state,
+   not an affordance. Row-level :focus-within carries the keyboard, which has no
+   hover. The .explorer-list part of both reveals is there for specificity —
+   without it they lose to the :not() pair above and the box never appears. */
+.explorer-list input[type="checkbox"]:not(:checked):not(:indeterminate) {
+  opacity: 0;
+}
+.explorer-column:hover .explorer-list input[type="checkbox"],
+.explorer-list .tree-row:focus-within input[type="checkbox"] {
+  opacity: 1;
 }
 .tree-chevron {
   flex: none;
@@ -1683,6 +1850,18 @@ textarea:focus-visible {
 .comment-nav-delete:hover {
   background: var(--danger-soft);
 }
+/* Revealed for the whole pane at once, not per card. Deciding which thread to
+   drop is a pass down the list, and a mark that only exists under the pointer
+   turns that into hunting one card at a time — while a --danger glyph on every
+   card at rest is a red rash down a narrow column. Focus-visible carries the
+   keyboard, which has no hover to trigger. */
+.comment-nav-delete {
+  opacity: 0;
+}
+.side-column:hover .comment-nav-delete,
+.comment-nav-delete:focus-visible {
+  opacity: 1;
+}
 .comment-preview {
   font-size: 13px;
   overflow: hidden;
@@ -1779,8 +1958,11 @@ textarea:focus-visible {
   font-size: 14px;
   margin: 0;
 }
-/* Keeps the title and the awaiting count together on the left, so the header's
-   space-between still pushes only the sort select to the right. */
+/* Keeps the collapse button, the title and the awaiting count together on the
+   left, so the header's space-between still pushes only the sort select to the
+   right. The button leads the row rather than ending it: both panes put their
+   collapse control against the edge the diff is on, so the two sit either side
+   of it in mirror image. */
 .comments-title {
   display: flex;
   align-items: center;

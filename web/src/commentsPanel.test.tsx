@@ -39,6 +39,7 @@ function panel(filter: CommentFilter, onFilterChange = () => {}) {
       authors={["reviewer"]}
       onJump={() => {}}
       onDelete={() => {}}
+      onCollapse={() => {}}
     />
   );
 }

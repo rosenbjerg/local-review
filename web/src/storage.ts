@@ -5,6 +5,8 @@ import type { PromptKind } from "./prompts";
 export const LS = {
   leftWidth: "lr.leftWidth",
   rightWidth: "lr.rightWidth",
+  leftOpen: "lr.leftOpen",
+  rightOpen: "lr.rightOpen",
   baseByRepo: "lr.baseByRepo",
   diffViewByRepo: "lr.diffViewByRepo",
   repo: "lr.repo",
