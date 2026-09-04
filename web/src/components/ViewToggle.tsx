@@ -9,12 +9,15 @@ export function ViewToggle<T extends string>({
   disabled,
 }: {
   value: T;
-  options: { value: T; label: string; title?: string }[];
+  // A per-option `disabled` is for a value that would do nothing in the current
+  // selection (Committed, when the base resolves to head — an empty range by
+  // construction); give it a `title` saying why, since a dimmed option with no
+  // explanation reads as a bug.
+  options: { value: T; label: string; title?: string; disabled?: boolean }[];
   onChange: (value: T) => void;
   ariaLabel: string;
-  // Disables the whole group, for a control that has only one valid value left
-  // (the side toggle when head isn't the checked-out branch) — never per option,
-  // so the group can't present a choice that does nothing.
+  // Disables the whole group, for a control with only one valid value left — the
+  // side toggle when head isn't the checked-out branch.
   disabled?: boolean;
 }) {
   return (
@@ -24,7 +27,7 @@ export function ViewToggle<T extends string>({
           key={o.value}
           className={value === o.value ? "active" : ""}
           aria-pressed={value === o.value}
-          disabled={disabled}
+          disabled={disabled || o.disabled}
           title={o.title}
           onClick={() => onChange(o.value)}
         >

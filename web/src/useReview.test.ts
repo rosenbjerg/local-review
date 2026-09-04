@@ -34,7 +34,7 @@ vi.mock("./api", () => {
 });
 
 import { api } from "./api";
-import { readDiffViewPref } from "./storage";
+import { readBasePref, readDiffViewPref, writeBasePref } from "./storage";
 import { useReview } from "./useReview";
 
 const branch = (
@@ -49,6 +49,12 @@ const branch = (
 });
 const repoInfo = (name: string, lastActivity = "2026-09-01") => ({ name, lastActivity });
 const mainOnly = { main: "main", branches: [branch("main", { current: true, main: true })] };
+// A checked-out feature branch off main: the fixture for anything about the view axes,
+// since on `main` itself the base resolves to head and the committed side is forced off.
+const onFeature = {
+  main: "main",
+  branches: [branch("main", { main: true }), branch("feature", { current: true })],
+};
 
 beforeEach(() => {
   localStorage.clear();
@@ -100,8 +106,9 @@ test("changing head resets the 'from' picker to all", async () => {
 // them lives in changeSide alone — including the pref write, which as two writes (one
 // per axis) persisted the other axis's pre-update value.
 test("changeSide moves both axes, and persists them together", async () => {
+  vi.mocked(api.branches).mockResolvedValue(onFeature);
   const { result } = renderHook(() => useReview());
-  await waitFor(() => expect(result.current.head).toBe("main")); // headIsCurrent
+  await waitFor(() => expect(result.current.head).toBe("feature")); // headIsCurrent
 
   expect(result.current.side).toBe("head");
 
@@ -187,6 +194,7 @@ test("an SSE diff ping keeps a 'from' that only slid out of the commit window", 
 // The frontend→backend contract: each view-axis combination must map to the right
 // api.diff params, or the backend computes the wrong diff scope.
 test("diffOpts maps the view axes to the api.diff params", async () => {
+  vi.mocked(api.branches).mockResolvedValue(onFeature);
   const { result } = renderHook(() => useReview());
   await waitFor(() => expect(result.current.review).not.toBeNull());
   const lastOpts = () => vi.mocked(api.diff).mock.calls.at(-1)?.[2] as Record<string, unknown> | undefined;
@@ -230,13 +238,14 @@ test("uncommitted turns off when head isn't the checked-out branch", async () =>
 // The view axes are remembered per repo, so reopening a repo lands on the side you
 // were last reviewing it from — and only that repo's (each keeps its own entry).
 test("the view axes are restored per repo", async () => {
+  vi.mocked(api.branches).mockResolvedValue(onFeature);
   const { result } = renderHook(() => useReview());
-  await waitFor(() => expect(result.current.head).toBe("main"));
+  await waitFor(() => expect(result.current.head).toBe("feature"));
 
   act(() => result.current.changeSide("index"));
 
   act(() => result.current.changeRepo("B"));
-  await waitFor(() => expect(result.current.head).toBe("main"));
+  await waitFor(() => expect(result.current.repo).toBe("B"));
   expect(result.current.side).toBe("head"); // B has no pref of its own
 
   act(() => result.current.changeRepo("A"));
@@ -522,4 +531,86 @@ test("a repo with no commits (branches: null) does not crash the hook", async ()
   expect(result.current.head).toBe("");
   // No head means no review was attempted, so nothing to show and nothing to error.
   expect(result.current.review).toBeNull();
+});
+
+// Head as its own base compares a branch with itself: on the committed side that range
+// is empty by construction (merge-base(head, head) is head), so the pick isn't offered
+// there. On an uncommitted side it's the one way to say "only my uncommitted work".
+test("the base picker offers the selected head only on an uncommitted side", async () => {
+  vi.mocked(api.branches).mockResolvedValue({
+    main: "main",
+    branches: [branch("main", { main: true }), branch("feature", { current: true }), branch("origin/feature", { remote: true })],
+  });
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.head).toBe("feature"));
+
+  expect(result.current.baseOptions.map((o) => o.value)).toEqual(["", "main", "origin/feature"]);
+
+  act(() => result.current.changeSide("worktree"));
+  await waitFor(() =>
+    expect(result.current.baseOptions.map((o) => o.value)).toEqual(["", "main", "feature", "origin/feature"])
+  );
+});
+
+// `auto` on the main branch resolves the base to head itself, and a single-branch repo
+// has no other base to offer — so the committed side is what gives way, not the base:
+// the uncommitted axis is forced on (the toolbar dims Committed to match) rather than
+// the reviewer being left on a range that is empty whatever the repo holds.
+test("the base resolving to head forces an uncommitted side", async () => {
+  vi.mocked(api.branches).mockResolvedValue({
+    main: "main",
+    branches: [branch("main", { current: true, main: true }), branch("feature")],
+  });
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.head).toBe("main")); // base auto → main
+
+  expect(result.current.baseIsHead).toBe(true);
+  expect(result.current.side).toBe("worktree");
+
+  act(() => result.current.changeSide("head")); // dimmed in the toolbar; a no-op here
+  expect(result.current.side).toBe("worktree");
+
+  act(() => result.current.setBase("feature")); // a base that isn't head → committed is back
+  await waitFor(() => expect(result.current.baseIsHead).toBe(false));
+  expect(result.current.side).toBe("head");
+});
+
+// A picked commit is the before side and the base goes unused, so the committed range
+// is a real one again even while the base names head.
+test("a picked 'from' commit leaves the committed side available", async () => {
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.head).toBe("main"));
+  expect(result.current.baseIsHead).toBe(true);
+
+  act(() => result.current.setFrom("c1"));
+  await waitFor(() => expect(result.current.baseIsHead).toBe(false));
+  expect(result.current.side).toBe("head");
+});
+
+// A head switch onto the current base falls back to auto — but only the state does:
+// the stored pref is still the base the reviewer wants for every other head.
+test("moving head onto the current base falls back to auto, keeping the pref", async () => {
+  vi.mocked(api.branches).mockResolvedValue({
+    main: "main",
+    branches: [branch("main", { current: true, main: true }), branch("feature")],
+  });
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.head).toBe("main"));
+
+  act(() => {
+    result.current.setBase("feature");
+    writeBasePref("A", "feature");
+  });
+  act(() => result.current.changeHead("feature"));
+
+  expect(result.current.base).toBe("");
+  expect(readBasePref("A")).toBe("feature");
+});
+
+test("a remembered base equal to the defaulted head is not restored", async () => {
+  writeBasePref("A", "main");
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.head).toBe("main"));
+
+  expect(result.current.base).toBe("");
 });

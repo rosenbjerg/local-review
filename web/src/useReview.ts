@@ -91,8 +91,17 @@ export function useReview() {
   // The working tree/index only make sense when head is the checked-out branch, so
   // the uncommitted axis is gated on that (and disabled in the UI otherwise).
   const currentBranch = branches.find((b) => b.isCurrent)?.name;
+  const mainBranch = branches.find((b) => b.isMain)?.name;
   const headIsCurrent = !!head && head === currentBranch;
-  const effectiveUncommitted = uncommitted && headIsCurrent;
+  // When the base resolves to head, the committed range is empty by construction:
+  // merge-base(head, head) is head. That isn't a bad selection to refuse — on the
+  // main branch `auto` has nothing else to resolve to, and a single-branch repo has
+  // no other base at all — it's the committed *side* that has nothing to say there,
+  // while the uncommitted sides still mean "just my uncommitted work". So the axis
+  // is forced on (the toolbar dims Committed to match) rather than the base refused.
+  // Only with `from` on "all": a picked commit is the before side, base unused.
+  const baseIsHead = from === "all" && !!head && (base || mainBranch || "") === head;
+  const effectiveUncommitted = (uncommitted || baseIsHead) && headIsCurrent;
   // The new side comments/reviewed marks anchor to: the working tree (uncommitted
   // incl. unstaged), the git index (uncommitted, staged only), else head_ref.
   const side: Side = !effectiveUncommitted ? "head" : unstaged ? "worktree" : "index";
@@ -147,7 +156,8 @@ export function useReview() {
         const current = list.find((b) => b.isCurrent);
         const firstLocal = list.find((b) => !b.isRemote);
         // Head is a local-only picker, so never default it to a remote.
-        setHead(current?.name ?? firstLocal?.name ?? "");
+        const headName = current?.name ?? firstLocal?.name ?? "";
+        setHead(headName);
         // Restore the remembered view axes here rather than above, in the same update
         // as `head`: the guard effect below clears `uncommitted` whenever head isn't
         // the checked-out branch, and while branches are loading it never is. `current`
@@ -158,7 +168,7 @@ export function useReview() {
           setUnstaged(view.unstaged);
         }
         const savedBase = readBasePref(repo);
-        if (savedBase === "" || list.some((b) => b.name === savedBase)) {
+        if (savedBase === "" || (savedBase !== headName && list.some((b) => b.name === savedBase))) {
           setBase(savedBase);
         }
       })
@@ -394,6 +404,10 @@ export function useReview() {
   function changeHead(name: string) {
     setHead(name);
     setFrom("all");
+    // Moving head onto the current base would compare a branch with itself; fall back
+    // to auto rather than leave the picker showing a value it no longer offers. The
+    // stored pref is deliberately left alone — it's still the base for other heads.
+    if (base === name) setBase("");
   }
 
   // Switch repo, clearing `head` in the same update. The reset must be synchronous:
@@ -506,7 +520,6 @@ export function useReview() {
     }
   }
 
-  const mainBranch = branches.find((b) => b.isMain)?.name;
   const shortSha = review?.headSha.slice(0, 7);
   const repoOptions = useMemo<ComboOption[]>(
     () => repos.map((r) => ({ value: r.name, label: r.name, hint: relativeDay(r.lastActivity) })),
@@ -517,9 +530,17 @@ export function useReview() {
     () => localBranches.map((b) => ({ value: b.name, label: b.name, hint: branchHint(b, b.isCurrent && "current") })),
     [localBranches]
   );
+  // Head is offered as its own base only while an uncommitted side is showing, where
+  // it means "only my uncommitted work"; on the committed side that range is empty by
+  // construction, so the pick would do nothing. The `base === head` clause keeps a
+  // value that's already set labelled — Combobox renders a value by finding it among
+  // the options, so dropping the current one blanks the control (reachable when head
+  // stops being the checked-out branch out-of-band, which forces the committed side).
   const baseOptions = useMemo<ComboOption[]>(() => {
+    const offerHead = effectiveUncommitted || base === head;
     const opts: ComboOption[] = [{ value: "", label: `auto${mainBranch ? ` (${mainBranch})` : ""}` }];
     for (const b of localBranches) {
+      if (b.name === head && !offerHead) continue;
       opts.push({ value: b.name, label: b.name, hint: branchHint(b, b.isMain && "main") });
     }
     for (const b of branches.filter((b) => b.isRemote)) {
@@ -531,7 +552,7 @@ export function useReview() {
       });
     }
     return opts;
-  }, [branches, localBranches, mainBranch]);
+  }, [branches, localBranches, mainBranch, head, base, effectiveUncommitted]);
   // The "from" picker: "All" (whole branch) plus head's recent commits.
   const fromOptions = useMemo<ComboOption[]>(() => {
     const opts: ComboOption[] = [
@@ -572,6 +593,7 @@ export function useReview() {
     error,
     setError,
     headIsCurrent,
+    baseIsHead,
     side,
     changeSide,
     shortSha,

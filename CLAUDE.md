@@ -158,8 +158,11 @@ web/src/
     PaneRail.tsx         the 28px stub a collapsed side pane leaves behind: the
                          reopen button, the pane's name set vertically, its count
     ViewToggle.tsx       data-driven segmented control (Changed/Full, Text/Image,
-                         Code/Rendered, Preview/Raw, the diff side); `disabled`
-                         dims the whole group, never single options
+                         Code/Rendered, Preview/Raw, the diff side); the group's
+                         `disabled` is for one valid value left, a per-option one
+                         for a value that would do nothing in the current
+                         selection (Committed, when the base resolves to head) —
+                         and that one carries a `title` saying why
     CopyButton.tsx       clipboard button with idle/ok/fail state (lazy text builder)
     ThemePicker.tsx      the toolbar's theme select; reads and writes the theme store
                          directly, since the theme isn't review state
@@ -444,7 +447,22 @@ web/src/
   with **no common ancestor** are a bad selection, not a server fault, so
   `git.ErrNoMergeBase` answers **400** with prose naming both ends
   (`mergeBaseStatus`/`mergeBaseError`); anything else from `merge-base` stays a 500
-  carrying git's own message.
+  carrying git's own message. **A base that resolves to head takes the committed
+  side away, not the other way round** (`baseIsHead` in `useReview`).
+  `merge-base(head, head)` is head, so `git diff head head` is empty whatever the
+  repo holds — but the base is not the thing to refuse: on the main branch `auto` has
+  nothing else to resolve to, and a single-branch repo has no other base in existence.
+  What *is* meaningless is only the committed side; the uncommitted ones still read
+  "just my uncommitted work", which on `main` is the whole point of the tool. So
+  `effectiveUncommitted` is forced on (like the `headIsCurrent` gate beside it —
+  derived, so it never touches the stored pref) and `TopBar` dims **Committed alone**
+  with a title saying why. Two corollaries: `baseOptions` offers head only while an
+  uncommitted side is showing (plus whatever `base` already holds, or `Combobox`
+  renders the control blank), and `changeHead` / the branch-load restore still drop a
+  base equal to the *new* head — head may not be checked out there, which would leave
+  the committed side forced *and* empty. It's gated on `from === "all"`: a picked
+  commit is the before side and the base goes unused, so the committed range is real
+  again. `useReview.test.ts` and `topBar.test.tsx` pin all of it.
 - **The diff view is two orthogonal axes**, *not* part of review identity —
   the review still resumes by `(repo, base_ref, head_ref)` and comments still anchor
   to whichever side they were added on, regardless of the view on screen. `/api/diff`

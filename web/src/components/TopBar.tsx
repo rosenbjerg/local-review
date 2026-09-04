@@ -21,6 +21,8 @@ export interface Selection {
   fromOptions: ComboOption[];
   onFromChange: (v: string) => void;
   headIsCurrent: boolean;
+  // The base resolves to head, so the committed range is empty by construction.
+  baseIsHead: boolean;
   side: Side;
   onSideChange: (v: Side) => void;
   loading: boolean;
@@ -31,7 +33,7 @@ export interface Selection {
 // checkboxes ("uncommitted", then "unstaged" appearing beside it) this used to be:
 // the three reachable combinations are exactly `Side`, which is what the diff, the
 // comment anchors and the reviewed marks all already speak.
-const SIDE_OPTIONS: { value: Side; label: string; title: string }[] = [
+const SIDE_OPTIONS: { value: Side; label: string; title: string; disabled?: boolean }[] = [
   { value: "head", label: "Committed", title: "Only what's committed on the branch" },
   { value: "index", label: "Staged", title: "Committed, plus what you've staged" },
   {
@@ -40,6 +42,23 @@ const SIDE_OPTIONS: { value: Side; label: string; title: string }[] = [
     title: "Committed, plus every edit on disk — staged, unstaged and untracked",
   },
 ];
+
+// Committed is dimmed when the base resolves to head (`auto` on the main branch, or
+// head picked as its own base): merge-base(head, head) is head, so the range is empty
+// whatever the repo holds. `useReview` forces an uncommitted side in that case, so
+// this dims the option the reviewer can no longer be on rather than the one they are.
+function sideOptions(s: Selection): typeof SIDE_OPTIONS {
+  if (!s.baseIsHead) return SIDE_OPTIONS;
+  return SIDE_OPTIONS.map((o) =>
+    o.value === "head"
+      ? {
+          ...o,
+          disabled: true,
+          title: `${s.head} is its own base, so there are no committed changes to compare — pick a different base branch to review them`,
+        }
+      : o
+  );
+}
 
 // The review-scoped buttons.
 export interface TopBarActions {
@@ -178,7 +197,7 @@ export function TopBar({ selection: s, actions, status }: Props) {
           <ViewToggle
             ariaLabel="diff side"
             value={s.side}
-            options={SIDE_OPTIONS}
+            options={sideOptions(s)}
             onChange={s.onSideChange}
             disabled={s.loading || !s.headIsCurrent}
           />

@@ -25,6 +25,7 @@ const selection: Selection = {
   fromOptions: [],
   onFromChange: () => {},
   headIsCurrent: true,
+  baseIsHead: false,
   side: "head",
   onSideChange: () => {},
   loading: false,
@@ -130,6 +131,25 @@ test("the side control is disabled off the checked-out branch", () => {
   for (const label of ["Committed", "Staged", "Working tree"]) {
     expect((screen.getByText(label) as HTMLButtonElement).disabled).toBe(true);
   }
+});
+
+// The one segment that may be dimmed on its own: when the base resolves to head the
+// committed range is empty whatever the repo holds, while the other two still read
+// something. It carries a title, since a dimmed control with no explanation reads as
+// a bug — and `useReview` has already moved the value off it.
+test("Committed is dimmed, with a reason, when the base resolves to head", () => {
+  render(
+    <TopBar
+      selection={{ ...selection, baseIsHead: true, side: "worktree" }}
+      actions={actions}
+      status={status}
+    />
+  );
+  const committed = screen.getByText("Committed") as HTMLButtonElement;
+  expect(committed.disabled).toBe(true);
+  expect(committed.getAttribute("title")).toContain("feature is its own base");
+  expect((screen.getByText("Working tree") as HTMLButtonElement).disabled).toBe(false);
+  expect((screen.getByText("Staged") as HTMLButtonElement).disabled).toBe(false);
 });
 
 afterEach(() => setThemePref(DEFAULT_PREF));
