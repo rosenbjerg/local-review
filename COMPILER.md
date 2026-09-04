@@ -8,9 +8,19 @@ normal `npm run build` / `dev`).
 ## Setup
 - `react-compiler-runtime` (**dependency**) polyfills `useMemoCache`, which is built
   into React 19 but not our React 18.
-- `babel-plugin-react-compiler` (devDep) runs in `web/vite.config.ts` via
-  `@vitejs/plugin-react`'s Babel hook — infer mode (compile everything it can),
-  `target: '18'`.
+- `babel-plugin-react-compiler` (devDep) runs in `web/vite.config.ts` — infer mode
+  (compile everything it can), `target: '18'`. It's wired in as its **own Vite
+  plugin**, `@rolldown/plugin-babel` carrying `@vitejs/plugin-react`'s
+  `reactCompilerPreset({ target: '18' })`: since plugin-react v6 the plugin itself
+  transforms with Oxc and no longer has a `babel` option to hang the compiler off.
+  The preset is a preconfigured filter around the same `babel-plugin-react-compiler`,
+  so the memoization it emits is unchanged.
+- plugin-react also ships an **experimental native (Rust) React Compiler** behind
+  `react({ compiler: true })` (via `oxc-transform-react`), which would drop Babel from
+  the build entirely. Deliberately not used: `DiffView`'s hand-written
+  `samePropsExceptComments` comparator exists because of where *this* compiler bails
+  out (it can't cache per-iteration inside `App`'s file map), so switching
+  implementations is a behavior change to evaluate on its own, not a build tweak.
 
 ## What to know
 - **Coexists with existing code.** The remaining hand-written `useMemo`s still work
@@ -20,8 +30,10 @@ normal `npm run build` / `dev`).
   re-renders for unrelated state. That's why the scroll-spy can keep the active file
   in plain `useState` (in `App`) without re-rendering the diff cards — no external
   store needed.
-- **Cost:** main bundle +~24 kB (+~10 kB gzip) for the memo scaffolding + runtime;
-  build ~1s → ~1.5–1.9s. No runtime cost beyond the bundle.
+- **Cost:** main bundle +~24 kB (+~10 kB gzip) for the memo scaffolding + runtime.
+  Babel is now the only non-native step in an otherwise Rolldown/Oxc build, so it's
+  most of the bundling time: ~1.6s total, against ~0.4s with the compiler plugin
+  removed. No runtime cost beyond the bundle.
 
 ## Linting
 `npm --prefix web run lint` runs ESLint (`web/eslint.config.js`) over `src` using

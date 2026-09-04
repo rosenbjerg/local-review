@@ -1262,3 +1262,16 @@ web/src/
   dependency (the `useMemoCache` polyfill for React 18). The intentional partial-dep
   effects surface as `exhaustive-deps` warnings, not inline disables (which would
   make the compiler rules distrust the whole file); `set-state-in-effect` is off.
+  The compiler is its **own Vite plugin** (`@rolldown/plugin-babel` +
+  `reactCompilerPreset`), because `@vitejs/plugin-react` has had no `babel` option
+  since v6 — see `COMPILER.md` for that and for why the native Rust compiler behind
+  `react({ compiler: true })` is deliberately not used.
+- **Vite 8 bundles with Rolldown and transforms with Oxc**, not Rollup and esbuild,
+  so the config options are `build.rolldownOptions` / `worker.rolldownOptions` /
+  `optimizeDeps.rolldownOptions` and `oxc` — the `rollupOptions` and `esbuild` names
+  every other Vite project still uses are deprecated shims here. None are set today
+  (the config is just `plugins` + `build.outDir`/`emptyOutDir` + `server.proxy`), and
+  the chunk-size warning Shiki's ~235 lazy grammars trigger points at the Rolldown
+  option. CSS minification is LightningCSS, which leaves the `color-mix()` tokens and
+  `:has()` selectors `styles.css` relies on intact. Node `^22.12 || ^24 || >=26` is
+  the floor (Vitest's, the strictest of the three), which is what CI pins 24 for.
