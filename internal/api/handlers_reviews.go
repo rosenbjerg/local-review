@@ -4,6 +4,7 @@ package api
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -136,23 +137,52 @@ func safeBaseURL(host string) string {
 	return "http://" + host
 }
 
-func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
+// The export has two shapes over one rendering. The browser wants JSON: it renders
+// the markdown in a preview and needs the download filename alongside it. An agent
+// wants the markdown itself — digging it out of a JSON envelope costs a `jq` the
+// copyable prompt shouldn't assume is installed, and that pipeline's failure mode is
+// the first instruction in the prompt not working. Both run the same render and the
+// same status transition; only the envelope differs.
+func (s *Server) renderExport(w http.ResponseWriter, r *http.Request) (md, filename string, ok bool) {
 	id, ok := pathID(w, r)
 	if !ok {
-		return
+		return "", "", false
 	}
 	review, err := s.Store.GetReview(id)
 	if err != nil {
 		httpError(w, http.StatusNotFound, err)
-		return
+		return "", "", false
 	}
 	s.annotateReview(review)
 	instructions := r.URL.Query().Get("instructions") == "true"
-	md := export.Render(review, instructions, safeBaseURL(r.Host))
+	md = export.Render(review, instructions, safeBaseURL(r.Host))
 	_ = s.Store.SetStatus(id, store.StatusExported)
 
-	filename := "code-review-" + sanitize(review.HeadRef) + "-" + export.ShortSHA(review.HeadSHA) + ".md"
+	return md, "code-review-" + sanitize(review.HeadRef) + "-" + export.ShortSHA(review.HeadSHA) + ".md", true
+}
+
+func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
+	md, filename, ok := s.renderExport(w, r)
+	if !ok {
+		return
+	}
 	writeJSON(w, map[string]any{"markdown": md, "filename": filename})
+}
+
+// The `.md` variant: the markdown as the body, so reading a review is one `curl -s`
+// with nothing to parse. The filename rides in Content-Disposition, the only place
+// left to carry it once the envelope is gone (`curl -OJ` picks it up), and stays
+// `inline` so a client that displays the response doesn't turn it into a download.
+// Errors stay JSON, like every other endpoint's — a 404 here is read by the same
+// clients and logged by the same wrapper.
+func (s *Server) handleExportMarkdown(w http.ResponseWriter, r *http.Request) {
+	md, filename, ok := s.renderExport(w, r)
+	if !ok {
+		return
+	}
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("Content-Disposition", `inline; filename="`+filename+`"`)
+	_, _ = io.WriteString(w, md)
 }
 
 type setSummaryReq struct {

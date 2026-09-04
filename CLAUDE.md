@@ -1157,6 +1157,16 @@ web/src/
 - `web/dist` bundle and `local-review.db*` are gitignored; don't commit them.
 - Changing the markdown output? `internal/export` is the single canonical
   formatter — the frontend never generates markdown (the preview only *renders* it).
+  It is served in **two shapes over one rendering** (`renderExport`): `export`
+  returns JSON, because the browser renders the markdown in a preview and needs the
+  download filename beside it, and `export.md` returns the markdown *as the body*,
+  because an agent digging it out of an envelope needs a `jq` the copyable prompt
+  can't assume is installed — and that pipeline failing is the prompt's **first**
+  instruction failing. Same render, same status transition, and errors stay JSON on
+  both. `export_test.go` pins the equivalence, which is the thing that could rot
+  silently: only the JSON shape is ever exercised by the app. The `.md` shape carries
+  the filename in `Content-Disposition`, which is why `sanitize` also drops `"` and
+  `\` — a git ref may legally contain them and the parameter is quoted.
   `Render` can optionally append **agent reply instructions** (a curl example
   against `/api/comments/{id}/replies`), gated by the `instructions` query param
   on `POST /api/reviews/{id}/export`; the export modal's checkbox drives it and

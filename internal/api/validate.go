@@ -64,6 +64,10 @@ func validCommentType(t store.CommentType) bool {
 	return false
 }
 
+// sanitize turns a ref into a filename component. A git ref may legally contain a
+// double quote, and the export's `.md` variant puts this filename inside a quoted
+// Content-Disposition parameter, so the quote (and the backslash that could escape
+// it) go too — a malformed header parameter is worse than a hyphen in a filename.
 func sanitize(s string) string {
-	return strings.NewReplacer("/", "-", " ", "-", ":", "-").Replace(s)
+	return strings.NewReplacer("/", "-", " ", "-", ":", "-", `"`, "-", `\`, "-").Replace(s)
 }

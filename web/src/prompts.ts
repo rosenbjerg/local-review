@@ -32,9 +32,8 @@ const REPLY_TEMPLATE = `This is a code review produced with local-review. Fetch 
 
 For each comment: if you agree, make the change and reply noting what you did; if you disagree or need clarification, reply explaining why or asking a question. Comment types signal intent — bug and suggestion want a fix (or a reason it's declined), question wants an answer, nit is optional. The author on each comment says which lens produced it (correctness, security, design or tests), so weigh a suggestion accordingly. A comment marked (outdated) or (moved from …) means the code shifted since it was written — trust the quoted snippet over the line number.
 
-# Fetch the review as markdown. The response is JSON; read its "markdown" field.
-# Each comment is headed with an id like "#42".
-curl -s -X POST {{origin}}/api/reviews/{{reviewId}}/export | jq -r .markdown
+# Fetch the review as markdown. Each comment is headed with an id like "#42".
+curl -s -X POST {{origin}}/api/reviews/{{reviewId}}/export.md
 
 # Reply to a comment by its id (the #42 in each heading; different per comment).
 curl -s -X POST {{origin}}/api/comments/<id>/replies \\

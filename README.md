@@ -154,8 +154,9 @@ the agent only sees what's still open. **Agent prompts** in the toolbar gives yo
 two copyable prompts, one per direction:
 
 - **Address the review** — points a coding agent at *this review's* API, so it pulls
-  the markdown itself (`POST /api/reviews/{id}/export`) and replies to comments by
-  id. Best for iterating: add or change a comment and the agent just re-fetches — no
+  the markdown itself (`POST /api/reviews/{id}/export.md`, which answers with the
+  markdown as the response body — no JSON to unwrap) and replies to comments by id.
+  Best for iterating: add or change a comment and the agent just re-fetches — no
   re-paste.
 - **Do a review** — sends an agent at the branch to review it and file what it finds
   as comments. Pick a **focus**: *Correctness*, *Security*, *Design* or *Tests* — each
@@ -177,7 +178,8 @@ example so a paste-only agent can still post replies. Either way replies come ba
 to `POST /api/comments/{id}/replies` and appear live in the UI.
 
 For scripting there's `GET /api/reviews` (every stored review, so a script can find
-the one it wants) and `DELETE /api/reviews/{id}`, which discards one outright —
+the one it wants), the `.md` export above (`curl -s -X POST .../export.md > review.md`),
+and `DELETE /api/reviews/{id}`, which discards one outright —
 comments, replies and reviewed marks with it. No undo, and no button for it in the
 UI; **Reset** is the one that keeps the review and clears its contents.
 

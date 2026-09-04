@@ -62,6 +62,10 @@ func TestSanitize(t *testing.T) {
 		"feature/x y:z": "feature-x-y-z",
 		"plain":         "plain",
 		"a/b/c":         "a-b-c",
+		// Legal in a git ref, and the export's `.md` variant puts the result in a
+		// quoted Content-Disposition parameter.
+		`we"ird`:     "we-ird",
+		`back\slash`: "back-slash",
 	}
 	for in, want := range cases {
 		if got := sanitize(in); got != want {
