@@ -1179,7 +1179,11 @@ web/src/
 - Modals (`.modal` inside a `.modal-backdrop`) close on Escape and backdrop
   click, and use `useFocusTrap` for focus-in / Tab-trap / restore-on-close —
   give a new modal the same treatment (mark its safe default control
-  `data-autofocus`). The global keyboard shortcuts in `App.tsx` must bail while
+  `data-autofocus`). **A backdrop click is a press _and_ a release on the
+  backdrop**, tracked across `mousedown`/`mouseup` in `Modal.tsx`: a `click`
+  fires on the common ancestor of the two, so selecting text in the prompt
+  editor and releasing outside the dialog reported the backdrop as the click's
+  target and discarded the edit. `modal.test.tsx` pins both drag directions. The global keyboard shortcuts in `App.tsx` must bail while
   a modal is open (see the `showExport`/`showPrompts`/`showHelp`/`showAddFile`/
   `confirmingReset` guards, passed to `useKeyboardShortcuts` as one `modalOpen` flag).
 
