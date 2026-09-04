@@ -3,7 +3,7 @@
 The build runs the [React Compiler](https://react.dev/learn/react-compiler), which
 auto-memoizes components and values — so unchanged components skip re-rendering
 without manual `useMemo`/`useCallback`/`React.memo`. It's unconditional (part of the
-normal `npm run build` / `dev`).
+normal `bun run build` / `dev`).
 
 ## Setup
 - `react-compiler-runtime` (**dependency**) polyfills `useMemoCache`, which is built
@@ -36,7 +36,7 @@ normal `npm run build` / `dev`).
   removed. No runtime cost beyond the bundle.
 
 ## Linting
-`npm --prefix web run lint` runs ESLint (`web/eslint.config.js`) over `src` using
+`bun run --cwd web lint` runs ESLint (`web/eslint.config.js`) over `src` using
 **`eslint-plugin-react-hooks@7`**'s `recommended-latest` set: rules-of-hooks,
 `exhaustive-deps` (warn), and the granular React Compiler diagnostics
 (`globals`/`refs`/`purity`/`set-state-in-render`/…) that flag code the compiler
@@ -55,5 +55,5 @@ Profiler to confirm unchanged `DiffView` cards no longer re-render on e.g. a
 reviewed-toggle or comment add.
 
 ## Notes
-- `npm audit` flags transitive advisories from the compiler/ESLint build-time
+- `bun audit` flags transitive advisories from the compiler/ESLint build-time
   dependency trees — review before releasing.

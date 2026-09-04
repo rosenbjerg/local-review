@@ -18,28 +18,30 @@ frontend is embedded via `go:embed`).
 Manual equivalent (frontend MUST be built before the binary — see Gotchas):
 
 ```sh
-npm --prefix web install
-npm --prefix web run build        # → web/dist (embedded)
+bun install --cwd web
+bun run --cwd web build           # → web/dist (embedded)
 go build -o local-review .
 ./local-review -root <folder>      # serves http://127.0.0.1:7777
 # other flags: -port, -data-dir, -no-open, -retention-days
 
 # frontend dev with hot reload (Vite proxies /api → :7777):
 ./local-review -root <folder> -no-open   # terminal 1
-npm --prefix web run dev                 # terminal 2 → :5173
+bun run --cwd web dev                    # terminal 2 → :5173
 ```
 
-Checks: `go build ./...`, `go vet ./...`, `go test ./...`, `npm --prefix web run build`
+Checks: `go build ./...`, `go vet ./...`, `go test ./...`, `bun run --cwd web build`
 (runs `tsc`),
-`npm --prefix web run lint` (ESLint: rules-of-hooks + React Compiler rule; see `COMPILER.md`),
-`npm --prefix web run test` (vitest; jsdom + Testing Library — `web/vitest.config.ts`,
+`bun run --cwd web lint` (ESLint: rules-of-hooks + React Compiler rule; see `COMPILER.md`),
+`bun run --cwd web test` (vitest; jsdom + Testing Library — `web/vitest.config.ts`,
 `web/vitest.setup.ts`). Frontend hook logic (the `useReview` selection/refetch races)
 is tested via `renderHook` with a mocked `api`; test files are excluded from the build
 tsconfig and lint. There is no browser automation here — verify backend changes with
 `curl` against a throwaway git repo; verify pure UI/DOM behavior manually.
 
 **`./...` is wrong in CI**, though it's fine locally: it walks `web/node_modules`,
-where npm ships a vendored Go package of its own (`flatted`). `.github/workflows/ci.yml`
+where an ESLint dependency (`flatted`) vendors a Go package of its own — twice over
+under bun, which keeps a second copy in `node_modules/.cache`, both inside that tree.
+`.github/workflows/ci.yml`
 resolves the package list once as `GOPKGS=$(go list ./... | grep -v /web/node_modules/)`
 and gofmt-checks `git ls-files '*.go'` — otherwise a dependency bump could fail our
 gofmt gate on a file we don't own.
@@ -226,7 +228,7 @@ web/src/
   with a 403. Three rules: **reads are exempt** — GET/HEAD/OPTIONS change nothing, and
   the SSE stream, `/api/blob`'s `<img>` loads and the embedded assets have to work
   regardless of headers; **`Sec-Fetch-Site` is checked before `Origin`**, which is
-  load-bearing for `npm run dev` (the browser talks to Vite on :5173, so its forwarded
+  load-bearing for `bun run dev` (the browser talks to Vite on :5173, so its forwarded
   `Origin` never matches our `Host`, while `Sec-Fetch-Site` still reads `same-origin`) —
   and a value we fail to recognize must not read as "header absent", hence the
   normalize; **neither header means no browser**, which is allowed, because the
@@ -1223,6 +1225,16 @@ web/src/
   compilable on a fresh clone; a Vite plugin (`preserveGitkeep`) recreates it
   after each build since `emptyOutDir` wipes the folder.
 - `web/dist` bundle and `local-review.db*` are gitignored; don't commit them.
+- **The frontend toolchain is bun, and `web/bunfig.toml` is what keeps Node out of
+  it.** `bun install` / `bun run --cwd web <script>`; the lockfile is `web/bun.lock`
+  (committed — `bun install --frozen-lockfile` is what CI installs with), and there
+  is no `package-lock.json` any more. But vite, vitest, tsc and eslint all ship bins
+  with a `#!/usr/bin/env node` shebang, which bun **honors by default** — so without
+  the `[run] bun = true` in `web/bunfig.toml` every script silently spawns Node again,
+  and both workflows (which install no Node at all) fail on the runner's ambient
+  version instead. Delete that file and the build stops being reproducible without
+  telling you. The whole toolchain is verified to run on bun's own runtime, so the
+  Node engine floor Vitest used to impose no longer applies to us.
 - Changing the markdown output? `internal/export` is the single canonical
   formatter — the frontend never generates markdown (the preview only *renders* it).
   It is served in **two shapes over one rendering** (`renderExport`): `export`
@@ -1279,7 +1291,7 @@ web/src/
   **dynamically imported but never called** (we use the JS engine) — dead weight
   on disk, not fetched at runtime. Don't chase it.
 - The build runs the **React Compiler** (auto-memoization) unconditionally, and
-  `npm run lint` runs `eslint-plugin-react-hooks@7`'s rules (rules-of-hooks +
+  `bun run lint` runs `eslint-plugin-react-hooks@7`'s rules (rules-of-hooks +
   the compiler diagnostics) — see `COMPILER.md`. `react-compiler-runtime` is a real
   dependency (the `useMemoCache` polyfill for React 18). The intentional partial-dep
   effects surface as `exhaustive-deps` warnings, not inline disables (which would
@@ -1295,5 +1307,5 @@ web/src/
   (the config is just `plugins` + `build.outDir`/`emptyOutDir` + `server.proxy`), and
   the chunk-size warning Shiki's ~235 lazy grammars trigger points at the Rolldown
   option. CSS minification is LightningCSS, which leaves the `color-mix()` tokens and
-  `:has()` selectors `styles.css` relies on intact. Node `^22.12 || ^24 || >=26` is
-  the floor (Vitest's, the strictest of the three), which is what CI pins 24 for.
+  `:has()` selectors `styles.css` relies on intact. Nothing here runs on Node — see
+  the bun gotcha below.

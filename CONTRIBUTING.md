@@ -16,7 +16,8 @@ open an issue first so we can agree on the approach.
 ## Prerequisites
 
 - **Go** — the version in [`go.mod`](go.mod) (or newer).
-- **Node.js 22+** and npm (for the frontend).
+- **[Bun](https://bun.com) 1.4+** (for the frontend — it runs vite, vitest, tsc and
+  eslint on its own runtime, so no Node install is needed).
 - **git** — the backend shells out to the real `git` binary.
 
 ## Build
@@ -33,8 +34,8 @@ The one-shot script builds the frontend, embeds it, and runs the server:
 Or manually:
 
 ```sh
-npm --prefix web install
-npm --prefix web run build        # → web/dist (embedded)
+bun install --cwd web
+bun run --cwd web build           # → web/dist (embedded)
 go build -o local-review .
 ./local-review -root <folder-of-git-repos>
 ```
@@ -46,7 +47,7 @@ Run the Go server and the Vite dev server side by side — Vite proxies `/api` t
 
 ```sh
 ./local-review -root <folder-of-git-repos> -no-open   # terminal 1
-npm --prefix web run dev                              # terminal 2 → :5173
+bun run --cwd web dev                                 # terminal 2 → :5173
 ```
 
 ## Checks before you push
@@ -55,13 +56,13 @@ npm --prefix web run dev                              # terminal 2 → :5173
 go build ./...
 go vet ./...
 go test ./...
-npm --prefix web run build        # runs tsc; strict TS must pass
+bun run --cwd web build           # runs tsc; strict TS must pass
 ```
 
 The release pipeline runs `go test ./...` and won't tag a release if it fails,
 so make sure tests pass locally. There's no browser automation here — verify
 backend changes with `curl` against a throwaway git repo, and pure frontend
-logic with a standalone node script.
+logic with a standalone bun script.
 
 ## Conventions
 

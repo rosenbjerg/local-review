@@ -34,19 +34,18 @@ jobs:
 
       # Build the frontend once — web/dist is platform-agnostic and embedded
       # into every binary via go:embed.
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci
+          # The version web/bun.lock was written by.
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
         working-directory: web
       # Gate the release on the frontend suite too — a failing vitest run must
       # never tag or publish, same as the Go test gate below.
       - name: Frontend tests
-        run: npm run test
+        run: bun run test
         working-directory: web
-      - run: npm run build
+      - run: bun run build
         working-directory: web
 
       - uses: actions/setup-go@v5
@@ -57,7 +56,8 @@ jobs:
       # Gate the release on the test suite — a failing test must never tag or
       # publish. Runs after the frontend build so the go:embed of web/dist
       # (pulled in by the root package) compiles. The package list excludes
-      # web/node_modules, where npm ships a vendored Go package of its own.
+      # web/node_modules, where an ESLint dependency vendors a Go package of
+      # its own.
       - name: Test
         run: go test $(go list ./... | grep -v '/web/node_modules/')
 

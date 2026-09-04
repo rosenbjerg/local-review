@@ -24,8 +24,8 @@ fi
 cd "$(dirname "$0")"
 
 echo "==> Building frontend"
-npm --prefix web install
-npm --prefix web run build
+bun install --cwd web
+bun run --cwd web build
 
 echo "==> Building binary"
 go build -o local-review .

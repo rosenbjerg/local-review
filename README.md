@@ -99,12 +99,12 @@ Or pin it in a project's `mise.toml`:
 
 ### Build from source
 
-Requires Go (see [`go.mod`](go.mod)) and Node.js 22+. The frontend must be built
-before the binary — it's embedded via `go:embed`:
+Requires Go (see [`go.mod`](go.mod)) and [Bun](https://bun.com) 1.4+. The frontend
+must be built before the binary — it's embedded via `go:embed`:
 
 ```sh
-npm --prefix web install
-npm --prefix web run build        # → web/dist (embedded)
+bun install --cwd web
+bun run --cwd web build           # → web/dist (embedded)
 go build -o local-review .
 ```
 
@@ -213,7 +213,7 @@ Run the Go server and the Vite dev server side by side — Vite proxies `/api` t
 
 ```sh
 ./local-review -root /path/to/folder-of-repos -no-open   # terminal 1
-npm --prefix web run dev                                 # terminal 2 → :5173
+bun run --cwd web dev                                    # terminal 2 → :5173
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the build order, checks and conventions.
