@@ -27,6 +27,9 @@ go build -o local-review .
 # frontend dev with hot reload (Vite proxies /api → :7777):
 ./local-review -root <folder> -no-open   # terminal 1
 bun run --cwd web dev                    # terminal 2 → :5173
+
+# regenerate docs/screenshot.png (README hero shot):
+bun scripts/screenshot.ts                # --no-build to skip the rebuild, --keep to seed only
 ```
 
 Checks: `go build ./...`, `go vet ./...`, `go test ./...`, `bun run --cwd web build`
@@ -50,6 +53,7 @@ gofmt gate on a file we don't own.
 
 ```
 main.go                  server: embeds web/dist, resolves DB path, prunes drafts, wraps the mux (error logging → same-origin guard), graceful shutdown, opens browser
+scripts/screenshot.ts    regenerates docs/screenshot.png: fixture repo → seeded review → headless capture (see Screenshots below)
 internal/git/git.go      git service (shells out to `git`): branches, merge-base, recent commits, diff parser (committed-range / working-tree / index variants), file content (ref/worktree/index), worktree fingerprint
 internal/store/store.go  SQLite (modernc.org/sqlite, WAL): reviews, comments, replies, reviewed_files
 internal/api/api.go      Server, repo resolution (repoFor: root-confined, symlink- and traversal-safe), route table
@@ -1089,6 +1093,43 @@ web/src/
   be dead everywhere the global
   handler has stood down. Covered by `useKeyboardShortcuts.test.ts` and
   `commentComposer.test.tsx`. The `?` header button opens the same overlay.
+
+## Screenshots
+
+`scripts/screenshot.ts` regenerates `docs/screenshot.png` end to end, because the
+README's hero shot went stale over ~50 commits of visible UI work the last time it
+was a manual act. It clones **this repo** into a temp dir at a pinned commit
+(`FIXTURE_SHA`), resets `main` to that commit's parent so the branch diffs to
+exactly it, seeds a review through the public API, and captures headless Chromium
+over the DevTools protocol. Six things are load-bearing:
+
+- **The fixture is a real commit of this repo**, not an invented demo project —
+  the diff is real Go and TypeScript, and `ada5041` is chosen because its
+  `useReview.ts` changes are mostly *modified* lines, which is what puts the
+  word-level intra-line shading in frame. A rewritten history breaks the clone
+  loudly rather than silently shooting something else.
+- **Never port 7777, never the default data dir.** It refuses 7777 outright and
+  aborts unless `GET /api/repos` returns exactly the one fixture repo — a stray
+  instance that won the port would be serving the developer's real reviews, and
+  every seeding call is a write. Same incident as the first gotcha below.
+- **Seeding omits `base`** so the server resolves it exactly as the browser will.
+  A review is keyed on `(repo, base_ref, head_ref)`, so a mismatch would leave the
+  page creating a second, empty review instead of resuming the seeded one.
+- **Dark is emulated, not stored.** The theme preference defaults to `system`, so
+  `Emulation.setEmulatedMedia` with `prefers-color-scheme: dark` is what resolves
+  it to GitHub Dark — set before the first navigate, so it never paints light.
+- **Waiting is on a signal, not a delay.** Shiki tokenizes asynchronously and
+  fetches each file's grammar lazily, so `settled()` polls until the token count
+  stops moving; a timed capture lands on unhighlighted code.
+- **Framing is three steps in order**: scroll the card into view (LazyFile mounts
+  only near the viewport, so its thread doesn't exist before that), assert the
+  card is in Changed view and click the pill if not, *then* centre the thread —
+  switching view moves every row below it, so centring first would be undone.
+
+Comment anchors are line numbers into the fixture commit's new side, so after
+changing `FIXTURE_SHA` or the seeded comments, run with `--keep` and read the
+snippets back off `GET /api/reviews/1` to confirm each landed where it was meant
+to — a wrong line still captures a snippet and still reads as `current`.
 
 ## Conventions
 
