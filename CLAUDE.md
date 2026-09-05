@@ -113,6 +113,9 @@ web/src/
                          and the theme it resolves to; owns <html data-theme>
   themes/darcula.ts      JetBrains Darcula's editor scheme as a hand-written TextMate
                          theme for Shiki (which ships no JetBrains theme)
+  themes/newUi.ts        the New UI's Dark and Light schemes, likewise hand-written:
+                         one scope map and two color records, since the pair assign
+                         the same roles and differ only in their colors
   fonts/                 the bundled woff2 faces + their licences (all SIL OFL 1.1):
                          Inter (UI, roman + italic), Monaspace Neon (code, GitHub
                          themes), JetBrains Mono (code, Darcula) — see the @font-face
@@ -845,6 +848,11 @@ web/src/
   JetBrains themes, and an IDE scheme is ~20 colors, so `themes/darcula.ts` maps each
   `.icls` attribute onto the scopes the bundled grammars emit for it; most identifiers
   deliberately stay the default color, which is what makes it read as the IDE's.
+  `themes/newUi.ts` does the same for the New UI pair, off the platform's own
+  `expUI_darkScheme.xml`/`expUI_lightScheme.xml`, but from **one** scope map: the two
+  schemes assign the same roles (`DEFAULT_KEYWORD`, `DEFAULT_STRING`,
+  `DEFAULT_FUNCTION_DECLARATION`, …) and differ only in the ~18 colors those roles
+  take, so a shared builder is what stops the pair drifting apart rule by rule.
   `theme.test.ts`, `topBar.test.tsx` and `diffView.test.tsx` pin the store, the picker
   and the re-tokenize; `themeBlocks.test.ts` parses `styles.css` and fails if a
   `THEMES` entry has no block or a block skips a token (a skipped token doesn't fall
@@ -1192,7 +1200,7 @@ to — a wrong line still captures a snippet and still reads as `current`.
   font it doesn't have. `--font-sans` (Inter) is shared, but **`--font-mono` is a
   per-theme token**: a theme that borrows an editor's colors should borrow the code
   face that editor is designed around, so the GitHub themes get Monaspace Neon and
-  Darcula gets JetBrains Mono. Every stack keeps the old system fallbacks behind the
+  the three JetBrains themes get JetBrains Mono. Every stack keeps the old system fallbacks behind the
   bundled family, so a face that fails to load degrades to what the app used before.
   Three rules for adding one: **woff2 only** (every browser that runs this app reads
   it, so a woff sibling is dead weight in the binary); **never subsetted** — a diff

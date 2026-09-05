@@ -261,6 +261,98 @@
   color-scheme: dark;
 }
 
+/* JetBrains New UI: the two schemes IntelliJ ships with the redesigned UI ("Dark" and
+   "Light", 2023.1+). Every value below is a numbered step of the platform's own
+   palettes (expUI_dark.theme.json / expUI_light.theme.json) or a color from the
+   matching editor scheme (expUI_darkScheme.xml / expUI_lightScheme.xml), so a token is
+   a step of the IDE's ramp rather than a hand-mixed shade. Three things worth knowing
+   before editing either block. The diff rows are the schemes' own DIFF_INSERTED /
+   DIFF_DELETED, which is why a deletion is grey here as it is in Darcula (that is the
+   look), and the row edges are the gutter markers the IDE draws beside a changed line
+   (ADDED_LINES_COLOR / DELETED_LINES_COLOR). The word marks are the one pair the
+   schemes can't supply — the IDE computes its inline-fragment shade rather than storing
+   it — so they step one rung further along the same ramp as their row. And --muted sits
+   a step above the IDE's own infoForeground (Gray7 in both schemes), which lands under
+   3:1 on a panel; Darcula's block departs from the IDE for exactly the same reason. */
+:root[data-theme="jetbrains-dark"] {
+  --bg: #1e1f22;
+  --bg-elev: #2b2d30;
+  --bg-hover: #393b40;
+  --border: #43454a;
+  --text: #dfe1e5;
+  --muted: #9da0a8;
+  --accent: #3574f0;
+  --accent-hover: #467ff2;
+  --add-bg: #294436;
+  --add-border: #549159;
+  --del-bg: #484a4a;
+  --del-border: #868a91;
+  --add-word-bg: #436946;
+  --del-word-bg: #6f737a;
+  --sel-bg: #214283;
+  --occ-bg: rgba(214, 174, 88, 0.26);
+  --occ-bg-active: rgba(214, 174, 88, 0.5);
+  --danger: #db5c5c;
+  --danger-border: #bd5757;
+  --success: #5fad65;
+  --success-border: #4e8052;
+  --warn: #f2c55c;
+  --warn-border: #9e814a;
+  --info: #548af7;
+  --info-border: #375fad;
+  --shadow-color: rgba(0, 0, 0, 0.45);
+  --highlight-color: rgba(255, 255, 255, 0.05);
+  --on-accent: #fff;
+  --checker-bg: #1e1f22;
+  --checker-fg: #2b2d30;
+  --backdrop: rgba(0, 0, 0, 0.6);
+  /* The IDE these schemes come from ships its own code face; use it. */
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    monospace;
+  color-scheme: dark;
+}
+
+/* The light half. --bg-hover is the New UI's blue hover tint (Blue12) rather than a
+   grey, which is both what the IDE paints and what leaves the grey ramp free to carry
+   deletions: a grey hover and a grey deleted row would be the same shade. */
+:root[data-theme="jetbrains-light"] {
+  --bg: #ffffff;
+  --bg-elev: #f7f8fa;
+  --bg-hover: #edf3ff;
+  --border: #c9ccd6;
+  --text: #000000;
+  --muted: #6c707e;
+  --accent: #3574f0;
+  --accent-hover: #3369d6;
+  --add-bg: #bee6be;
+  --add-border: #7fc784;
+  --del-bg: #d6d6d6;
+  --del-border: #767a8a;
+  --add-word-bg: #89c398;
+  --del-word-bg: #a8adbd;
+  --sel-bg: #a6d2ff;
+  --occ-bg: rgba(223, 147, 3, 0.26);
+  --occ-bg-active: rgba(223, 147, 3, 0.52);
+  --danger: #cc3645;
+  --danger-border: #ad2b38;
+  --success: #1f8039;
+  --success-border: #1e6b33;
+  --warn: #a46704;
+  --warn-border: #c27d04;
+  --info: #315fbd;
+  --info-border: #3369d6;
+  --shadow-color: rgba(39, 40, 46, 0.13);
+  --highlight-color: rgba(255, 255, 255, 0.7);
+  --on-accent: #fff;
+  --checker-bg: #ffffff;
+  --checker-fg: #dfe1e5;
+  --backdrop: rgba(0, 0, 0, 0.4);
+  /* The IDE these schemes come from ships its own code face; use it. */
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    monospace;
+  color-scheme: light;
+}
+
 * {
   box-sizing: border-box;
 }
