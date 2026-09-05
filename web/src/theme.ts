@@ -11,8 +11,8 @@ export type ThemeId =
   | "github-dark"
   | "github-light"
   | "darcula"
-  | "jetbrains-dark"
-  | "jetbrains-light";
+  | "rider-night"
+  | "rider-day";
 
 // The Shiki themes highlight.ts bundles — Shiki's own, or a hand-written one under
 // themes/. A name added here without its registration there is a compile error, not
@@ -21,8 +21,8 @@ export type ShikiTheme =
   | "github-dark"
   | "github-light"
   | "darcula"
-  | "jetbrains-dark"
-  | "jetbrains-light";
+  | "rider-night"
+  | "rider-day";
 export type MermaidTheme = NonNullable<MermaidConfig["theme"]>;
 
 export interface Theme {
@@ -36,18 +36,8 @@ export const THEMES: readonly Theme[] = [
   { id: "github-dark", label: "GitHub Dark", shiki: "github-dark", mermaid: "dark" },
   { id: "github-light", label: "GitHub Light", shiki: "github-light", mermaid: "default" },
   { id: "darcula", label: "JetBrains Darcula", shiki: "darcula", mermaid: "dark" },
-  {
-    id: "jetbrains-dark",
-    label: "JetBrains New UI Dark",
-    shiki: "jetbrains-dark",
-    mermaid: "dark",
-  },
-  {
-    id: "jetbrains-light",
-    label: "JetBrains New UI Light",
-    shiki: "jetbrains-light",
-    mermaid: "default",
-  },
+  { id: "rider-night", label: "JetBrains Rider Night", shiki: "rider-night", mermaid: "dark" },
+  { id: "rider-day", label: "JetBrains Rider Day", shiki: "rider-day", mermaid: "default" },
 ];
 
 // What the picker stores: a theme, or "system" — GitHub Dark or Light by the OS

@@ -113,9 +113,10 @@ web/src/
                          and the theme it resolves to; owns <html data-theme>
   themes/darcula.ts      JetBrains Darcula's editor scheme as a hand-written TextMate
                          theme for Shiki (which ships no JetBrains theme)
-  themes/newUi.ts        the New UI's Dark and Light schemes, likewise hand-written:
-                         one scope map and two color records, since the pair assign
-                         the same roles and differ only in their colors
+  themes/rider.ts        Rider Dark and Rider Light — the editor schemes Rider's New
+                         UI themes name — likewise hand-written: one scope map and two
+                         color records, since the pair assign the same roles and differ
+                         only in their colors
   fonts/                 the bundled woff2 faces + their licences (all SIL OFL 1.1):
                          Inter (UI, roman + italic), Monaspace Neon (code, GitHub
                          themes), JetBrains Mono (code, Darcula) — see the @font-face
@@ -848,11 +849,16 @@ web/src/
   JetBrains themes, and an IDE scheme is ~20 colors, so `themes/darcula.ts` maps each
   `.icls` attribute onto the scopes the bundled grammars emit for it; most identifiers
   deliberately stay the default color, which is what makes it read as the IDE's.
-  `themes/newUi.ts` does the same for the New UI pair, off the platform's own
-  `expUI_darkScheme.xml`/`expUI_lightScheme.xml`, but from **one** scope map: the two
-  schemes assign the same roles (`DEFAULT_KEYWORD`, `DEFAULT_STRING`,
-  `DEFAULT_FUNCTION_DECLARATION`, …) and differ only in the ~18 colors those roles
-  take, so a shared builder is what stops the pair drifting apart rule by rule.
+  `themes/rider.ts` does the same for Rider's pair, off `JetBrains/rider-theme-pack`'s
+  `RiderDark.xml`/`RiderLight.xml`, but from **one** scope map: the two schemes assign
+  the same roles (`DEFAULT_KEYWORD`, `DEFAULT_STRING`, `DEFAULT_FUNCTION_DECLARATION`, …)
+  and differ only in the ~15 colors those roles take, so a shared builder is what stops
+  the pair drifting apart rule by rule. Rider is **not** Darcula with different greys —
+  it is Visual Studio's palette in JetBrains chrome (blue keywords, green comments, pink
+  numbers), and two of its roles have no counterpart in the schemes above: it colors
+  **types** (`DEFAULT_CLASS_NAME`/`_REFERENCE`/`_INTERFACE_NAME`), which is what makes C#
+  and TypeScript read as Rider at all, and it colors a function **call** exactly as it
+  colors a declaration. Drop either rule and the result is a generic dark theme.
   `theme.test.ts`, `topBar.test.tsx` and `diffView.test.tsx` pin the store, the picker
   and the re-tokenize; `themeBlocks.test.ts` parses `styles.css` and fails if a
   `THEMES` entry has no block or a block skips a token (a skipped token doesn't fall

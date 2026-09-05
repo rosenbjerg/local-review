@@ -9,7 +9,7 @@ import { bundledLanguages, bundledLanguagesInfo, type BundledLanguage } from "sh
 import githubDark from "@shikijs/themes/github-dark";
 import githubLight from "@shikijs/themes/github-light";
 import { darcula } from "./themes/darcula";
-import { newUiDark, newUiLight } from "./themes/newUi";
+import { riderNight, riderDay } from "./themes/rider";
 import { themeOf, type ShikiTheme, type ThemeId } from "./theme";
 
 export type Token = ThemedToken;
@@ -21,8 +21,8 @@ const SHIKI_THEMES: Record<ShikiTheme, ThemeRegistrationAny> = {
   "github-dark": githubDark,
   "github-light": githubLight,
   darcula,
-  "jetbrains-dark": newUiDark,
-  "jetbrains-light": newUiLight,
+  "rider-night": riderNight,
+  "rider-day": riderDay,
 };
 
 const ALIAS_TO_ID = new Map<string, string>();

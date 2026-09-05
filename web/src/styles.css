@@ -261,50 +261,57 @@
   color-scheme: dark;
 }
 
-/* JetBrains New UI: the two schemes IntelliJ ships with the redesigned UI ("Dark" and
-   "Light", 2023.1+). Every value below is a numbered step of the platform's own
-   palettes (expUI_dark.theme.json / expUI_light.theme.json) or a color from the
-   matching editor scheme (expUI_darkScheme.xml / expUI_lightScheme.xml), so a token is
-   a step of the IDE's ramp rather than a hand-mixed shade. Three things worth knowing
-   before editing either block. The diff rows are the schemes' own DIFF_INSERTED /
-   DIFF_DELETED, which is why a deletion is grey here as it is in Darcula (that is the
-   look), and the row edges are the gutter markers the IDE draws beside a changed line
-   (ADDED_LINES_COLOR / DELETED_LINES_COLOR). The word marks are the one pair the
-   schemes can't supply — the IDE computes its inline-fragment shade rather than storing
-   it — so they step one rung further along the same ramp as their row. And --muted sits
-   a step above the IDE's own infoForeground (Gray7 in both schemes), which lands under
-   3:1 on a panel; Darcula's block departs from the IDE for exactly the same reason. */
-:root[data-theme="jetbrains-dark"] {
-  --bg: #1e1f22;
-  --bg-elev: #2b2d30;
-  --bg-hover: #393b40;
-  --border: #43454a;
-  --text: #dfe1e5;
-  --muted: #9da0a8;
+/* JetBrains Rider's New UI themes — "Rider Night" and "Rider Day", which are the New
+   UI chrome (they inherit ExperimentalDark/ExperimentalLight) over Rider's *own* editor
+   schemes, Rider Dark and Rider Light. Both halves come from JetBrains/rider-theme-pack,
+   the plugin bundled with Rider: the greys, blues and semantic colors are numbered steps
+   of that theme's palette, and everything the editor paints — the surface, the diff rows,
+   the selection, the find highlight — is a color from the scheme XML. Rider's greys are
+   *neutral* where IntelliJ's New UI tints them blue, which is most of what separates the
+   two on screen.
+
+   Four things worth knowing before editing either block. A deleted row is grey
+   (DIFF_DELETED) while its edge is red (DELETED_LINES_COLOR, the gutter marker Rider
+   draws beside a deleted line) — the fill is the JetBrains convention, the edge is what
+   makes a deletion findable anyway, and they are meant to disagree. The word marks are
+   the one pair the schemes can't supply, since the IDE computes its inline-fragment
+   shade rather than storing it, so each steps one rung along its row's own family. And
+   two deliberate departures from the IDE, both for our surfaces rather than its:
+   --muted sits above the IDE's infoForeground (Gray7 in both), which lands under 3:1 on
+   a panel, and --bg-elev is a step above Rider's panel grey (#2B2B2B), which sits only
+   five points off the editor's #262626 — a gap the IDE can leave flat but this app
+   can't, since a thread is drawn as a raised fill and has no border to fall back on. */
+:root[data-theme="rider-night"] {
+  --bg: #262626;
+  --bg-elev: #303030;
+  --bg-hover: #393939;
+  --border: #454545;
+  --text: #dfdfdf;
+  --muted: #a1a1a1;
   --accent: #3574f0;
   --accent-hover: #467ff2;
-  --add-bg: #294436;
-  --add-border: #549159;
-  --del-bg: #484a4a;
-  --del-border: #868a91;
-  --add-word-bg: #436946;
-  --del-word-bg: #6f737a;
-  --sel-bg: #214283;
-  --occ-bg: rgba(214, 174, 88, 0.26);
-  --occ-bg-active: rgba(214, 174, 88, 0.5);
-  --danger: #db5c5c;
+  --add-bg: #29421f;
+  --add-border: #85c46c;
+  --del-bg: #424242;
+  --del-border: #bf3428;
+  --add-word-bg: #487d34;
+  --del-word-bg: #5c5c5c;
+  --sel-bg: #08335e;
+  --occ-bg: rgba(138, 127, 35, 0.55);
+  --occ-bg-active: rgba(138, 127, 35, 0.85);
+  --danger: #ff5647;
   --danger-border: #bd5757;
   --success: #5fad65;
   --success-border: #4e8052;
   --warn: #f2c55c;
   --warn-border: #9e814a;
-  --info: #548af7;
+  --info: #6c95eb;
   --info-border: #375fad;
   --shadow-color: rgba(0, 0, 0, 0.45);
   --highlight-color: rgba(255, 255, 255, 0.05);
   --on-accent: #fff;
-  --checker-bg: #1e1f22;
-  --checker-fg: #2b2d30;
+  --checker-bg: #262626;
+  --checker-fg: #303030;
   --backdrop: rgba(0, 0, 0, 0.6);
   /* The IDE these schemes come from ships its own code face; use it. */
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
@@ -315,37 +322,37 @@
 /* The light half. --bg-hover is the New UI's blue hover tint (Blue12) rather than a
    grey, which is both what the IDE paints and what leaves the grey ramp free to carry
    deletions: a grey hover and a grey deleted row would be the same shade. */
-:root[data-theme="jetbrains-light"] {
+:root[data-theme="rider-day"] {
   --bg: #ffffff;
-  --bg-elev: #f7f8fa;
+  --bg-elev: #f7f7f7;
   --bg-hover: #edf3ff;
-  --border: #c9ccd6;
+  --border: #cccccc;
   --text: #000000;
-  --muted: #6c707e;
+  --muted: #727272;
   --accent: #3574f0;
   --accent-hover: #3369d6;
-  --add-bg: #bee6be;
-  --add-border: #7fc784;
-  --del-bg: #d6d6d6;
-  --del-border: #767a8a;
-  --add-word-bg: #89c398;
-  --del-word-bg: #a8adbd;
-  --sel-bg: #a6d2ff;
-  --occ-bg: rgba(223, 147, 3, 0.26);
-  --occ-bg-active: rgba(223, 147, 3, 0.52);
-  --danger: #cc3645;
+  --add-bg: #d1e3c9;
+  --add-border: #248700;
+  --del-bg: #dadada;
+  --del-border: #ff5c5c;
+  --add-word-bg: #8bc775;
+  --del-word-bg: #adadad;
+  --sel-bg: #b8d9ff;
+  --occ-bg: rgba(227, 195, 61, 0.45);
+  --occ-bg-active: rgba(227, 195, 61, 0.8);
+  --danger: #d91400;
   --danger-border: #ad2b38;
   --success: #1f8039;
   --success-border: #1e6b33;
   --warn: #a46704;
   --warn-border: #c27d04;
-  --info: #315fbd;
+  --info: #0f54d6;
   --info-border: #3369d6;
-  --shadow-color: rgba(39, 40, 46, 0.13);
+  --shadow-color: rgba(38, 38, 38, 0.13);
   --highlight-color: rgba(255, 255, 255, 0.7);
   --on-accent: #fff;
   --checker-bg: #ffffff;
-  --checker-fg: #dfe1e5;
+  --checker-fg: #e3e3e3;
   --backdrop: rgba(0, 0, 0, 0.4);
   /* The IDE these schemes come from ships its own code face; use it. */
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
