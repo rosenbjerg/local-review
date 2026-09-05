@@ -10,6 +10,7 @@ import githubDark from "@shikijs/themes/github-dark";
 import githubLight from "@shikijs/themes/github-light";
 import { darcula } from "./themes/darcula";
 import { riderNight, riderDay } from "./themes/rider";
+import { webstormDark, webstormLight } from "./themes/webstorm";
 import { themeOf, type ShikiTheme, type ThemeId } from "./theme";
 
 export type Token = ThemedToken;
@@ -23,6 +24,8 @@ const SHIKI_THEMES: Record<ShikiTheme, ThemeRegistrationAny> = {
   darcula,
   "rider-night": riderNight,
   "rider-day": riderDay,
+  "webstorm-dark": webstormDark,
+  "webstorm-light": webstormLight,
 };
 
 const ALIAS_TO_ID = new Map<string, string>();

@@ -117,6 +117,8 @@ web/src/
                          UI themes name — likewise hand-written: one scope map and two
                          color records, since the pair assign the same roles and differ
                          only in their colors
+  themes/webstorm.ts     the platform's own New UI Dark/Light — what WebStorm shows,
+                         and IDEA/PyCharm/GoLand with it; same one-scope-map shape
   fonts/                 the bundled woff2 faces + their licences (all SIL OFL 1.1):
                          Inter (UI, roman + italic), Monaspace Neon (code, GitHub
                          themes), JetBrains Mono (code, Darcula) — see the @font-face
@@ -859,6 +861,14 @@ web/src/
   **types** (`DEFAULT_CLASS_NAME`/`_REFERENCE`/`_INTERFACE_NAME`), which is what makes C#
   and TypeScript read as Rider at all, and it colors a function **call** exactly as it
   colors a declaration. Drop either rule and the result is a generic dark theme.
+  `themes/webstorm.ts` is the third, and the restrained one: the platform's own New UI
+  pair, which WebStorm ships **unchanged** — it has no scheme of its own, so the name is
+  the IDE it's offered as, not a source, and the same colors are what IDEA, PyCharm and
+  GoLand show. Types and calls stay default text there, which is most of what separates
+  it from Rider on screen. Its one JS-specific rule is `JS.REGEXP`, the only `JS.*`
+  attribute in those schemes that lands on a scope the grammars reliably emit; the rest
+  are asymmetric between the two schemes or too narrow to map, and are left unmapped
+  rather than invented.
   `theme.test.ts`, `topBar.test.tsx` and `diffView.test.tsx` pin the store, the picker
   and the re-tokenize; `themeBlocks.test.ts` parses `styles.css` and fails if a
   `THEMES` entry has no block or a block skips a token (a skipped token doesn't fall
