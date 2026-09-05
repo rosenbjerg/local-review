@@ -8,6 +8,7 @@ import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { bundledLanguages, bundledLanguagesInfo, type BundledLanguage } from "shiki/langs";
 import githubDark from "@shikijs/themes/github-dark";
 import githubLight from "@shikijs/themes/github-light";
+import materialTheme from "@shikijs/themes/material-theme";
 import { darcula } from "./themes/darcula";
 import { riderNight, riderDay } from "./themes/rider";
 import { webstormDark, webstormLight } from "./themes/webstorm";
@@ -26,6 +27,7 @@ const SHIKI_THEMES: Record<ShikiTheme, ThemeRegistrationAny> = {
   "rider-day": riderDay,
   "webstorm-dark": webstormDark,
   "webstorm-light": webstormLight,
+  "material-theme": materialTheme,
 };
 
 const ALIAS_TO_ID = new Map<string, string>();

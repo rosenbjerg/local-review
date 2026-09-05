@@ -868,7 +868,13 @@ web/src/
   it from Rider on screen. Its one JS-specific rule is `JS.REGEXP`, the only `JS.*`
   attribute in those schemes that lands on a scope the grammars reliably emit; the rest
   are asymmetric between the two schemes or too narrow to map, and are left unmapped
-  rather than invented.
+  rather than invented. **Material Oceanic takes the other branch** of that rule:
+  Shiki bundles the Material Theme, so it names `material-theme` directly and adds no
+  `themes/` module — only a token block, whose comment carries the two places it
+  departs from its source (the diff rows come from the theme's *gutter* markers
+  rather than its cyan/pink `diffEditor` colors, and `--accent` is the Teal 500 the
+  JetBrains port uses rather than the editor's own highlight teal, which is too light
+  to carry `--on-accent`).
   `theme.test.ts`, `topBar.test.tsx` and `diffView.test.tsx` pin the store, the picker
   and the re-tokenize; `themeBlocks.test.ts` parses `styles.css` and fails if a
   `THEMES` entry has no block or a block skips a token (a skipped token doesn't fall

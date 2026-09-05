@@ -458,6 +458,68 @@
   color-scheme: light;
 }
 
+/* Material Theme's Oceanic variant — the palette's default face, and the one that
+   reaches editors twice over: equinusocio's Material Theme for VS Code, which Shiki
+   bundles and which colors the code here, and Mallowigi's Material Theme UI for the
+   JetBrains IDEs. Unlike the four blocks above this one is paired with a *bundled*
+   Shiki theme rather than a hand-written one, so the syntax half needs no themes/
+   module. Every value below is either a color the theme itself paints (the editor
+   ground, its input and peek surfaces, the gutter change markers, the find-range
+   highlight) or a numbered step of the Material Design ramps it is built from — Blue
+   Grey for the greys, Teal for the accent, Red/Light Green/Amber/Indigo for the
+   semantic fills.
+
+   Four things worth knowing before editing. The diff rows come from the theme's
+   *gutter* markers (editorGutter.addedBackground / deletedBackground), not from its
+   diffEditor colors, which are cyan for an insertion and pink for a removal: in a
+   review tool cyan reads as a highlight rather than as an addition, and it would leave
+   --add-border disagreeing with --success. --accent is Teal 500, the accent Material
+   Theme UI gives Oceanic, and not the editor's own #80cbc4, which is a highlight color
+   — at 1.9:1 against white it cannot carry --on-accent on a primary button. --muted
+   sits above the theme's own sideBar.foreground (#6c8692, 2.96:1 on --bg-elev), the
+   same departure the JetBrains blocks above document. And the palette has no amber dark
+   enough to carry white (Amber 900 is still #ff6f00), so --warn-border is that yellow
+   taken down to the weight the block's other fills sit at. */
+:root[data-theme="material-oceanic"] {
+  --bg: #263238;
+  --bg-elev: #303c41;
+  --bg-hover: #37474f;
+  --border: #455a64;
+  --text: #eeffff;
+  --muted: #90a4ae;
+  --accent: #009688;
+  --accent-hover: #26a69a;
+  --add-bg: #394e3a;
+  --add-border: #c3e88d;
+  --del-bg: #4c3337;
+  --del-border: #f07178;
+  --add-word-bg: #51723d;
+  --del-word-bg: #723537;
+  --sel-bg: #175a58;
+  --occ-bg: rgba(255, 203, 107, 0.24);
+  --occ-bg-active: rgba(255, 203, 107, 0.5);
+  --danger: #f07178;
+  --danger-border: #e53935;
+  --success: #c3e88d;
+  --success-border: #558b2f;
+  --warn: #ffcb6b;
+  --warn-border: #8f6b1a;
+  --info: #82aaff;
+  --info-border: #5c6bc0;
+  --shadow-color: rgba(0, 0, 0, 0.45);
+  --highlight-color: rgba(255, 255, 255, 0.05);
+  --on-accent: #fff;
+  --checker-bg: #263238;
+  --checker-fg: #303c41;
+  --backdrop: rgba(0, 0, 0, 0.6);
+  /* The palette ships no code face of its own, and its most-installed home is a
+     JetBrains plugin; borrow that IDE's face rather than add a fourth family to the
+     binary. */
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    monospace;
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
 }

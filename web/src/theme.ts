@@ -14,7 +14,8 @@ export type ThemeId =
   | "rider-night"
   | "rider-day"
   | "webstorm-dark"
-  | "webstorm-light";
+  | "webstorm-light"
+  | "material-oceanic";
 
 // The Shiki themes highlight.ts bundles — Shiki's own, or a hand-written one under
 // themes/. A name added here without its registration there is a compile error, not
@@ -26,7 +27,9 @@ export type ShikiTheme =
   | "rider-night"
   | "rider-day"
   | "webstorm-dark"
-  | "webstorm-light";
+  | "webstorm-light"
+  // Shiki's own bundled Material Theme, under the name it registers itself with.
+  | "material-theme";
 export type MermaidTheme = NonNullable<MermaidConfig["theme"]>;
 
 export interface Theme {
@@ -54,6 +57,7 @@ export const THEMES: readonly Theme[] = [
     shiki: "webstorm-light",
     mermaid: "default",
   },
+  { id: "material-oceanic", label: "Material Oceanic", shiki: "material-theme", mermaid: "dark" },
 ];
 
 // What the picker stores: a theme, or "system" — GitHub Dark or Light by the OS
