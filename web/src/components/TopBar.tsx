@@ -1,6 +1,6 @@
 import { Combobox, type ComboOption } from "./Combobox";
 import { DiffStatBadge } from "./DiffStatBadge";
-import { IconSettings } from "./icons";
+import { IconRefresh, IconSettings, IconTrash } from "./icons";
 import { ViewToggle } from "./ViewToggle";
 import type { DiffStat } from "../diffStats";
 import type { Review, Side } from "../types";
@@ -86,17 +86,6 @@ interface Props {
   selection: Selection;
   actions: TopBarActions;
   status: TopBarStatus;
-}
-
-// A compact indicator of a non-default view, shown next to the sha. Keep it terse —
-// just the short sha for a picked "from", not the full "sha  subject" option label.
-// "from", not "since": the picked commit's own changes are part of the diff.
-function viewLabel(s: Selection): string {
-  const parts: string[] = [];
-  if (s.from !== "all") parts.push(`from ${s.from.slice(0, 7)}`);
-  if (s.side === "worktree") parts.push("working tree");
-  if (s.side === "index") parts.push("staged");
-  return parts.join(" · ");
 }
 
 function plural(n: number, word: string): string {
@@ -204,23 +193,29 @@ export function TopBar({ selection: s, actions, status }: Props) {
             disabled={s.loading || !s.headIsCurrent}
           />
         </span>
+        {/* Spinning while it loads is what the "Loading…" label used to say: the
+            button is disabled either way, and a dimmed icon alone wouldn't
+            distinguish "running" from "nothing to reload". */}
         <button
-          className="btn"
+          className={`btn btn-icon${s.loading ? " is-loading" : ""}`}
           onClick={s.onReload}
           disabled={s.loading || !s.repo || !s.head}
-          title="Re-run the review to pick up new commits"
+          title={s.loading ? "Loading…" : "Re-run the review to pick up new commits"}
+          aria-label="Reload"
+          aria-busy={s.loading}
         >
-          {s.loading ? "Loading…" : "Reload"}
+          <IconRefresh />
         </button>
       </div>
       <span className="spacer" />
       {status.review && (
         <>
+          {/* The head sha and the side it reads were printed here too, and both are
+              already on screen: the branch is in the breadcrumb, the side is the lit
+              segment of its own toggle, and the sha only ever named the tip of the
+              branch beside it. What no control can say is what the two ends resolve
+              to — so that stays, as the count's title. */}
           <div className="topbar-readout">
-            <span className="readout-sha" title={compareTitle(s, status)}>
-              {status.shortSha}
-              {viewLabel(s) && ` · ${viewLabel(s)}`}
-            </span>
             <span title={fileCountTitle(s, status)}>{plural(status.fileCount, "file")}</span>
             <DiffStatBadge stat={status.stat} title="Lines added and removed in this diff" />
           </div>
@@ -235,13 +230,17 @@ export function TopBar({ selection: s, actions, status }: Props) {
           <button className="btn" onClick={actions.onShowExport} title="Exports unresolved threads">
             Export ({status.openCommentCount})
           </button>
+          {/* Icon-only, but still `danger`: .btn.danger outranks .btn-icon on the
+              color, so it stays red rather than muted like the reload and gear —
+              the one control here that destroys something shouldn't read as chrome. */}
           <button
-            className="btn danger"
+            className="btn btn-icon danger"
             onClick={actions.onReset}
             disabled={!status.canReset}
             title="Delete all comments, unmark all reviewed files, and clear the summary"
+            aria-label="Reset review"
           >
-            Reset
+            <IconTrash />
           </button>
           </div>
         </>

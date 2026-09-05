@@ -75,7 +75,6 @@ test("a picked commit reads as inclusive, against its parent", () => {
     />
   );
 
-  expect(screen.getByText(/from abc1234/)).toBeTruthy();
   const title = titleOf("5 files");
   expect(title).toContain("the parent of abc1234");
   expect(title).toContain("own changes are included");
@@ -167,4 +166,78 @@ test("the gear opens settings, and the theme select is no longer in the bar", ()
   fireEvent.click(screen.getByLabelText("Settings"));
   expect(opened).toBe(1);
   expect(screen.queryByLabelText("Theme")).toBeNull();
+});
+
+// The sha and the "staged"/"working tree" label used to print beside the count, and
+// both only repeated a control standing a few pixels away — the room they took is
+// the point, so what's pinned is that the range they described is still reachable.
+test("the bar prints no sha or side label, and the title still names both ends", () => {
+  render(
+    <TopBar
+      selection={{ ...selection, side: "worktree", from: "abc1234def" }}
+      actions={actions}
+      status={status}
+    />
+  );
+
+  expect(screen.queryByText(/9f8e7d6/)).toBeNull();
+  expect(screen.queryByText(/from abc1234/)).toBeNull();
+  const title = titleOf("5 files");
+  expect(title).toContain("the parent of abc1234");
+  expect(title).toContain("your working tree");
+});
+
+// Reload keeps its place beside the side toggle but sheds its label, so the name it
+// answers to is now the aria one — and the spin is the only thing left saying it's
+// running, since a disabled icon reads the same as one with nothing to reload.
+test("reload is an icon button that spins while loading", () => {
+  let reloads = 0;
+  const { rerender } = render(
+    <TopBar
+      selection={{ ...selection, onReload: () => reloads++ }}
+      actions={actions}
+      status={status}
+    />
+  );
+
+  const reload = screen.getByLabelText("Reload") as HTMLButtonElement;
+  expect(reload.textContent).toBe("");
+  fireEvent.click(reload);
+  expect(reloads).toBe(1);
+
+  rerender(
+    <TopBar selection={{ ...selection, loading: true }} actions={actions} status={status} />
+  );
+  const loading = screen.getByLabelText("Reload") as HTMLButtonElement;
+  expect(loading.disabled).toBe(true);
+  expect(loading.className).toContain("is-loading");
+});
+
+// Reset loses its word too, but not its colour: it's the only control up here that
+// destroys anything, and `danger` is what keeps it from reading as chrome beside the
+// muted reload and gear. It stays disabled until there's something to delete.
+test("reset is a danger icon button, disabled with nothing to reset", () => {
+  let resets = 0;
+  const { rerender } = render(
+    <TopBar
+      selection={selection}
+      actions={{ ...actions, onReset: () => resets++ }}
+      status={status}
+    />
+  );
+
+  const reset = screen.getByLabelText("Reset review") as HTMLButtonElement;
+  expect(reset.textContent).toBe("");
+  expect(reset.className).toContain("danger");
+  expect(reset.disabled).toBe(true);
+
+  rerender(
+    <TopBar
+      selection={selection}
+      actions={{ ...actions, onReset: () => resets++ }}
+      status={{ ...status, canReset: true }}
+    />
+  );
+  fireEvent.click(screen.getByLabelText("Reset review"));
+  expect(resets).toBe(1);
 });

@@ -691,18 +691,15 @@ body {
 .spacer {
   flex: 1;
 }
-/* The review's readout — sha, view, file count, +/- — as one unit rather than three
-   loose spans, since they describe one comparison. Each keeps its own title: the
-   file count has more to explain than the range does. */
+/* The review's readout — the changed-file count and the +/- badge — as one unit,
+   since they describe one comparison. The count carries the title that names both
+   ends of it. */
 .topbar-readout {
   display: flex;
   align-items: center;
   gap: 10px;
   font-size: 12px;
   color: var(--muted);
-}
-.readout-sha {
-  font-family: var(--font-mono);
 }
 select {
   background: var(--bg);
@@ -889,6 +886,21 @@ textarea:focus-visible {
 }
 .btn-icon:hover {
   color: var(--text);
+}
+/* A disabled .btn is dimmed, which on its own reads the same as "nothing to
+   reload" — the spin is what says the review is being re-run. */
+.btn-icon.is-loading svg {
+  animation: spin 900ms linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-icon.is-loading svg {
+    animation: none;
+  }
 }
 .btn-primary {
   background: var(--accent);

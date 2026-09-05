@@ -129,7 +129,11 @@ web/src/
                          toggle (Committed / Staged / Working tree),
                          the changed-file count + `+N -M` badge and compareTitle, reload,
                          the review-scoped buttons (agent prompts, export, reset) and
-                         the settings gear
+                         the settings gear. The three that name one act — reload,
+                         reset, settings — are icon-only, each carrying its title
+                         *and* an aria-label, since the icon is the whole label;
+                         reset keeps `danger` on top of `btn-icon` (higher
+                         specificity, so it stays red rather than muted)
     FileExplorer.tsx     left pane: hierarchical file tree, collapse, reviewed toggle,
                          per-file +/- counts, reviewed-progress bar (the head's bottom edge)
     DiffView.tsx         center: per-file diff — fetches the source, tokenizes, owns the
@@ -541,7 +545,12 @@ web/src/
   count** next to the `+N -M` badge, and a `compareTitle` tooltip naming **both ends**
   in words (which commit the before side resolved to and why — merge-base with base,
   or the parent of the picked commit *whose own changes are included* — against head /
-  working tree / index). **Both counts name the same population:** the topbar counts
+  working tree / index). It prints **only** that count: the head sha and a "staged" /
+  "working tree" label sat beside it until each was found to restate a control inches
+  away (the branch in the breadcrumb, the side as the lit segment of its own toggle),
+  and toolbar room is what the pickers run out of first. What no control can state is
+  what the two ends *resolve* to, which is why that stays — as the count's title
+  rather than as a second readout. **Both counts name the same population:** the topbar counts
   `files` (what the diff changes, the number that matches a git client), and the
   explorer's `N/M reviewed` progress counts only those too — `changedFiles`, i.e.
   `allFiles` minus the synthetic `unchanged` cards for files opened only to comment
