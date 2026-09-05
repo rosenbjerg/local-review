@@ -1,10 +1,9 @@
-import { afterEach, expect, test } from "vitest";
+import { expect, test } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import { TopBar } from "./components/TopBar";
 import type { Selection, TopBarStatus } from "./components/TopBar";
 import type { Review } from "./types";
-import { DEFAULT_PREF, setThemePref } from "./theme";
 
 // The "from" picker used to leave a reviewer guessing whether the picked commit's
 // own changes were in the diff, and the file count had nothing to explain itself
@@ -48,7 +47,7 @@ const actions = {
   onShowPrompts: () => {},
   onShowExport: () => {},
   onReset: () => {},
-  onShowHelp: () => {},
+  onShowSettings: () => {},
 };
 
 function titleOf(text: string): string {
@@ -152,19 +151,20 @@ test("Committed is dimmed, with a reason, when the base resolves to head", () =>
   expect((screen.getByText("Staged") as HTMLButtonElement).disabled).toBe(false);
 });
 
-afterEach(() => setThemePref(DEFAULT_PREF));
+// The theme, the shortcut list and the repo link were three permanent controls in a
+// bar whose room belongs to the review's own: they moved behind one gear, so what
+// the toolbar has to keep is that the gear is the way back to them.
+test("the gear opens settings, and the theme select is no longer in the bar", () => {
+  let opened = 0;
+  render(
+    <TopBar
+      selection={selection}
+      actions={{ ...actions, onShowSettings: () => opened++ }}
+      status={status}
+    />
+  );
 
-// The picker isn't review state: it reads and writes the theme store directly, and
-// the store moves <html data-theme>, which is what the token blocks key on. It shows
-// the stored preference — System by default, which resolves dark under jsdom — so
-// following the OS stays visibly selected rather than showing as the theme it landed on.
-test("the theme picker shows the stored preference and switches it", () => {
-  render(<TopBar selection={selection} actions={actions} status={status} />);
-  const picker = screen.getByLabelText("Theme") as HTMLSelectElement;
-  expect(picker.value).toBe("system");
-  expect(document.documentElement.dataset.theme).toBe("github-dark");
-
-  fireEvent.change(picker, { target: { value: "github-light" } });
-  expect(picker.value).toBe("github-light");
-  expect(document.documentElement.dataset.theme).toBe("github-light");
+  fireEvent.click(screen.getByLabelText("Settings"));
+  expect(opened).toBe(1);
+  expect(screen.queryByLabelText("Theme")).toBeNull();
 });

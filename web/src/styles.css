@@ -823,6 +823,7 @@ select {
 .btn,
 .btn-icon,
 .link,
+.settings-link,
 .view-toggle button,
 .type-pill,
 .tree-dir,
@@ -842,6 +843,7 @@ select {
 .btn:focus-visible,
 .btn-icon:focus-visible,
 .link:focus-visible,
+.settings-link:focus-visible,
 .view-toggle button:focus-visible,
 .type-pill:focus-visible,
 .explorer-name:focus-visible,
@@ -2548,7 +2550,7 @@ textarea:focus-visible {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
 }
-/* Compact, content-sized modal (help overlay, confirm dialogs) — overrides the
+/* Compact, content-sized modal (settings, confirm dialogs) — overrides the
    export modal's full-height default. */
 .modal-sm {
   width: min(440px, 94vw);
@@ -2561,15 +2563,46 @@ textarea:focus-visible {
 .modal-md {
   width: min(880px, 94vw);
 }
-.help-body {
+/* Settings: the theme row, the shortcut tables and the repo link, stacked as one
+   centred column. Nothing in here is a form to fill in top to bottom — it's a
+   handful of unrelated things a reviewer looks at once — so a left-hugging stack
+   left the dialog lopsided. The tables set their own cell padding, so the body's
+   own stays small. */
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   padding: 8px 8px 12px;
   overflow: auto;
 }
-.help-subhead {
-  margin: 14px 0 4px 12px;
+.settings-subhead {
+  margin: 14px 0 4px;
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px;
+}
+.settings-label {
+  font-size: 13px;
+}
+/* The repo link closes the dialog rather than sitting in the toolbar: it's a
+   destination, not a control, so it reads as a line of text with its mark. */
+.settings-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 16px 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: none;
+}
+.settings-link:hover {
+  color: var(--text);
 }
 /* Add-file picker */
 .addfile-body {
@@ -2636,9 +2669,12 @@ textarea:focus-visible {
 .confirm-actions {
   padding: 0 16px 16px;
 }
+/* Shrink-to-fit rather than full width, so the centred column has something to
+   centre; a long description still wraps, since a table caps at the room it has. */
 .shortcuts {
   border-collapse: collapse;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
 }
 .shortcuts td {
   padding: 6px 12px;

@@ -7,7 +7,7 @@ import { DiffView, LARGE_FILE_LINES } from "./components/DiffView";
 import { ExportModal } from "./components/ExportModal";
 import { FileExplorer, orderedFiles } from "./components/FileExplorer";
 import { FindBar } from "./components/FindBar";
-import { HelpModal } from "./components/HelpModal";
+import { SettingsModal } from "./components/SettingsModal";
 import { LazyFile } from "./components/LazyFile";
 import { PaneRail } from "./components/PaneRail";
 import { ResetConfirmModal } from "./components/ResetConfirmModal";
@@ -89,7 +89,7 @@ export default function App() {
   const [showAddFile, setShowAddFile] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showPrompts, setShowPrompts] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [commentSort, setCommentSort] = useState<CommentSort>(() => {
     const stored = getString(LS.commentSort);
@@ -298,8 +298,8 @@ export default function App() {
 
   useKeyboardShortcuts({
     enabled: !!review,
-    modalOpen: showHelp || confirmingReset || showExport || showPrompts || showAddFile,
-    helpOpen: showHelp,
+    modalOpen: showSettings || confirmingReset || showExport || showPrompts || showAddFile,
+    settingsOpen: showSettings,
     loading,
     onNextFile: () => moveFile(1),
     onPrevFile: () => moveFile(-1),
@@ -308,8 +308,8 @@ export default function App() {
     onExport: () => setShowExport(true),
     onReload: startReview,
     onMarkReviewed: markReviewedAndAdvance,
-    onOpenHelp: () => setShowHelp(true),
-    onCloseHelp: () => setShowHelp(false),
+    onOpenSettings: () => setShowSettings(true),
+    onCloseSettings: () => setShowSettings(false),
     // `/` reaches the search even with the pane shut: open it, then focus on the
     // frame after the commit, since the input doesn't exist until then.
     onFocusSearch: () => {
@@ -361,7 +361,7 @@ export default function App() {
           onShowPrompts: () => setShowPrompts(true),
           onShowExport: () => setShowExport(true),
           onReset: requestReset,
-          onShowHelp: () => setShowHelp(true),
+          onShowSettings: () => setShowSettings(true),
         }}
         status={{
           review,
@@ -601,7 +601,7 @@ export default function App() {
         />
       )}
 
-      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
       {confirmingReset && (
         <ResetConfirmModal

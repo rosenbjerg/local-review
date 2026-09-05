@@ -1,8 +1,8 @@
 import { THEMES, isThemePref, setThemePref, useThemePref } from "../theme";
 
-// The color-theme select in the toolbar. Reads and writes the theme store directly:
-// the theme is a whole-app preference, not review state, so it doesn't pass through
-// App like the pickers around it do. It shows the stored *preference*, not the
+// The color-theme select in the settings modal. Reads and writes the theme store
+// directly: the theme is a whole-app preference, not review state, so it doesn't
+// pass through App the way the review's own controls do. It shows the stored *preference*, not the
 // resolved theme — "System" has to stay visibly selected while it follows the OS.
 export function ThemePicker() {
   const pref = useThemePref();

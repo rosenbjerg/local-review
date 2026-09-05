@@ -4,9 +4,9 @@ export interface Shortcuts {
   // When false (no review open) all shortcuts are inert.
   enabled: boolean;
   // While any modal is open the shortcuts below are suppressed; only `?` (to close
-  // the help overlay) still fires — the Modal shell owns Escape.
+  // the settings overlay) still fires — the Modal shell owns Escape.
   modalOpen: boolean;
-  helpOpen: boolean;
+  settingsOpen: boolean;
   loading: boolean;
   onNextFile: () => void;
   onPrevFile: () => void;
@@ -15,8 +15,8 @@ export interface Shortcuts {
   onExport: () => void;
   onReload: () => void;
   onMarkReviewed: () => void;
-  onOpenHelp: () => void;
-  onCloseHelp: () => void;
+  onOpenSettings: () => void;
+  onCloseSettings: () => void;
   onFocusSearch: () => void;
   onToggleFilesPane: () => void;
   onToggleCommentsPane: () => void;
@@ -58,9 +58,9 @@ export function useKeyboardShortcuts(opts: Shortcuts) {
         return;
       }
       if (o.modalOpen) {
-        if (o.helpOpen && e.key === "?") {
+        if (o.settingsOpen && e.key === "?") {
           e.preventDefault();
-          o.onCloseHelp();
+          o.onCloseSettings();
         }
         return;
       }
@@ -97,7 +97,7 @@ export function useKeyboardShortcuts(opts: Shortcuts) {
           break;
         case "?":
           e.preventDefault();
-          o.onOpenHelp();
+          o.onOpenSettings();
           break;
         case "/":
           e.preventDefault();

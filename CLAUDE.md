@@ -128,8 +128,8 @@ web/src/
                          and `→` between), the from picker + the three-way diff-side
                          toggle (Committed / Staged / Working tree),
                          the changed-file count + `+N -M` badge and compareTitle, reload,
-                         the review-scoped buttons (agent prompts, export, reset), the
-                         theme picker and help
+                         the review-scoped buttons (agent prompts, export, reset) and
+                         the settings gear
     FileExplorer.tsx     left pane: hierarchical file tree, collapse, reviewed toggle,
                          per-file +/- counts, reviewed-progress bar (the head's bottom edge)
     DiffView.tsx         center: per-file diff — fetches the source, tokenizes, owns the
@@ -162,7 +162,9 @@ web/src/
                          per repo
     AddFileModal.tsx     typeahead over the repo's tracked files (GET /api/files), to open a
                          file the branch didn't change and comment on it
-    HelpModal.tsx        the keyboard-shortcuts overlay (`?`)
+    SettingsModal.tsx    the settings overlay (the toolbar's gear, or `?`): the theme
+                         picker, the keyboard-shortcut list and the repo link — the
+                         three toolbar controls that weren't about the review
     ResetConfirmModal.tsx  names what a reset would delete, then does it
     Modal.tsx            shared dialog shell: backdrop, focus trap, Escape, dialog aria
     Combobox.tsx         searchable single-select — a native <select> can't filter, which
@@ -176,8 +178,8 @@ web/src/
                          selection (Committed, when the base resolves to head) —
                          and that one carries a `title` saying why
     CopyButton.tsx       clipboard button with idle/ok/fail state (lazy text builder)
-    ThemePicker.tsx      the toolbar's theme select; reads and writes the theme store
-                         directly, since the theme isn't review state
+    ThemePicker.tsx      the settings modal's theme select; reads and writes the theme
+                         store directly, since the theme isn't review state
     ErrorBoundary.tsx    the app's only class component: shows a render-time throw plus a
                          reload and a "clear the lr.* keys" escape hatch
     EmptyState.tsx       the shape every empty state takes: a large faint icon, a
@@ -1107,14 +1109,14 @@ web/src/
   order via `orderedCommentIds`, stepping from `activeComment`), `v` mark the
   selected file reviewed and jump to the next unreviewed one (`nextUnreviewed` in
   `reviewNav.ts`; unmarking deliberately stays put), `e` export, `r`
-  reload, `/` focus the file search, `?` help overlay, `[`/`]` show or hide the files /
+  reload, `/` focus the file search, `?` settings overlay, `[`/`]` show or hide the files /
   comments pane (the brackets sit either side of the diff the way the panes do),
   `Enter`/`Shift+Enter` next/prev
   occurrence match (only while a highlight is live, and never from a focused
   button/link, so it can't steal the key from a control), `Escape` clear an occurrence
   highlight. The handler bails when the target is an input/textarea/select
   or a modifier is held, and while a modal is open (the one exception being `?`, which
-  still closes the help overlay), so it never fights the composer or the browser —
+  still closes the settings overlay), so it never fights the composer or the browser —
   which is also what leaves `Escape` to the `Modal` shell and the comment composer.
   The bail covers **the whole `.composer` subtree**, not just its textarea: the type
   pills and Cancel/Submit are focusable, and `v`/`e` firing off one of them would act
@@ -1275,7 +1277,7 @@ to — a wrong line still captures a snippet and still reads as `current`.
   fires on the common ancestor of the two, so selecting text in the prompt
   editor and releasing outside the dialog reported the backdrop as the click's
   target and discarded the edit. `modal.test.tsx` pins both drag directions. The global keyboard shortcuts in `App.tsx` must bail while
-  a modal is open (see the `showExport`/`showPrompts`/`showHelp`/`showAddFile`/
+  a modal is open (see the `showExport`/`showPrompts`/`showSettings`/`showAddFile`/
   `confirmingReset` guards, passed to `useKeyboardShortcuts` as one `modalOpen` flag).
 
 ## Gotchas
