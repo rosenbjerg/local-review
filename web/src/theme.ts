@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { MermaidConfig } from "mermaid";
-import { LS, getString, setString } from "./storage";
+import { LS, getString, readThemePref, writeThemePref } from "./storage";
 
 // A theme is one entry here plus a `:root[data-theme="<id>"]` token block in
 // styles.css. The tokens carry every color the UI itself paints; the two renderers
@@ -81,8 +81,8 @@ export function themeOf(id: ThemeId): Theme {
 // A stored value counts only if it names a theme or "system": a removed or misspelt
 // id falls back to the default rather than leaving <html> with a data-theme no token
 // block matches.
-export function readStoredPref(): ThemePref {
-  const v = getString(LS.theme);
+export function readStoredPref(repo: string): ThemePref {
+  const v = readThemePref(repo);
   return isThemePref(v) ? v : DEFAULT_PREF;
 }
 
@@ -103,7 +103,12 @@ export function resolveTheme(pref: ThemePref): ThemeId {
 // The active theme lives outside React. DiffView, Markdown and the picker each read
 // it where they are, so it needn't be threaded from App through every card and every
 // rendered body — and the store owns the <html> attribute, so the two can't disagree.
-let pref: ThemePref = readStoredPref();
+
+// Whose preference is showing: the theme is picked per repo, so the store is seeded
+// from the remembered selection (lr.repo — the one useReview restores) and the first
+// paint is already that repo's theme rather than a flash of the default.
+let repo = getString(LS.repo);
+let pref: ThemePref = readStoredPref(repo);
 let current: ThemeId = resolveTheme(pref);
 const listeners = new Set<() => void>();
 
@@ -130,12 +135,23 @@ export function getThemePref(): ThemePref {
   return pref;
 }
 
+// Point the store at the selected repo — App calls it on every repo change. An empty
+// repo is "nothing selected yet", the first render before the repo list loads, and
+// not a repo without a preference: repainting to the default there would flash the
+// seeded theme away and back.
+export function setThemeRepo(next: string): void {
+  if (next === "" || next === repo) return;
+  repo = next;
+  pref = readStoredPref(repo);
+  paint(resolveTheme(pref));
+}
+
 // One notification serves both snapshots: a consumer whose own (theme or pref)
 // didn't change bails out of the re-render.
 export function setThemePref(next: ThemePref): void {
   if (next === pref) return;
   pref = next;
-  setString(LS.theme, next);
+  writeThemePref(repo, next);
   paint(resolveTheme(next));
 }
 

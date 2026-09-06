@@ -19,7 +19,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       </div>
       <div className="settings-body">
         <div className="settings-row">
-          <span className="settings-label">Theme</span>
+          <span className="settings-label">Theme for this repo</span>
           <ThemePicker />
         </div>
         <h3 className="settings-subhead">Keyboard shortcuts</h3>

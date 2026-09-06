@@ -14,6 +14,7 @@ export const LS = {
   commentSort: "lr.commentSort",
   agentPromptsByRepo: "lr.agentPromptsByRepo",
   theme: "lr.theme",
+  themeByRepo: "lr.themeByRepo",
 } as const;
 
 export function getString(key: string, def = ""): string {
@@ -140,4 +141,29 @@ export function clearPromptOverride(repo: string, kind: PromptKind): void {
   delete entry[kind];
   if (Object.keys(entry).length === 0) delete map[repo];
   setJSON(LS.agentPromptsByRepo, map);
+}
+
+// Per-repo remembered color theme, under lr.themeByRepo (a { repo: pref } map).
+// Keyed by repo alone, like the base and diff-view prefs: a theme is picked for the
+// code you're looking at — the JetBrains one for a repo you edit in Rider, GitHub
+// Dark for the rest — not for a branch or a review.
+//
+// `lr.theme`, the single global choice this replaced, is now the *default*: what a
+// repo with no pick of its own shows, and where a pick made before any repo is
+// selected goes. That doubles as the migration — a theme chosen before the split
+// keeps applying everywhere until a repo is themed outright. The value stays a raw
+// string here; theme.ts validates it, since the type it has to name lives there.
+export function readThemePref(repo: string): string {
+  const v = getJSON<Record<string, string>>(LS.themeByRepo, {})[repo];
+  return typeof v === "string" ? v : getString(LS.theme);
+}
+
+export function writeThemePref(repo: string, pref: string): void {
+  if (repo === "") {
+    setString(LS.theme, pref);
+    return;
+  }
+  const map = getJSON<Record<string, string>>(LS.themeByRepo, {});
+  map[repo] = pref;
+  setJSON(LS.themeByRepo, map);
 }

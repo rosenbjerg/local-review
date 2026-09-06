@@ -843,7 +843,7 @@ web/src/
   are, and threading it would add a prop to every card and rendered body (the
   memoised `DiffView` included); it applies the attribute at import and on every set,
   so the attribute and the React value can't disagree. **What's stored is a
-  preference, not a theme**: `lr.theme` holds a theme id or `system` — the default,
+  preference, not a theme**: the stored value is a theme id or `system` — the default,
   resolving to GitHub Dark or Light by `prefers-color-scheme` and following the OS
   live (a `change` listener on the media query) until a theme is picked outright, at
   which point the pick stays put when the desktop flips. The picker shows the
@@ -851,8 +851,25 @@ web/src/
   renders reads the resolved theme (`useTheme`). No `matchMedia` — jsdom, or any
   browser we'd not want to paint light unasked — resolves dark. **The default block
   also matches a bare `:root`** (`:root, :root[data-theme="github-dark"]`), and
-  `readStoredPref` trusts `lr.theme` only if it names a theme or `system`, so a
+  `readStoredPref` trusts a stored value only if it names a theme or `system`, so a
   removed or misspelt id falls back to `system` rather than painting nothing.
+  **And that preference is per repo** (`lr.themeByRepo`, keyed by repo alone like
+  the base and diff-view prefs): a theme is picked for the code you're looking at —
+  the JetBrains one for a repo you edit in Rider, GitHub Dark for the rest — so
+  `setThemeRepo` points the store at the selection and repaints, from a `useEffect`
+  in `App` keyed on `repo` (every path that can change it, not just the picker's
+  `onRepoChange`). Two rules the store's own repo state rests on. It **seeds from
+  `lr.repo`** at import, since it paints before React runs and the remembered repo
+  is what `useReview` restores — so the first paint is already that repo's theme;
+  and `setThemeRepo("")` is therefore a **no-op**, because the empty repo App's
+  first render carries (the list hasn't loaded) is "nothing selected yet", not a
+  repo without a preference — repainting there would flash the seeded theme away
+  and back. `lr.theme`, the one global choice this replaced, stays the **default**:
+  what a repo with no pick of its own shows, and where a pick made with no repo
+  selected goes — which is also the migration, since a theme chosen before the
+  split keeps applying everywhere until a repo is themed outright. The settings row
+  says "Theme for this repo", or a reviewer whose next repo opens in another theme
+  reads it as the pick not having saved.
   **Rendered colors are keyed on
   the theme**: Shiki tokens carry resolved hex, so both `tokenize` effects in
   `DiffView` and the highlight + mermaid passes in `Markdown` take the theme and list
@@ -1276,9 +1293,9 @@ to — a wrong line still captures a snippet and still reads as `current`.
   an `.explorer-list` in the selector, or they lose on specificity to the
   `:not(:checked):not(:indeterminate)` rule and the box never appears at all.
 - Persisted UI prefs (panel widths and open/collapsed flags, selected repo,
-  comment sort, color theme, the
-  export's instructions checkbox, and the per-repo base branch, diff-view axes and
-  agent prompts) go in `localStorage` under `lr.*` keys, via
+  comment sort, the
+  export's instructions checkbox, and the per-repo base branch, diff-view axes,
+  agent prompts and color theme) go in `localStorage` under `lr.*` keys, via
   `storage.ts`. Validate a stored value on read (`isCommentSort`, `isThemePref`, `normalizeDiffView`,
   `readPromptOverride`'s non-blank-string check) so a stale or impossible one falls
   back to the default rather than reaching the app.

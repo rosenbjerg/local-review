@@ -30,6 +30,7 @@ import { useOccurrenceHighlight } from "./useOccurrenceHighlight";
 import { usePanelResize } from "./usePanelResize";
 import { useReview } from "./useReview";
 import { useUnseenActivity } from "./useUnseenActivity";
+import { setThemeRepo } from "./theme";
 import type { CommentFilter } from "./commentFilter";
 import { NO_FILTER, authorsOf, filterComments } from "./commentFilter";
 import type { CommentSort } from "./commentSort";
@@ -153,6 +154,11 @@ export default function App() {
   useEffect(() => {
     setCommentFilter(NO_FILTER);
   }, [review?.id]);
+
+  // The theme is a per-repo preference and its store lives outside React, so point
+  // it at the selection. It ignores the empty repo the first render carries, having
+  // seeded itself from the remembered one.
+  useEffect(() => setThemeRepo(repo), [repo]);
 
   // Clear pure view/nav state on a repo switch; useReview resets its own data.
   useEffect(() => {
