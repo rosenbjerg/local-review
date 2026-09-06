@@ -124,16 +124,20 @@ web/src/
                          themes), JetBrains Mono (code, Darcula) — see the @font-face
                          block at the top of styles.css
   components/
-    TopBar.tsx           the repo / head / base breadcrumb (chrome-less pickers, `/`
-                         and `→` between), the from picker + the three-way diff-side
-                         toggle (Committed / Staged / Working tree),
-                         the changed-file count + `+N -M` badge and compareTitle, reload,
-                         the review-scoped buttons (agent prompts, export, reset) and
-                         the settings gear. The three that name one act — reload,
-                         reset, settings — are icon-only, each carrying its title
-                         *and* an aria-label, since the icon is the whole label;
-                         reset keeps `danger` on top of `btn-icon` (higher
-                         specificity, so it stays red rather than muted)
+    TopBar.tsx           three tracks — the logo, the selection, the review's
+                         actions — whose two ends are equal-width (`flex: 1 1 0`) so
+                         the selection sits at the centre of the *bar*, and whose
+                         middle is the one that wraps: the repo / head / base
+                         breadcrumb (chrome-less pickers, `/` and `→` between), the
+                         from picker + the three-way diff-side toggle (Committed /
+                         Staged / Working tree) and reload, in one centred cluster.
+                         On the right, the changed-file count + `+N -M` badge and
+                         compareTitle, the review-scoped buttons (agent prompts,
+                         export, reset) and the settings gear. The three that name
+                         one act — reload, reset, settings — are icon-only, each
+                         carrying its title *and* an aria-label, since the icon is
+                         the whole label; reset keeps `danger` on top of `btn-icon`
+                         (higher specificity, so it stays red rather than muted)
     FileExplorer.tsx     left pane: hierarchical file tree, collapse, reviewed toggle,
                          per-file +/- counts, reviewed-progress bar (the head's bottom edge)
     DiffView.tsx         center: per-file diff — fetches the source, tokenizes, owns the

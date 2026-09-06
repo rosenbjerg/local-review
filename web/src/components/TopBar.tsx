@@ -128,131 +128,145 @@ function fileCountTitle(s: Selection, st: TopBarStatus): string {
 export function TopBar({ selection: s, actions, status }: Props) {
   return (
     <header className="topbar">
-      <span className="logo">local-review</span>
-      {/* What's being compared, as one breadcrumb: the pickers carry their own
-          values, so the labels this used to put in front of each ("repo", "head",
-          "base") only said again what the value shows. The separators say the rest —
-          `/` for the repo the branch lives in, `→` for the comparison — and each
-          picker keeps its aria-label for anyone not reading the shape. */}
-      <div className="crumbs">
-        <Combobox
-          ariaLabel="repository"
-          value={s.repo}
-          options={s.repoOptions}
-          onChange={s.onRepoChange}
-          disabled={s.loading}
-          emptyText="(none found)"
-        />
-        <span className="crumb-sep" aria-hidden="true">
-          /
-        </span>
-        <Combobox
-          ariaLabel="head branch"
-          value={s.head}
-          options={s.headOptions}
-          onChange={s.onHeadChange}
-          disabled={s.loading}
-        />
-        <span className="crumb-sep" aria-hidden="true">
-          →
-        </span>
-        <Combobox
-          ariaLabel="base branch"
-          value={s.base}
-          options={s.baseOptions}
-          onChange={s.onBaseChange}
-          disabled={s.loading || !s.baseRelevant}
-        />
+      <div className="topbar-side">
+        <span className="logo">local-review</span>
       </div>
-      {/* The range's two remaining knobs: where the diff starts, and which side its
-          after end reads. Kept together, and apart from the breadcrumb above, because
-          neither names a ref — they narrow the comparison the breadcrumb states. */}
-      <div className="topbar-group">
-        <label title="Start the diff at one of the branch's own commits — that commit's own changes are included, so picking the oldest one is the same as All.">
-          from
+      {/* Everything that picks what to look at, as one wrapping cluster: the
+          breadcrumb naming the refs, the two knobs that narrow the range, and the
+          reload that re-runs it. Together they're the selection, so they wrap
+          together — a narrow window folds them onto their own line rather than
+          stranding the range's knobs behind the review's actions. */}
+      <div className="topbar-center">
+        {/* What's being compared, as one breadcrumb: the pickers carry their own
+            values, so the labels this used to put in front of each ("repo", "head",
+            "base") only said again what the value shows. The separators say the rest —
+            `/` for the repo the branch lives in, `→` for the comparison — and each
+            picker keeps its aria-label for anyone not reading the shape. */}
+        <div className="crumbs">
           <Combobox
-            ariaLabel="diff from"
-            value={s.from}
-            options={s.fromOptions}
-            onChange={s.onFromChange}
+            ariaLabel="repository"
+            value={s.repo}
+            options={s.repoOptions}
+            onChange={s.onRepoChange}
+            disabled={s.loading}
+            emptyText="(none found)"
+          />
+          <span className="crumb-sep" aria-hidden="true">
+            /
+          </span>
+          <Combobox
+            ariaLabel="head branch"
+            value={s.head}
+            options={s.headOptions}
+            onChange={s.onHeadChange}
             disabled={s.loading}
           />
-        </label>
-        <span
-          title={
-            s.headIsCurrent
-              ? undefined
-              : "Staged and working-tree changes are only available when reviewing the branch you have checked out"
-          }
-        >
-          <ViewToggle
-            ariaLabel="diff side"
-            value={s.side}
-            options={sideOptions(s)}
-            onChange={s.onSideChange}
-            disabled={s.loading || !s.headIsCurrent}
+          <span className="crumb-sep" aria-hidden="true">
+            →
+          </span>
+          <Combobox
+            ariaLabel="base branch"
+            value={s.base}
+            options={s.baseOptions}
+            onChange={s.onBaseChange}
+            disabled={s.loading || !s.baseRelevant}
           />
-        </span>
-        {/* Spinning while it loads is what the "Loading…" label used to say: the
-            button is disabled either way, and a dimmed icon alone wouldn't
-            distinguish "running" from "nothing to reload". */}
+        </div>
+        {/* The range's two remaining knobs: where the diff starts, and which side its
+            after end reads. Kept together, and apart from the breadcrumb above, because
+            neither names a ref — they narrow the comparison the breadcrumb states. */}
+        <div className="topbar-group">
+          <label title="Start the diff at one of the branch's own commits — that commit's own changes are included, so picking the oldest one is the same as All.">
+            from
+            <Combobox
+              ariaLabel="diff from"
+              value={s.from}
+              options={s.fromOptions}
+              onChange={s.onFromChange}
+              disabled={s.loading}
+            />
+          </label>
+          <span
+            title={
+              s.headIsCurrent
+                ? undefined
+                : "Staged and working-tree changes are only available when reviewing the branch you have checked out"
+            }
+          >
+            <ViewToggle
+              ariaLabel="diff side"
+              value={s.side}
+              options={sideOptions(s)}
+              onChange={s.onSideChange}
+              disabled={s.loading || !s.headIsCurrent}
+            />
+          </span>
+          {/* Spinning while it loads is what the "Loading…" label used to say: the
+              button is disabled either way, and a dimmed icon alone wouldn't
+              distinguish "running" from "nothing to reload". */}
+          <button
+            className={`btn btn-icon${s.loading ? " is-loading" : ""}`}
+            onClick={s.onReload}
+            disabled={s.loading || !s.repo || !s.head}
+            title={s.loading ? "Loading…" : "Re-run the review to pick up new commits"}
+            aria-label="Reload"
+            aria-busy={s.loading}
+          >
+            <IconRefresh />
+          </button>
+        </div>
+      </div>
+      <div className="topbar-side topbar-side-end">
+        {status.review && (
+          <>
+            {/* The head sha and the side it reads were printed here too, and both are
+                already on screen: the branch is in the breadcrumb, the side is the lit
+                segment of its own toggle, and the sha only ever named the tip of the
+                branch beside it. What no control can say is what the two ends resolve
+                to — so that stays, as the count's title. */}
+            <div className="topbar-readout">
+              <span title={fileCountTitle(s, status)}>{plural(status.fileCount, "file")}</span>
+              <DiffStatBadge stat={status.stat} title="Lines added and removed in this diff" />
+            </div>
+            <div className="topbar-group">
+              <button
+                className="btn"
+                onClick={actions.onShowPrompts}
+                title="Copyable, editable prompts: hand a coding agent this review to address, or have an agent review the branch itself"
+              >
+                Agent prompts
+              </button>
+              <button
+                className="btn"
+                onClick={actions.onShowExport}
+                title="Exports unresolved threads"
+              >
+                Export ({status.openCommentCount})
+              </button>
+              {/* Icon-only, but still `danger`: .btn.danger outranks .btn-icon on the
+                  color, so it stays red rather than muted like the reload and gear —
+                  the one control here that destroys something shouldn't read as chrome. */}
+              <button
+                className="btn btn-icon danger"
+                onClick={actions.onReset}
+                disabled={!status.canReset}
+                title="Delete all comments, unmark all reviewed files, and clear the summary"
+                aria-label="Reset review"
+              >
+                <IconTrash />
+              </button>
+            </div>
+          </>
+        )}
         <button
-          className={`btn btn-icon${s.loading ? " is-loading" : ""}`}
-          onClick={s.onReload}
-          disabled={s.loading || !s.repo || !s.head}
-          title={s.loading ? "Loading…" : "Re-run the review to pick up new commits"}
-          aria-label="Reload"
-          aria-busy={s.loading}
+          className="btn btn-icon"
+          onClick={actions.onShowSettings}
+          title="Settings — theme, keyboard shortcuts (?)"
+          aria-label="Settings"
         >
-          <IconRefresh />
+          <IconSettings />
         </button>
       </div>
-      <span className="spacer" />
-      {status.review && (
-        <>
-          {/* The head sha and the side it reads were printed here too, and both are
-              already on screen: the branch is in the breadcrumb, the side is the lit
-              segment of its own toggle, and the sha only ever named the tip of the
-              branch beside it. What no control can say is what the two ends resolve
-              to — so that stays, as the count's title. */}
-          <div className="topbar-readout">
-            <span title={fileCountTitle(s, status)}>{plural(status.fileCount, "file")}</span>
-            <DiffStatBadge stat={status.stat} title="Lines added and removed in this diff" />
-          </div>
-          <div className="topbar-group">
-          <button
-            className="btn"
-            onClick={actions.onShowPrompts}
-            title="Copyable, editable prompts: hand a coding agent this review to address, or have an agent review the branch itself"
-          >
-            Agent prompts
-          </button>
-          <button className="btn" onClick={actions.onShowExport} title="Exports unresolved threads">
-            Export ({status.openCommentCount})
-          </button>
-          {/* Icon-only, but still `danger`: .btn.danger outranks .btn-icon on the
-              color, so it stays red rather than muted like the reload and gear —
-              the one control here that destroys something shouldn't read as chrome. */}
-          <button
-            className="btn btn-icon danger"
-            onClick={actions.onReset}
-            disabled={!status.canReset}
-            title="Delete all comments, unmark all reviewed files, and clear the summary"
-            aria-label="Reset review"
-          >
-            <IconTrash />
-          </button>
-          </div>
-        </>
-      )}
-      <button
-        className="btn btn-icon"
-        onClick={actions.onShowSettings}
-        title="Settings — theme, keyboard shortcuts (?)"
-        aria-label="Settings"
-      >
-        <IconSettings />
-      </button>
     </header>
   );
 }

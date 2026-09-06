@@ -645,6 +645,32 @@ body {
   box-shadow: var(--elev-1);
   flex-wrap: wrap;
 }
+/* The bar is three tracks. Both ends are `flex: 1 1 0` — equal widths whatever
+   they hold — because that is the only thing that puts the selection at the centre
+   of the *bar*; give either end a content-sized basis and it lands at the centre of
+   whatever the logo and the review's actions leave over, which is well left of it. */
+.topbar-side {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 0;
+}
+.topbar-side-end {
+  justify-content: flex-end;
+}
+/* The selection — repo/head/base, the range's two knobs, reload — as one centred
+   cluster that wraps within itself. Sizing it `0 1 auto` is what makes that the
+   first thing to give: it shrinks to its widest row and wraps while the ends still
+   hold their content, so a narrow bar folds the selection onto a second line
+   instead of breaking the toolbar up around it. */
+.topbar-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  flex: 0 1 auto;
+  gap: 8px 12px;
+}
 .logo {
   font-weight: 700;
   letter-spacing: -0.02em;
