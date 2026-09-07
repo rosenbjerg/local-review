@@ -86,28 +86,29 @@ export function AgentPromptsModal({
   }
 
   return (
-    <Modal onClose={onClose} labelledBy="prompts-title" className="modal-md">
-      <div className="modal-head">
-        <h2 id="prompts-title">Agent prompts</h2>
+    <Modal
+      onClose={onClose}
+      title="Agent prompts"
+      className="modal-md"
+      controls={
         <ViewToggle
           ariaLabel="Prompt"
           value={group}
           onChange={setGroup}
           options={PROMPT_GROUPS.map((g) => ({ value: g.group, label: g.label }))}
         />
-        <span className="spacer" />
-        {/* Copies the draft on screen, placeholders filled in — including edits not
-            saved yet, since the box is what you're looking at. */}
+      }
+      // Copies the draft on screen, placeholders filled in — including edits not
+      // saved yet, since the box is what you're looking at.
+      actions={
         <CopyButton
           className="btn copy-btn"
           text={() => renderPrompt(draft, promptVars)}
           idleLabel="Copy"
           title="Copy with the placeholders filled in for this review"
         />
-        <button className="btn" onClick={onClose}>
-          Close
-        </button>
-      </div>
+      }
+    >
       {/* Only for a group that has several prompts to choose between — one review
           focus per run, deliberately (see prompts.ts). The author is shown because
           it's how the pane and the export tell this pass's findings from another's. */}

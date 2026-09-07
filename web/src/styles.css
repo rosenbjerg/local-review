@@ -1444,8 +1444,9 @@ textarea:focus-visible {
   padding: 6px 10px;
   border-bottom: 1px solid var(--border);
 }
-/* Shared by the file explorer's search and the comments pane's — one look for
-   "narrow this list", wherever the list is. The rows around them differ. */
+/* SearchInput — the file explorer's search, the comments pane's and the add-file
+   picker's: one look for "narrow this list", wherever the list is. The rows around
+   them differ. */
 .search-wrap {
   position: relative;
   display: flex;
@@ -2286,17 +2287,9 @@ textarea:focus-visible {
   font-size: 13px;
   color: var(--muted);
 }
-.review-summary-input {
-  width: 100%;
+/* The summary is a paragraph, not a line note, so its composer opens taller. */
+.review-summary .composer textarea {
   min-height: 90px;
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 8px;
-  font-family: inherit;
-  font-size: 13px;
-  resize: vertical;
 }
 
 /* Comments panel */
@@ -2608,6 +2601,7 @@ textarea:focus-visible {
 }
 .composer {
   animation: surface-in 140ms ease-out;
+  margin: 4px;
 }
 @media (prefers-reduced-motion: reduce) {
   .combobox-list,
@@ -2711,13 +2705,9 @@ textarea:focus-visible {
   gap: 10px;
   padding: 12px 16px 16px;
 }
-.addfile-search {
-  width: 100%;
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 6px 10px;
+/* The picker's field sits over a 13px list, so it takes the list's size. */
+.addfile-body .search-input {
+  padding: 6px 24px 6px 10px;
   font-size: 13px;
 }
 .addfile-empty {

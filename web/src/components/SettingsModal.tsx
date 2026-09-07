@@ -9,14 +9,7 @@ import { ThemePicker } from "./ThemePicker";
 // while it's open.
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   return (
-    <Modal onClose={onClose} labelledBy="settings-title" className="modal-sm">
-      <div className="modal-head">
-        <h2 id="settings-title">Settings</h2>
-        <span className="spacer" />
-        <button className="btn" data-autofocus onClick={onClose}>
-          Close
-        </button>
-      </div>
+    <Modal onClose={onClose} title="Settings" close="autofocus" className="modal-sm">
       <div className="settings-body">
         <div className="settings-row">
           <span className="settings-label">Theme for this repo</span>

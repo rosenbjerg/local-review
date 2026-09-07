@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
+import { useListNavigation } from "../useListNavigation";
 import { Modal } from "./Modal";
+import { SearchInput } from "./SearchInput";
 
 interface Props {
   repo: string;
@@ -20,7 +22,6 @@ export function AddFileModal({ repo, headRef, present, onSelect, onClose }: Prop
   const [files, setFiles] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [active, setActive] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
@@ -45,47 +46,23 @@ export function AddFileModal({ repo, headRef, present, onSelect, onClose }: Prop
     return hits.slice(0, MAX_RESULTS);
   }, [files, query]);
 
-  // Keep the active index in range as the filtered list shrinks/grows.
-  useEffect(() => {
-    setActive((a) => (matches.length === 0 ? 0 : Math.min(a, matches.length - 1)));
-  }, [matches]);
-
-  // Follow the keyboard-selected row into view.
-  useEffect(() => {
-    listRef.current?.children[active]?.scrollIntoView({ block: "nearest" });
-  }, [active]);
-
-  function onKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActive((a) => Math.min(a + 1, matches.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActive((a) => Math.max(a - 1, 0));
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      const path = matches[active];
-      if (path) onSelect(path);
-    }
-  }
+  const { active, setActive, onKeyDown } = useListNavigation({
+    length: matches.length,
+    onPick: (i) => onSelect(matches[i]),
+    listRef,
+  });
 
   return (
-    <Modal onClose={onClose} labelledBy="addfile-title" className="modal-sm">
-      <div className="modal-head">
-        <h2 id="addfile-title">Add a file to comment on</h2>
-        <span className="spacer" />
-        <button className="btn" onClick={onClose}>
-          Close
-        </button>
-      </div>
+    <Modal onClose={onClose} title="Add a file to comment on" className="modal-sm">
       <div className="addfile-body">
-        <input
-          type="text"
-          className="addfile-search"
-          placeholder="Filter files…"
+        {/* An empty field's Escape bubbles: in here it means close the dialog. */}
+        <SearchInput
+          autoFocus
+          emptyEscape="bubble"
           value={query}
-          data-autofocus
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={setQuery}
+          ariaLabel="Filter files"
+          placeholder="Filter files…"
           onKeyDown={onKeyDown}
         />
         {error && <div className="error file-error">{error}</div>}
@@ -99,7 +76,7 @@ export function AddFileModal({ repo, headRef, present, onSelect, onClose }: Prop
         )}
         <ul className="addfile-list" ref={listRef}>
           {matches.map((path, i) => (
-            <li key={path}>
+            <li key={path} data-idx={i}>
               <button
                 className={`addfile-item${i === active ? " active" : ""}`}
                 onMouseEnter={() => setActive(i)}

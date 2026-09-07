@@ -1,4 +1,3 @@
-import { useRef } from "react";
 import type { CommentFilter, TypeFilter } from "../commentFilter";
 import {
   ANY,
@@ -16,6 +15,7 @@ import { effectivePath } from "../types";
 import { CommentPreview } from "./CommentPreview";
 import { HighlightMatch } from "./HighlightMatch";
 import { IconChevronRight, IconX } from "./icons";
+import { SearchInput } from "./SearchInput";
 
 interface Props {
   // Already filtered and sorted — the same list the n/p shortcuts step through.
@@ -62,7 +62,6 @@ export function CommentsPanel({
 }: Props) {
   const narrowed = isFiltered(filter);
   const needle = queryNeedle(filter.query);
-  const searchRef = useRef<HTMLInputElement>(null);
   // A filtered-on author whose last thread just went away still needs its option,
   // or the select would sit blank on a filter that is quietly hiding everything.
   const authorOptions =
@@ -117,38 +116,12 @@ export function CommentsPanel({
       </div>
       {total > 0 && (
         <div className="comments-search-row">
-          <div className="search-wrap">
-            <input
-              ref={searchRef}
-              type="text"
-              className="search-input"
-              placeholder="Search comments…"
-              value={filter.query}
-              aria-label="Search comments"
-              onChange={(e) => onFilterChange({ ...filter, query: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  e.stopPropagation(); // don't let it bubble to global/modal handlers
-                  if (filter.query) onFilterChange({ ...filter, query: "" });
-                  else e.currentTarget.blur();
-                }
-              }}
-            />
-            {filter.query && (
-              <button
-                type="button"
-                className="search-clear"
-                aria-label="Clear search"
-                title="Clear search"
-                onClick={() => {
-                  onFilterChange({ ...filter, query: "" });
-                  searchRef.current?.focus();
-                }}
-              >
-                <IconX size={13} />
-              </button>
-            )}
-          </div>
+          <SearchInput
+            value={filter.query}
+            onChange={(query) => onFilterChange({ ...filter, query })}
+            ariaLabel="Search comments"
+            placeholder="Search comments…"
+          />
         </div>
       )}
       {total > 0 && (

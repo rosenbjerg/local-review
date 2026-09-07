@@ -8,8 +8,7 @@ import { Modal } from "./components/Modal";
 
 const renderModal = (onClose: () => void) => {
   render(
-    <Modal onClose={onClose} labelledBy="t">
-      <h2 id="t">Prompts</h2>
+    <Modal onClose={onClose} title="Prompts">
       <textarea defaultValue="prompt text" />
     </Modal>
   );
@@ -50,6 +49,36 @@ test("a drag that starts on the backdrop and ends inside does not close", () => 
   fireEvent.click(backdrop);
 
   expect(onClose).not.toHaveBeenCalled();
+});
+
+// The shell owns the head: the title is what names the dialog, and the Close
+// button is the one every modal used to write by hand — except the confirm, whose
+// body carries its own way out.
+test("the title names the dialog and the head's Close button closes it", () => {
+  const onClose = vi.fn();
+  renderModal(onClose);
+  expect(screen.getByRole("dialog", { name: "Prompts" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(onClose).toHaveBeenCalled();
+});
+
+test("close='none' leaves the head with no Close button", () => {
+  render(
+    <Modal onClose={() => {}} title="Reset?" close="none">
+      <button>Cancel</button>
+    </Modal>
+  );
+  expect(screen.getByRole("dialog", { name: "Reset?" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+});
+
+test("close='autofocus' opens with focus on Close", () => {
+  render(
+    <Modal onClose={() => {}} title="Settings" close="autofocus">
+      <select aria-label="Theme" />
+    </Modal>
+  );
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close" }));
 });
 
 test("a click inside the modal does not close", () => {

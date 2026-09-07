@@ -104,6 +104,12 @@ web/src/
   useUnseenActivity.ts   count agent comments/replies that arrived while the tab was hidden
   useCommentRefs.ts      delegated click/hover/focus handling for those `#<id>` links
   useFocusTrap.ts        modal focus hook: focus-in, Tab trap, restore on close
+  useListNavigation.ts   the keyboard half of a filtered list: the active row, arrows
+                         that stay in range as the filter shrinks it, Enter, and the row
+                         following the keyboard into view — Combobox and AddFileModal
+                         each held a copy; what differs (opening on ArrowDown, Escape)
+                         stays in the caller, which asks onKeyDown whether the key was
+                         taken first
   prompts.ts             the agent prompts (one per review focus) as {{placeholder}}
                          templates + renderPrompt
   storage.ts             typed, error-swallowing localStorage helpers + the lr.* keys
@@ -159,9 +165,12 @@ web/src/
                          pane and the `#<id>` popover; never linkifies nested refs
     CommentRefPopover.tsx  that popover: positioned from the anchor's rect (flip above,
                          clamp in), pointer-events: none
-    ReviewSummary.tsx    the review's free-text summary above the comments pane (view/edit)
+    ReviewSummary.tsx    the review's free-text summary above the comments pane; its
+                         editor is CommentComposer with the type row off and allowEmpty
+                         on (saving it blank is how it's cleared)
     CommentComposer.tsx  type pills (one-click radiogroup, built on the .badge-<type>
-                         chips) + body textarea (reused for new/edit; replies hide the type)
+                         chips) + body textarea (reused for new/edit; replies hide the
+                         type, the summary also passes allowEmpty)
     FileComments.tsx     a file's own threads + the "+ Add file comment" control; owns
                          the composer's open state (shared by the diff, media and
                          rendered-markdown views, which each held that flag before)
@@ -173,12 +182,20 @@ web/src/
                          files as, Copy the rendered draft, Reset/Save the shown one
                          per repo
     AddFileModal.tsx     typeahead over the repo's tracked files (GET /api/files), to open a
-                         file the branch didn't change and comment on it
+                         file the branch didn't change and comment on it: a SearchInput
+                         over useListNavigation
     SettingsModal.tsx    the settings overlay (the toolbar's gear, or `?`): the theme
                          picker, the keyboard-shortcut list and the repo link — the
                          three toolbar controls that weren't about the review
     ResetConfirmModal.tsx  names what a reset would delete, then does it
-    Modal.tsx            shared dialog shell: backdrop, focus trap, Escape, dialog aria
+    Modal.tsx            shared dialog shell: backdrop, focus trap, Escape, dialog aria,
+                         and the head — `title` (names the dialog via a useId'd h2),
+                         `controls` beside it, `actions` at the right, and the Close
+                         button (`close`: button | autofocus | none)
+    SearchInput.tsx      the "narrow this list" field: text input + clear button, Escape
+                         clears a non-empty field and on an empty one blurs (the panes) or
+                         bubbles (`emptyEscape`, so a modal's own Escape closes it); the
+                         explorer's search, the comments pane's and the add-file picker's
     Combobox.tsx         searchable single-select — a native <select> can't filter, which
                          gets unwieldy with many branches; `rangePreview` draws the from
                          picker's list as a timeline: the row under the pointer (or the
@@ -374,8 +391,8 @@ web/src/
   heading there would read as a file named Summary to anything parsing the
   artifact by section. `SetReviewSummary` reports a missing review through
   `RowsAffected`, not through the text being blank — an empty summary is the
-  legitimate way to clear one, which is also why the editor has no non-empty
-  guard. **`ResetReview` clears it** alongside the comments and reviewed marks —
+  legitimate way to clear one, which is also why the editor passes the composer
+  `allowEmpty`. **`ResetReview` clears it** alongside the comments and reviewed marks —
   it's review-level feedback like they are, so leaving it would carry one pass's
   framing into the next; it also counts toward `canReset`, so a review holding
   only a summary is still resettable. `App`'s `hasReviewState` is the single
@@ -1309,7 +1326,11 @@ to — a wrong line still captures a snippet and still reads as `current`.
 - Modals (`.modal` inside a `.modal-backdrop`) close on Escape and backdrop
   click, and use `useFocusTrap` for focus-in / Tab-trap / restore-on-close —
   give a new modal the same treatment (mark its safe default control
-  `data-autofocus`). **A backdrop click is a press _and_ a release on the
+  `data-autofocus`, or pass `close="autofocus"` when that's the Close button).
+  `Modal` renders the head too: pass `title` (which is what names the dialog —
+  no hand-written ids), `controls` for a ViewToggle beside it, `actions` for the
+  right-hand buttons, and `close="none"` only when the body carries its own way
+  out. **A backdrop click is a press _and_ a release on the
   backdrop**, tracked across `mousedown`/`mouseup` in `Modal.tsx`: a `click`
   fires on the common ancestor of the two, so selecting text in the prompt
   editor and releasing outside the dialog reported the backdrop as the click's

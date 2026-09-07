@@ -76,6 +76,9 @@ interface Props {
   submitLabel?: string;
   hideType?: boolean;
   placeholder?: string;
+  // Lets an empty body through: the review summary is cleared by saving it blank,
+  // where a comment with nothing in it is a mis-click.
+  allowEmpty?: boolean;
 }
 
 export function CommentComposer({
@@ -86,16 +89,19 @@ export function CommentComposer({
   submitLabel = "Add comment",
   hideType = false,
   placeholder = "Leave a comment for the agent…",
+  allowEmpty = false,
 }: Props) {
   const [body, setBody] = useState(initialBody);
   const [type, setType] = useState<CommentType>(initialType);
   const [submitting, setSubmitting] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
+  const submittable = allowEmpty || body.trim() !== "";
+
   // Block re-entry so a second click or ⌘+Enter mid-save can't post a duplicate.
   async function submit() {
+    if (!submittable || submitting) return;
     const trimmed = body.trim();
-    if (!trimmed || submitting) return;
     setSubmitting(true);
     try {
       await onSubmit(trimmed, type);
@@ -140,7 +146,7 @@ export function CommentComposer({
         </button>
         <button
           className="btn btn-primary"
-          disabled={!body.trim() || submitting}
+          disabled={!submittable || submitting}
           onClick={submit}
         >
           {submitLabel}

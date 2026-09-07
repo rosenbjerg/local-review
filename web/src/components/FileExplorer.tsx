@@ -4,7 +4,8 @@ import { type Comment, type FileDiff, effectivePath } from "../types";
 import { Chevron } from "./Chevron";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { HighlightMatch } from "./HighlightMatch";
-import { IconChevronLeft, IconX } from "./icons";
+import { IconChevronLeft } from "./icons";
+import { SearchInput } from "./SearchInput";
 
 interface Props {
   files: FileDiff[];
@@ -322,38 +323,13 @@ export function FileExplorer({
           />
         </div>
         <div className="explorer-search-row">
-          <div className="search-wrap">
-            <input
-              ref={searchRef}
-              type="text"
-              className="search-input"
-              placeholder="Search files… ( / )"
-              value={query}
-              aria-label="Search files"
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  e.stopPropagation(); // don't let it bubble to global/modal handlers
-                  if (query) setQuery("");
-                  else e.currentTarget.blur();
-                }
-              }}
-            />
-            {query && (
-              <button
-                type="button"
-                className="search-clear"
-                aria-label="Clear search"
-                title="Clear search"
-                onClick={() => {
-                  setQuery("");
-                  searchRef?.current?.focus();
-                }}
-              >
-                <IconX size={13} />
-              </button>
-            )}
-          </div>
+          <SearchInput
+            inputRef={searchRef}
+            value={query}
+            onChange={setQuery}
+            ariaLabel="Search files"
+            placeholder="Search files… ( / )"
+          />
         </div>
       </div>
       <div className="explorer-list">

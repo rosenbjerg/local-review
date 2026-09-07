@@ -18,10 +18,7 @@ export function ResetConfirmModal({
   onConfirm,
 }: Props) {
   return (
-    <Modal onClose={onCancel} labelledBy="reset-title" className="modal-sm">
-      <div className="modal-head">
-        <h2 id="reset-title">Reset review?</h2>
-      </div>
+    <Modal onClose={onCancel} title="Reset review?" close="none" className="modal-sm">
       <div className="confirm-body">
         <p>
           This deletes{" "}

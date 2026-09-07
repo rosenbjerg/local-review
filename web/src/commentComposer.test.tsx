@@ -64,6 +64,35 @@ test("a click hands focus to the textarea; an arrow keeps it on the pills", () =
   expect(document.activeElement).toBe(pill("suggestion"));
 });
 
+// A comment with nothing in it is a mis-click, so submit stays disabled until
+// there's a body — except where blank is the point: the review summary is cleared
+// by saving it empty.
+test("an empty body can't be submitted unless allowEmpty says so", () => {
+  const onSubmit = vi.fn();
+  const { unmount } = render(
+    <CommentComposer hideType submitLabel="Save" onSubmit={onSubmit} onCancel={() => {}} />
+  );
+  const save = () => screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
+  expect(save().disabled).toBe(true);
+  fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter", metaKey: true });
+  expect(onSubmit).not.toHaveBeenCalled();
+  unmount();
+
+  render(
+    <CommentComposer
+      hideType
+      allowEmpty
+      initialBody="  "
+      submitLabel="Save"
+      onSubmit={onSubmit}
+      onCancel={() => {}}
+    />
+  );
+  expect(save().disabled).toBe(false);
+  fireEvent.click(save());
+  expect(onSubmit).toHaveBeenCalledWith("", "suggestion");
+});
+
 test("a reply composer has no type picker at all", () => {
   render(<CommentComposer hideType onSubmit={() => {}} onCancel={() => {}} />);
   expect(screen.queryByRole("radiogroup")).toBeNull();

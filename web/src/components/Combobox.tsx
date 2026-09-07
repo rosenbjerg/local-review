@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useId, useMemo, useRef, useState } from "react";
+import { useListNavigation } from "../useListNavigation";
 import { Chevron } from "./Chevron";
 
 export interface ComboOption {
@@ -36,7 +37,6 @@ export function Combobox({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const listId = useId();
@@ -48,6 +48,14 @@ export function Combobox({
     if (q === "") return options;
     return options.filter((o) => o.label.toLowerCase().includes(q));
   }, [options, query]);
+
+  const nav = useListNavigation({
+    length: filtered.length,
+    onPick: (i) => choose(filtered[i]),
+    listRef,
+    open,
+  });
+  const { active, setActive } = nav;
 
   // The range preview's shape over the filtered rows: where the rail starts and
   // ends, and where the included run ends — at the active row when that row is on
@@ -85,16 +93,6 @@ export function Combobox({
       .join(" ");
   }
 
-  // Keep the highlighted row in range as filtering shrinks the list.
-  useEffect(() => {
-    setActive((a) => (filtered.length === 0 ? 0 : Math.min(a, filtered.length - 1)));
-  }, [filtered]);
-
-  // Follow the keyboard selection into view.
-  useEffect(() => {
-    if (open) listRef.current?.querySelector(`[data-idx="${active}"]`)?.scrollIntoView({ block: "nearest" });
-  }, [active, open]);
-
   function openList() {
     if (disabled) return;
     setQuery("");
@@ -110,33 +108,21 @@ export function Combobox({
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
-    switch (e.key) {
-      case "ArrowDown":
+    if (!open) {
+      // Closed, the arrow is what opens it; every other key is the input's own.
+      if (e.key === "ArrowDown") {
         e.preventDefault();
-        if (!open) openList();
-        else setActive((a) => Math.min(a + 1, filtered.length - 1));
-        break;
-      case "ArrowUp":
-        if (open) {
-          e.preventDefault();
-          setActive((a) => Math.max(a - 1, 0));
-        }
-        break;
-      case "Enter":
-        if (open && filtered[active]) {
-          e.preventDefault();
-          choose(filtered[active]);
-        }
-        break;
-      case "Escape":
-        if (open) {
-          // Swallow it so the app's global handlers / modals don't also react.
-          e.preventDefault();
-          e.stopPropagation();
-          setOpen(false);
-          setQuery("");
-        }
-        break;
+        openList();
+      }
+      return;
+    }
+    if (nav.onKeyDown(e)) return;
+    if (e.key === "Escape") {
+      // Swallow it so the app's global handlers / modals don't also react.
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(false);
+      setQuery("");
     }
   }
 

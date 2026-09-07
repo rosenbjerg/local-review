@@ -49,9 +49,10 @@ export function ExportModal({ reviewId, onClose }: Props) {
   }
 
   return (
-    <Modal onClose={onClose} labelledBy="export-title">
-      <div className="modal-head">
-        <h2 id="export-title">Export review</h2>
+    <Modal
+      onClose={onClose}
+      title="Export review"
+      controls={
         <ViewToggle
           ariaLabel="Export view"
           value={view}
@@ -61,29 +62,30 @@ export function ExportModal({ reviewId, onClose }: Props) {
             { value: "raw", label: "Raw" },
           ]}
         />
-        <span className="spacer" />
-        <label
-          className="checkbox"
-          title="Append instructions telling a coding agent how to reply to these comments over HTTP"
-        >
-          <input
-            type="checkbox"
-            checked={instructions}
-            onChange={(e) => {
-              setInstructions(e.target.checked);
-              setBool(LS.exportInstructions, e.target.checked);
-            }}
-          />
-          agent reply instructions
-        </label>
-        <CopyButton className="btn copy-btn" text={markdown} idleLabel="Copy markdown" />
-        <button className="btn btn-primary" onClick={download}>
-          Download .md
-        </button>
-        <button className="btn" onClick={onClose}>
-          Close
-        </button>
-      </div>
+      }
+      actions={
+        <>
+          <label
+            className="checkbox"
+            title="Append instructions telling a coding agent how to reply to these comments over HTTP"
+          >
+            <input
+              type="checkbox"
+              checked={instructions}
+              onChange={(e) => {
+                setInstructions(e.target.checked);
+                setBool(LS.exportInstructions, e.target.checked);
+              }}
+            />
+            agent reply instructions
+          </label>
+          <CopyButton className="btn copy-btn" text={markdown} idleLabel="Copy markdown" />
+          <button className="btn btn-primary" onClick={download}>
+            Download .md
+          </button>
+        </>
+      }
+    >
       {error ? (
         <p className="error">{error}</p>
       ) : view === "preview" ? (
