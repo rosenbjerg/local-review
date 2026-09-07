@@ -20,6 +20,8 @@ export interface Selection {
   from: string;
   fromOptions: ComboOption[];
   onFromChange: (v: string) => void;
+  // The branch's own commits over the base — how many the from picker has to offer.
+  commitCount: number;
   headIsCurrent: boolean;
   // The base resolves to head, so the committed range is empty by construction.
   baseIsHead: boolean;
@@ -27,6 +29,21 @@ export interface Selection {
   onSideChange: (v: Side) => void;
   loading: boolean;
   onReload: () => void;
+}
+
+// The from picker has a choice to offer only while the branch has two or more commits
+// of its own: with one, starting from it *is* the whole branch, and with none there is
+// nowhere to start. A held pick keeps the control live — it's the way back to All — and
+// like the dimmed Committed segment below, the reason rides on the disabled control's
+// title, since a dimmed control with no explanation reads as a bug.
+function fromRelevant(s: Selection): boolean {
+  return s.commitCount > 1 || s.from !== "all";
+}
+function fromDisabledTitle(s: Selection): string | undefined {
+  if (fromRelevant(s)) return undefined;
+  return s.commitCount === 0
+    ? "The branch has no commits of its own over the base, so there is nowhere to start from"
+    : "The branch has one commit, so starting from it is the whole branch";
 }
 
 // The diff's after end, as one three-valued control rather than the two dependent
@@ -172,20 +189,36 @@ export function TopBar({ selection: s, actions, status }: Props) {
             disabled={s.loading || !s.baseRelevant}
           />
         </div>
-        {/* The range's two remaining knobs: where the diff starts, and which side its
-            after end reads. Kept together, and apart from the breadcrumb above, because
-            neither names a ref — they narrow the comparison the breadcrumb states. */}
-        <div className="topbar-group">
-          <label title="Start the diff at one of the branch's own commits — that commit's own changes are included, so picking the oldest one is the same as All.">
+        {/* The range's two remaining knobs — where the diff starts, and which side its
+            after end reads — as one phrase, "from … to …". Kept apart from the
+            breadcrumb because neither names a ref (they narrow the comparison it
+            states), and kept as a phrase because as a labelled box the word "from"
+            stood alone beside a form field: the two words are the grammar, the two
+            controls the values, and the picker wears the crumbs' chrome-less dress so
+            the values read at the same weight. */}
+        <div className="topbar-group range">
+          <span
+            className="range-word"
+            title="Start the diff at one of the branch's own commits — that commit's own changes are included, so picking the oldest one is the same as All."
+          >
             from
+          </span>
+          <span title={fromDisabledTitle(s)}>
             <Combobox
               ariaLabel="diff from"
               value={s.from}
               options={s.fromOptions}
               onChange={s.onFromChange}
-              disabled={s.loading}
+              disabled={s.loading || !fromRelevant(s)}
+              rangePreview
             />
-          </label>
+          </span>
+          <span
+            className="range-word"
+            title="Where the diff ends: what's committed on the branch, or the index or working tree on top of it"
+          >
+            to
+          </span>
           <span
             title={
               s.headIsCurrent

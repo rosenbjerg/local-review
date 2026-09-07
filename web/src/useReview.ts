@@ -553,11 +553,19 @@ export function useReview() {
     }
     return opts;
   }, [branches, localBranches, mainBranch, head, base, effectiveUncommitted]);
-  // The "from" picker: "All" (whole branch) plus head's recent commits.
+  // The "from" picker: "All" (whole branch) plus head's recent commits. The commits
+  // are `rail` options — the points on the timeline the list's range preview draws
+  // (see Combobox) — and All is not, which is what tells the preview that a pick of
+  // it includes every one of them.
   const fromOptions = useMemo<ComboOption[]>(() => {
     const opts: ComboOption[] = [
       { value: "all", label: "All (whole branch)" },
-      ...commits.map((c) => ({ value: c.sha, label: `${c.shortSha}  ${c.subject}`, hint: c.relDate })),
+      ...commits.map((c) => ({
+        value: c.sha,
+        label: `${c.shortSha}  ${c.subject}`,
+        hint: c.relDate,
+        rail: true,
+      })),
     ];
     // A pick that slid out of the newest-COMMIT_LIMIT window keeps the view it was
     // chosen for (see fromWasRemoved), and Combobox labels its value by finding it
@@ -565,7 +573,7 @@ export function useReview() {
     // the diff is still narrowed to that commit. Last, since it's older than every
     // commit the list does hold.
     if (from !== "all" && !commits.some((c) => c.sha === from)) {
-      opts.push({ value: from, label: from.slice(0, 7), hint: "picked earlier" });
+      opts.push({ value: from, label: from.slice(0, 7), hint: "picked earlier", rail: true });
     }
     return opts;
   }, [commits, from]);
@@ -589,6 +597,9 @@ export function useReview() {
     reviewedFiles,
     from,
     setFrom,
+    // How many commits of its own the branch has over the base — what decides whether
+    // the from picker has a choice to offer (TopBar disables it under two).
+    commitCount: commits.length,
     loading,
     error,
     setError,

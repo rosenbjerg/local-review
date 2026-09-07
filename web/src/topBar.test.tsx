@@ -23,6 +23,7 @@ const selection: Selection = {
   from: "all",
   fromOptions: [],
   onFromChange: () => {},
+  commitCount: 3,
   headIsCurrent: true,
   baseIsHead: false,
   side: "head",
@@ -148,6 +149,58 @@ test("Committed is dimmed, with a reason, when the base resolves to head", () =>
   expect(committed.getAttribute("title")).toContain("feature is its own base");
   expect((screen.getByText("Working tree") as HTMLButtonElement).disabled).toBe(false);
   expect((screen.getByText("Staged") as HTMLButtonElement).disabled).toBe(false);
+});
+
+// The range's two knobs read as one phrase — "from <commit> to <side>" — where "from"
+// used to stand alone beside a boxed picker and the side toggle had no word at all.
+// The words are content the bar has to keep, in that order around the two controls.
+test("the range reads as one phrase: from the commit picker to the side toggle", () => {
+  render(<TopBar selection={selection} actions={actions} status={status} />);
+
+  const from = screen.getByText("from");
+  const picker = screen.getByLabelText("diff from");
+  const to = screen.getByText("to");
+  const side = screen.getByRole("group", { name: "diff side" });
+  const follows = (a: Element, b: Element) =>
+    (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+  expect(follows(from, picker)).toBe(true);
+  expect(follows(picker, to)).toBe(true);
+  expect(follows(to, side)).toBe(true);
+  expect(from.parentElement).toBe(side.parentElement?.parentElement);
+});
+
+// A branch with one commit offers no start to pick — starting from it is the whole
+// branch — and one with none has nowhere to start, so the picker is disabled with the
+// reason on its title, the way the Committed segment is. A held pick stays live: it's
+// the way back to All.
+test("the from picker is disabled, with a reason, under two commits", () => {
+  const picker = () => screen.getByLabelText("diff from") as HTMLInputElement;
+  const reason = () => picker().parentElement?.parentElement?.getAttribute("title");
+
+  const { rerender } = render(
+    <TopBar selection={{ ...selection, commitCount: 1 }} actions={actions} status={status} />
+  );
+  expect(picker().disabled).toBe(true);
+  expect(reason()).toContain("one commit");
+
+  rerender(
+    <TopBar selection={{ ...selection, commitCount: 0 }} actions={actions} status={status} />
+  );
+  expect(picker().disabled).toBe(true);
+  expect(reason()).toContain("no commits");
+
+  rerender(
+    <TopBar
+      selection={{ ...selection, commitCount: 1, from: "abc1234def" }}
+      actions={actions}
+      status={status}
+    />
+  );
+  expect(picker().disabled).toBe(false);
+
+  rerender(<TopBar selection={selection} actions={actions} status={status} />);
+  expect(picker().disabled).toBe(false);
+  expect(reason()).toBeNull();
 });
 
 // The theme, the shortcut list and the repo link were three permanent controls in a

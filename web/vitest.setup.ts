@@ -17,6 +17,11 @@ class MockEventSource {
 }
 (globalThis as unknown as { EventSource: unknown }).EventSource = MockEventSource;
 
+// jsdom lays nothing out, so it ships no scrollIntoView either — and Combobox calls it
+// to follow the keyboard selection whenever its list is open. A no-op keeps a test that
+// opens the list from dying in that effect.
+Element.prototype.scrollIntoView = () => {};
+
 afterEach(() => {
   cleanup();
   MockEventSource.instances = [];

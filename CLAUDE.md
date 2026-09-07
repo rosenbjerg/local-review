@@ -129,8 +129,12 @@ web/src/
                          the selection sits at the centre of the *bar*, and whose
                          middle is the one that wraps: the repo / head / base
                          breadcrumb (chrome-less pickers, `/` and `→` between), the
-                         from picker + the three-way diff-side toggle (Committed /
-                         Staged / Working tree) and reload, in one centred cluster.
+                         range phrase — `from` the commit picker `to` the three-way
+                         diff-side toggle (Committed / Staged / Working tree), the
+                         picker as chrome-less as the crumbs, and disabled with a
+                         reason on its title while the branch has under two commits
+                         of its own (a held pick keeps it live) — and reload, in one
+                         centred cluster.
                          On the right, the changed-file count + `+N -M` badge and
                          compareTitle, the review-scoped buttons (agent prompts,
                          export, reset) and the settings gear. The three that name
@@ -176,7 +180,10 @@ web/src/
     ResetConfirmModal.tsx  names what a reset would delete, then does it
     Modal.tsx            shared dialog shell: backdrop, focus trap, Escape, dialog aria
     Combobox.tsx         searchable single-select — a native <select> can't filter, which
-                         gets unwieldy with many branches
+                         gets unwieldy with many branches; `rangePreview` draws the from
+                         picker's list as a timeline: the row under the pointer (or the
+                         arrow keys) is the origin and every `rail` row above it tints as
+                         included, while All, off the rail, includes them all
     PaneRail.tsx         the 28px stub a collapsed side pane leaves behind: the
                          reopen button, the pane's name set vertically, its count
     ViewToggle.tsx       data-driven segmented control (Changed/Full, Text/Image,

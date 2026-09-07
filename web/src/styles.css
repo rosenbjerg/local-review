@@ -675,12 +675,12 @@ body {
   font-weight: 700;
   letter-spacing: -0.02em;
 }
-.topbar label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+/* The two words of the range phrase, "from … to …": muted like the crumb separators,
+   since they're the grammar and the controls between them are the values. */
+.range-word {
   color: var(--muted);
   font-size: 12px;
+  user-select: none;
 }
 /* One cluster of controls: tighter than the topbar's own gap, so the groups read
    as groups without a divider rule between them. */
@@ -689,24 +689,27 @@ body {
   align-items: center;
   gap: 6px;
 }
-/* The repo/head/base breadcrumb. Its pickers wear no chrome at rest — the values
-   and the separators between them are the sentence, and three bordered boxes in a
-   row made the toolbar read as a form. The border comes back on hover and focus,
-   where the control is actually being used; the caret is always visible, so it
-   still reads as a picker at rest. */
+/* The repo/head/base breadcrumb, and the range phrase after it. Their pickers wear
+   no chrome at rest — the values and the words between them are the sentence, and
+   bordered boxes in a row made the toolbar read as a form. The border comes back on
+   hover and focus, where the control is actually being used; the caret is always
+   visible, so it still reads as a picker at rest. */
 .crumbs {
   display: flex;
   align-items: center;
   gap: 2px;
 }
-.crumbs .combobox-input {
+.crumbs .combobox-input,
+.range .combobox-input {
   background: transparent;
   border-color: transparent;
   font-size: 13px;
   font-weight: 500;
 }
 .crumbs .combobox-input:hover:not(:disabled),
-.crumbs .combobox-input:focus {
+.range .combobox-input:hover:not(:disabled),
+.crumbs .combobox-input:focus,
+.range .combobox-input:focus {
   background: var(--bg);
   border-color: var(--border);
 }
@@ -799,7 +802,6 @@ select {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-family: var(--font-mono);
 }
 .combobox-hint {
   margin-left: auto;
@@ -817,6 +819,65 @@ select {
   padding: 6px 8px;
   color: var(--muted);
   font-size: 13px;
+}
+/* The range preview (the from picker's list). The list is a timeline, newest first,
+   and a pick means "from here onward" — which rows of sha + subject can't say. So
+   the rows on the rail carry a dot on a line, the row under the pointer is the
+   origin (filled dot), and every rail row above it tints as included; All, which
+   isn't on the rail, includes them all. Dots and line are pseudo-elements (no DOM
+   per row), and the dot states its own box-sizing — the `*` reset doesn't reach
+   pseudo-elements. The tinted run drops its inner corners: adjacent rounded rows
+   notch at every seam. `.included` sits after `.active` so the origin row keeps
+   the tint rather than the hover grey. */
+.range-list .combobox-option {
+  position: relative;
+  padding-left: 24px;
+}
+.combobox-option.rail::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+.combobox-option.rail-first::before {
+  top: 50%;
+}
+.combobox-option.rail-last::before {
+  bottom: 50%;
+}
+.combobox-option.rail::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  box-sizing: border-box;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+  background: var(--bg-elev);
+}
+.combobox-option.included {
+  background: var(--accent-soft);
+  border-radius: 0;
+}
+.combobox-option.included-first {
+  border-top-left-radius: var(--radius-sm);
+  border-top-right-radius: var(--radius-sm);
+}
+.combobox-option.included-last {
+  border-bottom-left-radius: var(--radius-sm);
+  border-bottom-right-radius: var(--radius-sm);
+}
+.combobox-option.included::after {
+  border-color: var(--accent);
+}
+.combobox-option.origin::after {
+  background: var(--accent);
 }
 
 /* Buttons */
