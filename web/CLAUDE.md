@@ -236,11 +236,10 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   the first paint is right, and `setThemeRepo("")` is a no-op.
 - Rendered colors are keyed on the theme: `DiffView`'s tokenize effects and `Markdown`'s highlight +
   mermaid passes list it in deps. Word marks and `--sel-bg` are hand-picked per theme.
-- A Shiki theme is either bundled (GitHub pair, `material-theme`) or hand-written under `themes/`:
-  `darcula.ts` (from the `.icls`), `rider.ts` (Rider Dark/Light from **one** scope map — it colors
-  types and calls, which is what makes it read as Rider), `webstorm.ts` (the platform New UI pair,
-  restrained). `--font-mono` is a per-theme token: Monaspace Neon for GitHub, JetBrains Mono for the
-  JetBrains themes.
+- A Shiki theme is either one Shiki bundles (`@shikijs/themes`) or hand-written under `themes/` from the
+  editor's own scheme file; a dark/light pair can share **one** scope map. Check a hand-written one by
+  tokenizing samples in node. `--font-mono` is a per-theme token: a theme borrowing an editor's colors
+  borrows its code face, and one with no face of its own borrows JetBrains Mono.
 
 ## CSS conventions (`styles.css`)
 

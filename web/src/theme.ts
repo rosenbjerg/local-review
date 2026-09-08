@@ -11,7 +11,9 @@ export type ThemeId =
   | "rider-day"
   | "webstorm-dark"
   | "webstorm-light"
-  | "material-oceanic";
+  | "material-oceanic"
+  | "catppuccin-mocha"
+  | "catppuccin-latte";
 
 // The Shiki themes highlight.ts registers — Shiki's own, or a hand-written one under themes/.
 export type ShikiTheme =
@@ -23,7 +25,9 @@ export type ShikiTheme =
   | "webstorm-dark"
   | "webstorm-light"
   // Shiki's own bundled Material Theme, under the name it registers itself with.
-  | "material-theme";
+  | "material-theme"
+  | "catppuccin-mocha"
+  | "catppuccin-latte";
 export type MermaidTheme = NonNullable<MermaidConfig["theme"]>;
 
 export interface Theme {
@@ -52,6 +56,13 @@ export const THEMES: readonly Theme[] = [
     mermaid: "default",
   },
   { id: "material-oceanic", label: "Material Oceanic", shiki: "material-theme", mermaid: "dark" },
+  { id: "catppuccin-mocha", label: "Catppuccin Mocha", shiki: "catppuccin-mocha", mermaid: "dark" },
+  {
+    id: "catppuccin-latte",
+    label: "Catppuccin Latte",
+    shiki: "catppuccin-latte",
+    mermaid: "default",
+  },
 ];
 
 // "system" follows the OS (GitHub Dark/Light) live until a theme is picked outright.

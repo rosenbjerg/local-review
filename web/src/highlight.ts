@@ -9,6 +9,8 @@ import { bundledLanguages, bundledLanguagesInfo, type BundledLanguage } from "sh
 import githubDark from "@shikijs/themes/github-dark";
 import githubLight from "@shikijs/themes/github-light";
 import materialTheme from "@shikijs/themes/material-theme";
+import catppuccinMocha from "@shikijs/themes/catppuccin-mocha";
+import catppuccinLatte from "@shikijs/themes/catppuccin-latte";
 import { darcula } from "./themes/darcula";
 import { riderNight, riderDay } from "./themes/rider";
 import { webstormDark, webstormLight } from "./themes/webstorm";
@@ -26,6 +28,8 @@ const SHIKI_THEMES: Record<ShikiTheme, ThemeRegistrationAny> = {
   "webstorm-dark": webstormDark,
   "webstorm-light": webstormLight,
   "material-theme": materialTheme,
+  "catppuccin-mocha": catppuccinMocha,
+  "catppuccin-latte": catppuccinLatte,
 };
 
 const ALIAS_TO_ID = new Map<string, string>();

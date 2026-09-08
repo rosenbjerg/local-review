@@ -376,6 +376,85 @@
   color-scheme: dark;
 }
 
+/* Catppuccin Mocha (Shiki bundles the syntax theme). Surfaces climb the palette's own base → surface0 →
+   surface1, wider steps than GitHub's; the accent is mauve with crust text, as the port draws its buttons. */
+:root[data-theme="catppuccin-mocha"] {
+  --bg: #1e1e2e;
+  --bg-elev: #313244;
+  --bg-hover: #45475a;
+  --border: #585b70;
+  --text: #cdd6f4;
+  --muted: #9399b2;
+  --accent: #cba6f7;
+  --accent-hover: #dec7fa;
+  --add-bg: #394545;
+  --add-border: #a6e3a1;
+  --del-bg: #493446;
+  --del-border: #f38ba8;
+  --add-word-bg: #546d5c;
+  --del-word-bg: #734a5f;
+  --sel-bg: #3c4867;
+  --occ-bg: rgba(249, 226, 175, 0.22);
+  --occ-bg-active: rgba(249, 226, 175, 0.45);
+  --danger: #f38ba8;
+  --danger-border: #f38ba8;
+  --success: #a6e3a1;
+  --success-border: #a6e3a1;
+  --warn: #fab387;
+  --warn-border: #fab387;
+  --info: #89b4fa;
+  --info-border: #89b4fa;
+  --shadow-color: rgba(17, 17, 27, 0.55);
+  --highlight-color: rgba(255, 255, 255, 0.05);
+  --on-accent: #11111b;
+  --checker-bg: #1e1e2e;
+  --checker-fg: #313244;
+  --backdrop: rgba(17, 17, 27, 0.6);
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    monospace;
+  color-scheme: dark;
+}
+
+/* Catppuccin Latte. Raised fills step down base → mantle → crust; --warn is the peach darkened past 4:1
+   (the palette's own sits at 2.6:1 on base), and --on-accent is white: crust drops to 3:1 on the hover mauve. */
+:root[data-theme="catppuccin-latte"] {
+  --bg: #eff1f5;
+  --bg-elev: #e6e9ef;
+  --bg-hover: #dce0e8;
+  --border: #bcc0cc;
+  --text: #4c4f69;
+  --muted: #6c6f85;
+  --accent: #8839ef;
+  --accent-hover: #9c5af2;
+  --add-bg: #d5e5d7;
+  --add-border: #40a02b;
+  --del-bg: #ebcfd9;
+  --del-border: #d20f39;
+  --add-word-bg: #b2d5ae;
+  --del-word-bg: #e5a2b3;
+  --sel-bg: #c9d8f5;
+  --occ-bg: rgba(223, 142, 29, 0.25);
+  --occ-bg-active: rgba(223, 142, 29, 0.5);
+  --danger: #d20f39;
+  --danger-border: #d20f39;
+  --success: #40a02b;
+  --success-border: #40a02b;
+  --warn: #c74e09;
+  --warn-border: #fe640b;
+  --info: #1e66f5;
+  --info-border: #1e66f5;
+  --shadow-color: rgba(76, 79, 105, 0.16);
+  --highlight-color: rgba(255, 255, 255, 0.7);
+  --on-accent: #fff;
+  --checker-bg: #eff1f5;
+  --checker-fg: #ccd0da;
+  --backdrop: rgba(76, 79, 105, 0.4);
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    monospace;
+  color-scheme: light;
+}
+
+
 * {
   box-sizing: border-box;
 }
@@ -1474,6 +1553,7 @@ textarea:focus-visible {
   width: 1ch;
   padding: 0 3px 0 0;
   color: var(--muted);
+  user-select: none;
 }
 .row-add .word-diff {
   background: var(--add-word-bg);
