@@ -1,10 +1,7 @@
 import { useRef, useState } from "react";
 import { COMMENT_TYPES, type CommentType } from "../types";
 
-/** One-click type picker: the type badges themselves, made selectable, so the
- *  target is recognized by its color rather than read out of a dropdown.
- *  Radiogroup semantics (single tab stop, arrows move the selection) keep four
- *  pills costing the keyboard no more than the one select they replaced. */
+/** One-click type picker with radiogroup semantics: a single tab stop, arrows move the selection. */
 function TypePills({
   value,
   onChange,
@@ -12,9 +9,7 @@ function TypePills({
 }: {
   value: CommentType;
   onChange: (type: CommentType) => void;
-  /** A click is a finished choice, so it hands the caret back to the body.
-   *  Arrow-keying deliberately doesn't: focus has to stay in the group for the
-   *  next arrow to land, and it's the roving tabIndex's only holder. */
+  /** A click hands the caret back to the body; arrow-keying doesn't, since focus must stay in the group. */
   onPick: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -31,8 +26,7 @@ function TypePills({
     const i = COMMENT_TYPES.indexOf(value);
     const next = COMMENT_TYPES[(i + step + COMMENT_TYPES.length) % COMMENT_TYPES.length];
     onChange(next);
-    // Focus follows the selection, as it does in a native radiogroup — the
-    // unselected pills are tabIndex -1, so nothing else can hold it.
+    // Focus follows the selection: the unselected pills are tabIndex -1, so nothing else can hold it.
     ref.current?.querySelector<HTMLButtonElement>(`[data-type="${next}"]`)?.focus();
   }
 
@@ -76,8 +70,7 @@ interface Props {
   submitLabel?: string;
   hideType?: boolean;
   placeholder?: string;
-  // Lets an empty body through: the review summary is cleared by saving it blank,
-  // where a comment with nothing in it is a mis-click.
+  // The review summary is cleared by saving it blank.
   allowEmpty?: boolean;
 }
 
@@ -110,9 +103,8 @@ export function CommentComposer({
     }
   }
 
-  // Submit/cancel are bound on the root rather than the textarea, so they work from
-  // the pills and buttons too — the global shortcuts bail on this whole subtree
-  // (`useKeyboardShortcuts`), which would otherwise leave both keys dead there.
+  // Bound on the root, not the textarea: the global shortcuts bail on this whole subtree, so the
+  // keys would otherwise be dead on the pills and buttons.
   function onKeyDown(e: React.KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();

@@ -2,17 +2,11 @@ import { turnOf } from "./commentTurn";
 import type { Comment, CommentType } from "./types";
 import { COMMENT_TYPES, effectivePath } from "./types";
 
-// The comments pane's filters, the counterpart to commentSort's orderings. Session
-// state, deliberately not persisted: a filter remembered from yesterday would open
-// the pane already hiding comments, and a pane that silently omits feedback is
-// worse than one that needs re-narrowing.
+// The comments pane's filters. Session state, not persisted: a remembered filter would open the pane already hiding comments.
 
 export const ANY = "any";
 
-// One select, two axes: how a thread stands (open/resolved/outdated) and whose
-// move it is (see commentTurn). They're kept together because the answers are
-// mutually exclusive in practice — a resolved thread has no turn — and a fourth
-// select would crowd the filter row for a choice nobody combines.
+// One select, two axes (how a thread stands, whose move it is): exclusive in practice, and a fourth select would crowd the row.
 export type StatusFilter =
   | typeof ANY
   | "open"
@@ -25,11 +19,9 @@ export type TypeFilter = typeof ANY | CommentType;
 export interface CommentFilter {
   status: StatusFilter;
   type: TypeFilter;
-  // An exact root author, or ANY. Authors are open-ended (an API client sets its
-  // own), so the choices come from the review rather than a fixed list.
+  // An exact root author, or ANY; authors are open-ended, so the choices come from the review.
   author: string;
-  // Free text, matched against the whole thread (see matchesQuery). Blank means
-  // no narrowing — it's the query's ANY.
+  // Free text matched against the whole thread; blank means no narrowing.
   query: string;
 }
 
@@ -49,24 +41,17 @@ export const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
   ...COMMENT_TYPES.map((t) => ({ value: t, label: t })),
 ];
 
-// The authors who started a thread here. Replies don't count: the pane lists roots,
-// so an author with only replies would filter to nothing.
+// Replies don't count: the pane lists roots, so a reply-only author would filter to nothing.
 export function authorsOf(comments: Comment[]): string[] {
   return [...new Set(comments.map((c) => c.author).filter(Boolean))].sort();
 }
 
-// The needle a query narrows by: trimmed and lowercased, so matching is
-// case-insensitive and a whitespace-only query narrows nothing. Everything that
-// acts on the query goes through this — the pane highlights matches with the same
-// needle it filtered with, or it would mark text that isn't why the row is there.
+// The only place the raw query becomes a needle: the pane must highlight with the same needle it filtered by.
 export function queryNeedle(query: string): string {
   return query.trim().toLowerCase();
 }
 
-// A plain case-insensitive substring, matched against the thread rather than the
-// root comment alone: the pane lists roots, so a term that only appears in a reply
-// still has to surface the thread that holds it. Both paths count, so a
-// rename-moved comment is findable under either its old or its new home.
+// Matches the whole thread (replies included) and both paths, so a rename-moved comment is findable under either.
 function matchesQuery(c: Comment, needle: string): boolean {
   if (!needle) return true;
   const has = (s: string | undefined) => !!s && s.toLowerCase().includes(needle);
@@ -90,8 +75,7 @@ function matchesStatus(c: Comment, status: StatusFilter): boolean {
       return !!c.resolved;
     case "outdated":
       return c.anchorStatus === "outdated";
-    // Both turn values already exclude resolved threads — turnOf calls those
-    // "none" — so neither needs to restate it.
+    // turnOf already calls a resolved thread "none", so neither turn value restates it.
     case "awaiting-you":
       return turnOf(c) === "you";
     case "awaiting-them":

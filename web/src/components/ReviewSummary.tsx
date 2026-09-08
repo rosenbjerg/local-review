@@ -7,8 +7,7 @@ interface Props {
   onSave: (summary: string) => void;
 }
 
-// The review's overall note, above the per-line comments: what the export leads
-// with, so the agent gets the framing before the list of tasks.
+// The review's overall note: what the export leads with.
 export function ReviewSummary({ summary, onSave }: Props) {
   const [editing, setEditing] = useState(false);
 
@@ -16,11 +15,8 @@ export function ReviewSummary({ summary, onSave }: Props) {
     setEditing(true);
   }
 
-  // The editor is the comment composer with the type row off — same keys, same
-  // actions row, and its `.composer` root is what the global shortcuts stand down
-  // for, so `v` or `e` can't fire off a focused Save button mid-edit. The composer
-  // seeds its draft from `initialBody` on mount, and it only mounts while editing,
-  // so reopening always starts from the saved summary.
+  // The composer's `.composer` root is what the global shortcuts stand down for; it only
+  // mounts while editing, so reopening always starts from the saved summary.
   if (editing) {
     return (
       <div className="review-summary">

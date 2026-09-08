@@ -1,8 +1,6 @@
 import type { Hunk } from "./types";
 
-// Intra-line diffing: which parts of a changed line actually changed, so a
-// one-character edit doesn't read as a whole line rewritten. Pure — DiffView
-// turns the ranges into spans (see splitPieces).
+// Intra-line diffing: which parts of a changed line changed, so a one-character edit doesn't read as a rewrite.
 
 // Half-open [start, end) character offsets into a line's content.
 export type Range = [start: number, end: number];
@@ -12,26 +10,22 @@ export interface LineWordDiff {
   add: Range[];
 }
 
-// A minified bundle or a base64 blob is one enormous "line"; the quadratic
-// matching below is only affordable because these caps keep it off such lines.
+// A minified bundle is one enormous "line"; these caps keep the quadratic LCS off it.
 const MAX_CHARS = 1000;
 const MAX_TOKENS = 200;
-// Below this, the two lines are different code rather than an edit of the same
-// code, and marking their few shared tokens would be noise.
+// Below this the two lines are different code, not an edit of the same code.
 const MIN_SIMILARITY = 0.5;
 // The per-file budget, mirroring the syntax highlighter's own ceiling.
 const MAX_CHANGED_LINES = 2000;
 
-// Word runs, whitespace runs, and single punctuation characters, so a diff lands
-// on identifier boundaries instead of mid-word.
+// Word runs, whitespace runs, single punctuation: a diff lands on identifier boundaries, not mid-word.
 const TOKEN = /[\p{L}\p{N}_$]+|\s+|[^\p{L}\p{N}_$\s]/gu;
 
 export function tokenizeLine(line: string): string[] {
   return line.match(TOKEN) ?? [];
 }
 
-// The changed ranges on each side of a paired -/+ line, or null when marking
-// them would say nothing the row's own add/del shade doesn't already.
+// Null when marking the ranges would say nothing the row's own add/del shade doesn't.
 export function wordDiff(oldLine: string, newLine: string): LineWordDiff | null {
   if (oldLine === newLine) return null;
   if (oldLine.length > MAX_CHARS || newLine.length > MAX_CHARS) return null;
@@ -39,8 +33,7 @@ export function wordDiff(oldLine: string, newLine: string): LineWordDiff | null 
   const b = tokenizeLine(newLine);
   if (a.length > MAX_TOKENS || b.length > MAX_TOKENS) return null;
 
-  // Trimming the shared head and tail first is what keeps the quadratic step off
-  // the common case — a long line with one word changed leaves a 1-token middle.
+  // Trimming the shared head and tail first keeps the quadratic step off the common one-word change.
   let head = 0;
   while (head < a.length && head < b.length && a[head] === b[head]) head++;
   let tail = 0;
@@ -75,7 +68,6 @@ export function wordDiff(oldLine: string, newLine: string): LineWordDiff | null 
   return { del, add };
 }
 
-// Flags every token outside a longest common subsequence of the two middles.
 function markDivergence(
   a: string[],
   b: string[],
@@ -107,8 +99,6 @@ function markDivergence(
   while (j < m) bChanged[offset + j++] = true;
 }
 
-// Token flags → character ranges, merging runs so adjacent changed tokens (and
-// the whitespace between them) read as one highlight.
 function rangesOf(tokens: string[], changed: boolean[]): Range[] {
   const out: Range[] = [];
   let pos = 0;
@@ -133,9 +123,7 @@ export interface HunkWordRanges {
   add: Map<number, Range[]>;
 }
 
-// Keyed by the line numbers the rendered rows already carry — deletions by old
-// line, additions by new line — so the Changed and Full views can both look a row
-// up without knowing how it was paired.
+// Keyed by the line numbers rows carry — deletions by old line, additions by new — so both views look up alike.
 export function hunkWordRanges(hunks: Hunk[]): HunkWordRanges {
   const out: HunkWordRanges = { del: new Map(), add: new Map() };
   let budget = MAX_CHANGED_LINES;
@@ -151,8 +139,7 @@ export function hunkWordRanges(hunks: Hunk[]): HunkWordRanges {
       while (d < lines.length && lines[d].kind === "del") d++;
       let a = d;
       while (a < lines.length && lines[a].kind === "add") a++;
-      // Positional pairing within the run: a replaced block usually lines up, and
-      // when it doesn't, wordDiff's similarity gate drops the bogus pair.
+      // Positional pairing within the run; wordDiff's similarity gate drops a bogus pair.
       const pairs = Math.min(d - i, a - d);
       for (let k = 0; k < pairs; k++) {
         if (budget-- <= 0) return out;
@@ -178,11 +165,8 @@ export interface Piece extends Segment {
   changed: boolean;
 }
 
-// Cuts the syntax-highlighted segments at the changed-range boundaries, so the
-// two independent segmentations (colour, changedness) compose instead of one
-// having to win. Ranges past the end of the text are clamped: the segments come
-// from the file's current content and the ranges from the diff's hunks, which a
-// stale read can briefly disagree about.
+// Cuts the highlighted segments at the range boundaries so colour and changedness compose. Ranges past the
+// text are clamped: the segments and the hunks can briefly disagree after a stale read.
 export function splitPieces(segments: Segment[], ranges: Range[]): Piece[] {
   const out: Piece[] = [];
   let pos = 0;

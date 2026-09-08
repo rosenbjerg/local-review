@@ -84,9 +84,7 @@ export default function App() {
     setSummary,
   } = useReview();
 
-  // Files the branch didn't change, opened so they can be commented on. Session
-  // state (not persisted): comment-bearing ones re-derive from `comments` on
-  // reload; uncommented ones are transient.
+  // Files opened only to comment on. Session state: the comment-bearing ones re-derive from `comments` on reload.
   const [openedFiles, setOpenedFiles] = useState<string[]>([]);
   const [showAddFile, setShowAddFile] = useState(false);
   const [showExport, setShowExport] = useState(false);
@@ -97,13 +95,10 @@ export default function App() {
     const stored = getString(LS.commentSort);
     return isCommentSort(stored) ? stored : "file";
   });
-  // Session state, unlike the sort — see commentFilter.ts.
   const [commentFilter, setCommentFilter] = useState<CommentFilter>(NO_FILTER);
   const diffColRef = useRef<HTMLDivElement>(null);
   const explorerSearchRef = useRef<HTMLInputElement>(null);
-  // Which file the tree highlights: the scroll-spy sets it as you scroll, clicks/nav
-  // set it too. Plain state — the React Compiler keeps unchanged DiffViews from
-  // re-rendering when this changes, so it needn't live outside React.
+  // Plain state on purpose: the React Compiler keeps unchanged DiffViews from re-rendering on it.
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
   const {
@@ -118,8 +113,6 @@ export default function App() {
     startResize,
     onResizeKey,
   } = usePanelResize();
-  // Highlight the file scrolled to the top of the diff, not just the last-clicked
-  // one; suppress it during programmatic scrolls so it doesn't flicker en route.
   const { suppress: suppressActiveFile } = useActiveFile(diffColRef, setSelectedFile, review?.id);
   const { activeComment, expandTarget, expandComment, jumpTo, jumpToFile, resetJump } = useJump({
     comments,
@@ -128,7 +121,6 @@ export default function App() {
   });
   const [showFullSignal, setShowFullSignal] = useState<{ path: string; n: number } | null>(null);
   const highlight = useOccurrenceHighlight(!!review, diffColRef);
-  // `#<id>` references in comment bodies: click jumps, hover/focus previews.
   const refHover = useCommentRefs(jumpTo);
   const { commentActions, handleAddComment, handleDelete } = useCommentActions({
     review,
@@ -139,8 +131,6 @@ export default function App() {
   });
 
 
-  // Agent activity that landed while the tab was hidden, counted into the title so
-  // a review left open in a background tab says when the agent has answered.
   const unseen = useUnseenActivity(comments, review?.id);
 
   useEffect(() => {
@@ -150,18 +140,15 @@ export default function App() {
       : "local-review";
   }, [review, repo, unseen]);
 
-  // A filter belongs to the review it was set on — carried into another one it
-  // would open a pane that silently hides that review's comments.
+  // A filter carried into another review would silently hide its comments.
   useEffect(() => {
     setCommentFilter(NO_FILTER);
   }, [review?.id]);
 
-  // The theme is a per-repo preference and its store lives outside React, so point
-  // it at the selection. It ignores the empty repo the first render carries, having
-  // seeded itself from the remembered one.
+  // The theme store ignores the empty repo the first render carries, having seeded from the remembered one.
   useEffect(() => setThemeRepo(repo), [repo]);
 
-  // Clear pure view/nav state on a repo switch; useReview resets its own data.
+  // Keyed on repo alone, deliberately (resetJump isn't a dep); useReview resets its own data.
   useEffect(() => {
     if (!repo) return;
     setSelectedFile(null);
@@ -174,9 +161,7 @@ export default function App() {
     if (path) setShowFullSignal((s) => ({ path, n: (s?.n ?? 0) + 1 }));
   }
 
-  // What a reset would actually clear. Read twice — to enable the toolbar control
-  // and to refuse a no-op confirm — so the two can't drift into a button that
-  // opens a dialog which then declines to do anything.
+  // One predicate behind both canReset and requestReset's guard, so they can't drift apart.
   const hasReviewState = comments.length > 0 || reviewedFiles.size > 0 || !!review?.summary;
 
   function requestReset() {
@@ -210,10 +195,8 @@ export default function App() {
     return Math.min(lines, 400) * 18 + 44;
   }
 
-  // Fold in synthetic cards for paths the diff didn't touch but that were opened
-  // to comment on — explicitly (openedFiles) or because a comment (browser- or
-  // agent-authored) already anchors there. Deriving from comments both surfaces
-  // agent comments on non-changed files and restores opened files after a reload.
+  // Synthetic cards for paths the diff didn't touch: opened here, or anchoring a comment — which
+  // is also what restores them after a reload.
   const allFiles = useMemo(() => {
     const inDiff = new Set(files.map((f) => f.newPath || f.oldPath));
     const extras = new Set<string>();
@@ -231,8 +214,7 @@ export default function App() {
     return [...files, ...synthetic];
   }, [files, openedFiles, comments]);
 
-  // The review's own totals, off the real diff — the synthetic cards in `allFiles`
-  // have no hunks and nothing to count.
+  // Off the real diff: the synthetic cards in `allFiles` have nothing to count.
   const diffStat = useMemo(() => totalStat(files), [files]);
 
   const orderedDiffFiles = useMemo(() => orderedFiles(allFiles), [allFiles]);
@@ -240,28 +222,23 @@ export default function App() {
     () => orderedDiffFiles.map((f) => f.newPath || f.oldPath),
     [orderedDiffFiles]
   );
-  // The set of existing comment ids, so `#<id>` references only linkify real comments.
-  // Keyed on the id list (not the array identity) so an SSE refetch returning the same
-  // ids keeps a stable Set identity — otherwise every thread/reply <Markdown> re-runs
-  // markdown-it + Shiki highlighting on each refetch.
+  // Keyed on the joined id list, not the array: a no-op SSE refetch must keep the Set's
+  // identity, or every <Markdown> re-runs markdown-it + Shiki.
   const commentIdKey = comments.map((c) => c.id).join(",");
   const commentIds = useMemo(
     () => new Set(commentIdKey ? commentIdKey.split(",").map(Number) : []),
     [commentIdKey]
   );
-  // Each file card gets only its own comments, so a card whose comments didn't
-  // change compares equal and skips the re-render (see DiffView's memo boundary).
+  // Per-file slices are what let DiffView's memo skip cards whose comments didn't change.
   const commentsByPath = useMemo(() => groupByPath(comments), [comments]);
 
-  // The comments panel and the n/p keyboard nav share one ordering *and* one
-  // filter, so stepping through comments always follows what the pane shows.
+  // The pane and the n/p nav share one ordering and one filter.
   const sortedComments = useMemo(
     () => sortComments(filterComments(comments, commentFilter), commentSort, orderedFilePaths),
     [comments, commentFilter, commentSort, orderedFilePaths]
   );
   const commentAuthors = useMemo(() => authorsOf(comments), [comments]);
-  // Off the unfiltered list on purpose — the pane's own count follows the filter,
-  // this one describes the review (like the explorer badges and the export button).
+  // Off the unfiltered list on purpose: this count describes the review, not the pane.
   const awaitingYou = useMemo(() => awaitingYouCount(comments), [comments]);
   const orderedCommentIds = useMemo(() => sortedComments.map((c) => c.id), [sortedComments]);
 
@@ -285,9 +262,7 @@ export default function App() {
     jumpTo(orderedCommentIds[next]);
   }
 
-  // Mark the file you're on reviewed and move to the next one still unread, so a
-  // read-through never needs the mouse. Unmarking stays put — undoing a keystroke
-  // shouldn't also move you.
+  // Unmarking stays put: undoing a keystroke shouldn't also move you.
   function markReviewedAndAdvance() {
     if (!selectedFile) return;
     if (reviewedFiles.has(selectedFile)) {
@@ -297,9 +272,7 @@ export default function App() {
     toggleReviewed(selectedFile, true);
     const next = nextUnreviewed(orderedFilePaths, selectedFile, reviewedFiles);
     if (!next) return;
-    // Deferred, like openFile's scroll: marking a file reviewed collapses its card
-    // on the next render, and that card is above the target — scrolling first
-    // computes an offset the collapse then invalidates, landing short of the file.
+    // Deferred: marking collapses the card above the target, invalidating an offset computed first.
     setTimeout(() => jumpToFile(next), 50);
   }
 
@@ -317,8 +290,7 @@ export default function App() {
     onMarkReviewed: markReviewedAndAdvance,
     onOpenSettings: () => setShowSettings(true),
     onCloseSettings: () => setShowSettings(false),
-    // `/` reaches the search even with the pane shut: open it, then focus on the
-    // frame after the commit, since the input doesn't exist until then.
+    // Open the pane first; the input only exists on the frame after the commit.
     onFocusSearch: () => {
       if (leftOpen) explorerSearchRef.current?.focus();
       else {
@@ -375,8 +347,7 @@ export default function App() {
           review,
           shortSha,
           baseSha,
-          // `files`, not `allFiles`: the count answers "what does this diff change",
-          // so the synthetic cards for commented-but-unchanged files stay out of it.
+          // `files`, not `allFiles`: the synthetic cards aren't changes this diff made.
           fileCount: files.length,
           stat: diffStat,
           openCommentCount: comments.filter((c) => !c.resolved).length,
@@ -398,9 +369,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Not dismissible, and deliberately not an error: nothing failed, the server
-          simply declined to judge staleness because it couldn't read the repo. It
-          clears itself on the next read once the repo is back. */}
+      {/* Not an error: nothing failed, the server just couldn't read the repo to judge staleness. */}
       {review?.annotationError && (
         <div className="warn banner" role="status">
           <span>
@@ -424,8 +393,6 @@ export default function App() {
             hint="local-review serves every git repository directly under the folder it was started with. Restart it with -root pointing at a folder that contains some."
           />
         ) : branchesLoaded && branches.length === 0 ? (
-          // A repo with no commits has no branches to pick, so "select a branch"
-          // would send the reviewer looking for a control that can't be filled.
           <EmptyState
             icon={<IconGitCommit />}
             title={`${repo} has no commits yet`}
@@ -460,8 +427,7 @@ export default function App() {
               />
             )}
           </aside>
-          {/* A shut pane's resizer is inert: dragging it would clamp the stored
-              width back up to the minimum while the pane stayed collapsed. */}
+          {/* Inert while shut: a drag would clamp the stored width back up to the minimum. */}
           <div
             className={`resizer${leftOpen ? "" : " resizer-inert"}`}
             role="separator"
@@ -594,8 +560,7 @@ export default function App() {
       )}
 
       {showPrompts && review && (
-        // Keyed on the repo so a switch remounts the editor with that repo's saved
-        // prompts, rather than carrying the previous repo's drafts across.
+        // Keyed on repo so a switch remounts the editor instead of carrying drafts across.
         <AgentPromptsModal
           key={repo}
           repo={repo}

@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { mapSpansToNodes, matchSpans, normalizeTerm } from "./occurrences";
 
-// TS 5.6's DOM lib types `Highlight` but leaves HighlightRegistry's maplike
-// members off the interface.
+// TS 5.6's DOM lib types `Highlight` but leaves HighlightRegistry's maplike members off.
 declare global {
   interface HighlightRegistry {
     set(name: string, highlight: Highlight): void;
@@ -23,18 +22,13 @@ interface Target {
   term: string;
 }
 
-// Select a word in a diff line and every other occurrence of it in that file
-// lights up, so a variable's uses read at a glance. Painted with the CSS Custom
-// Highlight API — ranges over the existing text nodes rather than wrapper
-// elements, which keeps it off the DOM entirely and out of the way of the
-// per-token spans syntax highlighting renders.
+// Select a word in a diff line and its other occurrences in that file light up — via the CSS Custom Highlight API, so no DOM is created.
 export function useOccurrenceHighlight(enabled: boolean, rootRef: RefObject<HTMLElement | null>) {
   const [target, setTarget] = useState<Target | null>(null);
   const [count, setCount] = useState(0);
   const [index, setIndex] = useState(0);
   const [viewMode, setViewMode] = useState<string | null>(null);
-  // The ranges live outside React because a repaint replaces them without
-  // re-running the effect that owns them, and stepping needs the current set.
+  // Outside React: a repaint replaces the ranges without re-running the owning effect, and stepping needs the current set.
   const ranges = useRef<Range[]>([]);
   const active = useRef(0);
 
@@ -61,8 +55,7 @@ export function useOccurrenceHighlight(enabled: boolean, rootRef: RefObject<HTML
 
   function clear() {
     setTarget(null);
-    // Without this the browser still holds the selection, so the next mouseup or
-    // keyup re-derives the same term and the highlight comes straight back.
+    // Or the next mouseup/keyup re-derives the same term and the highlight comes straight back.
     window.getSelection()?.removeAllRanges();
   }
 
@@ -110,10 +103,7 @@ export function useOccurrenceHighlight(enabled: boolean, rootRef: RefObject<HTML
     };
     paint();
 
-    // Highlighting swaps a line's single text node for per-token spans when its
-    // grammar finishes loading, which detaches every range built before that.
-    // Repainting on any change to the card is what keeps the highlight alive
-    // through it — and through a Changed/Full toggle or a refetched diff.
+    // Shiki swaps a line's text node for per-token spans when its grammar loads, detaching every range built before; repaint on any change.
     const mo = new MutationObserver(() => {
       if (!raf) raf = requestAnimationFrame(paint);
     });
@@ -124,8 +114,7 @@ export function useOccurrenceHighlight(enabled: boolean, rootRef: RefObject<HTML
       attributeFilter: ["data-view-mode"],
     });
 
-    // Scrolling the file out of sight drops the highlight. A long file stays
-    // intersecting while you scan down it, which is the point.
+    // Scrolling the file out of sight drops the highlight; a long file stays intersecting while you scan it.
     const io = new IntersectionObserver(
       ([entry]) => {
         if (!entry.isIntersecting) setTarget(null);
@@ -155,9 +144,7 @@ export function useOccurrenceHighlight(enabled: boolean, rootRef: RefObject<HTML
   };
 }
 
-// A selection only counts when it starts and ends inside one line's content
-// cell: that rules out multi-line drags, the line-number gutters, and text
-// selected in a comment thread, all without a separate check.
+// Start and end must be in one line's content cell, which rules out multi-line drags, gutters and thread text at once.
 function readTarget(): Target | null {
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed) return null;
@@ -169,8 +156,7 @@ function readTarget(): Target | null {
   return { path, term };
 }
 
-// Park the counter on the occurrence the reader selected rather than the file's
-// first, so "3 of 12" says where they are and Enter steps forward from there.
+// Start on the occurrence the reader selected, so Enter steps forward from there.
 function indexOfSelection(ranges: Range[]): number {
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return 0;
@@ -203,8 +189,7 @@ function buildRanges(card: HTMLElement, term: string): Range[] {
 
 function textNodesIn(cell: Element): Text[] {
   const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT, {
-    // The +/-/space marker shares the cell with the code; counting it would
-    // shift every offset in the line and let a match span the two.
+    // The +/-/space sign shares the cell; counting it would shift every offset in the line.
     acceptNode: (node) =>
       node.parentElement?.classList.contains("sign")
         ? NodeFilter.FILTER_REJECT

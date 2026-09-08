@@ -5,16 +5,12 @@ import { renderMermaid } from "../mermaid";
 import { commentRefPlugin } from "../commentRef";
 import { useTheme } from "../theme";
 
-// html:false — bodies are injected via dangerouslySetInnerHTML, so raw HTML must
-// stay escaped. `md` renders comment bodies (soft newlines → <br>, GFM-style);
-// `docMd` renders whole documents (export preview, markdown files) the standard
-// CommonMark way, where a soft newline is just a space. Both linkify `#<id>`
-// comment references when a `commentIds` set is passed as the render env.
+// html:false — bodies go through dangerouslySetInnerHTML, so raw HTML must stay escaped.
+// `md` renders comment bodies (soft newline → <br>); `docMd` whole documents, CommonMark-style.
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true }).use(commentRefPlugin);
 const docMd = new MarkdownIt({ html: false, linkify: true, breaks: false }).use(commentRefPlugin);
 
-// This preview renders inside a nav <button>: links would be invalid nesting and
-// hijack the jump click, so link/image syntax collapses to plain text.
+// Renders inside a nav <button>, where links would be invalid nesting and hijack the click.
 const inlineMd = new MarkdownIt({ html: false, linkify: false, breaks: false });
 inlineMd.renderer.rules.link_open = () => "";
 inlineMd.renderer.rules.link_close = () => "";
@@ -31,7 +27,6 @@ export function Markdown({
   className?: string;
   inline?: boolean;
   softBreaks?: boolean;
-  // When set, `#<id>` references to these comment ids become clickable links.
   commentIds?: Set<number>;
 }) {
   const base = useMemo(

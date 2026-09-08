@@ -1,5 +1,4 @@
-// Package git wraps the git binary for the tool's read-only operations: listing
-// branches, computing the branch diff, and reading file content at a ref.
+// Package git wraps the git binary for the tool's read-only operations.
 package git
 
 import (
@@ -19,8 +18,7 @@ import (
 	"time"
 )
 
-// Every git invocation is bounded: a hung smudge/textconv filter or an unexpected
-// credential prompt must not wedge a serving handler or the 1.5s watch poller.
+// Bounds every git invocation: a hung filter or credential prompt must not wedge a handler or the poller.
 const gitTimeout = 30 * time.Second
 
 type Repo struct {
@@ -33,11 +31,8 @@ func (r *Repo) run(args ...string) (string, error) {
 	return r.runEnv(nil, args...)
 }
 
-// Pass to runEnv for read-only commands the poller runs on a timer. Without it,
-// git may refresh — and write — the index as a side effect, taking index.lock;
-// that can make a concurrent write by the user's own git (an agent committing)
-// fail with "unable to lock index". Output stays correct; only the stat-cache
-// write is skipped. Don't remove it from the polling path.
+// optionalLocksOff keeps a timed read from refreshing the index and taking index.lock
+// out from under a concurrent `git commit`.
 var optionalLocksOff = []string{"GIT_OPTIONAL_LOCKS=0"}
 
 // runEnv is run with extra KEY=VALUE entries appended to the process environment.
@@ -45,8 +40,7 @@ func (r *Repo) runEnv(env []string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", r.Path}, args...)...)
-	// GIT_TERMINAL_PROMPT=0: never block waiting for credentials on stdin (a hang
-	// the timeout would otherwise have to reap). Caller-supplied vars layer on top.
+	// GIT_TERMINAL_PROMPT=0: never block on a credential prompt.
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	cmd.Env = append(cmd.Env, env...)
 	var out, errb bytes.Buffer
@@ -63,17 +57,12 @@ type Branch struct {
 	IsCurrent bool   `json:"isCurrent"`
 	IsMain    bool   `json:"isMain"`
 	IsRemote  bool   `json:"isRemote"`
-	// LastCommit is the tip commit's committer date (RFC3339) — the branch's last
-	// activity, which is what the picker orders by. Empty if git didn't report one.
+	// LastCommit is the tip commit's committer date (RFC3339), which the picker orders by.
 	LastCommit string `json:"lastCommit"`
 }
 
 func (r *Repo) ListBranches() ([]Branch, error) {
-	// Fields are unit-separated (0x1f): a refname can't contain one, and the
-	// committer date is what the picker orders by. %(HEAD) is "*" on the checked-out
-	// branch, a space otherwise. The separator is a literal byte, not git's `%x1f`
-	// escape — `git branch --format` prints that escape verbatim (`git log` expands
-	// it, which is why RecentCommits can use it).
+	// A literal \x1f, not git's %x1f escape: `git branch --format` prints that escape verbatim.
 	out, err := r.run("branch", "--format=%(refname:short)\x1f%(committerdate:iso-strict)\x1f%(HEAD)")
 	if err != nil {
 		return nil, err
@@ -101,8 +90,6 @@ func (r *Repo) ListBranches() ([]Branch, error) {
 	if err := sc.Err(); err != nil {
 		return nil, err
 	}
-	// Remote-tracking branches feed the base picker, so a branch worked off
-	// origin/main with no local trunk can still be diffed against origin/main.
 	remotes, err := r.remoteBranches(main)
 	if err != nil {
 		return nil, err
@@ -112,9 +99,7 @@ func (r *Repo) ListBranches() ([]Branch, error) {
 	return branches, nil
 }
 
-// remoteBranches lists remote-tracking branches (e.g. "origin/main"). It skips
-// the symbolic origin/HEAD pointer via %(symref) rather than fragile "->"
-// parsing, and reflects only what the last fetch pulled — it does not fetch.
+// remoteBranches lists remote-tracking branches as of the last fetch; it does not fetch.
 func (r *Repo) remoteBranches(main string) ([]Branch, error) {
 	out, err := r.run("for-each-ref", "--format=%(refname:short)\x1f%(symref)\x1f%(committerdate:iso-strict)", "refs/remotes")
 	if err != nil {
@@ -131,8 +116,7 @@ func (r *Repo) remoteBranches(main string) ([]Branch, error) {
 		if len(f) != 3 {
 			continue
 		}
-		// A non-empty symref marks the "origin/HEAD -> origin/main" pointer, not a
-		// real branch.
+		// A non-empty symref is the origin/HEAD pointer, not a branch.
 		if strings.TrimSpace(f[1]) != "" {
 			continue
 		}
@@ -144,12 +128,8 @@ func (r *Repo) remoteBranches(main string) ([]Branch, error) {
 
 var pinnedBranches = []string{"main", "master", "develop", "development", "dev", "staging"}
 
-// branchRank orders the pinned trunks ahead of everything else in their partition;
-// anything unpinned ranks equal (and falls through to the date ordering). A remote
-// is ranked on the name *after* its remote, so origin/main and origin/staging head
-// the remote group the way main and staging head the locals — they're the bases a
-// reviewer reaches for, and burying them by date under whatever branch was pushed
-// most recently is exactly what the base picker must not do.
+// branchRank puts the pinned trunks first; a remote ranks on the name after its remote,
+// so origin/main heads the remotes the way main heads the locals.
 func branchRank(b Branch) int {
 	name := b.Name
 	if b.IsRemote {
@@ -165,12 +145,8 @@ func branchRank(b Branch) int {
 	return len(pinnedBranches)
 }
 
-// branchGroup is the prefix a branch is grouped under: everything before its first
-// "/", so "abc/feature-1" and "abc/feature-2" stay adjacent however old they are.
-// A branch with no prefix is its own group (keyed by its full name), so it takes its
-// place among the groups by its own date rather than lumping in with every other
-// slashless branch. For a remote the leading remote name is not the prefix — it is
-// shared by all of them — so it's kept and the first segment *after* it is used.
+// branchGroup is the prefix a branch sorts under: the segment before its first "/", or
+// for a remote the segment after the remote name, which every remote branch shares.
 func branchGroup(b Branch) string {
 	name := b.Name
 	if b.IsRemote {
@@ -193,14 +169,10 @@ func branchDate(b Branch) time.Time {
 	return t
 }
 
-// sortBranches orders the pickers: locals before remotes, then the pinned trunks,
-// then by last activity — but grouped, so a prefix's branches stay together and the
-// group as a whole sits at its newest branch's date. Ordering the groups by their
-// newest member (rather than the branches flatly) is what keeps "abc/*" from being
-// scattered through the list by the age of each individual branch.
+// sortBranches orders locals before remotes, pinned trunks first, then by activity —
+// grouped by prefix, each group sitting at its newest member's date.
 func sortBranches(branches []Branch) {
-	// Locals and remotes are separate partitions, so a local literally named
-	// "origin/x" must not pool its date with the origin/x-prefixed remotes.
+	// Partition by side, so a local named "origin/x" doesn't pool with the origin/x remotes.
 	key := func(b Branch) string {
 		if b.IsRemote {
 			return "r\x00" + branchGroup(b)
@@ -241,8 +213,6 @@ func (r *Repo) MainBranch() string {
 			return name
 		}
 	}
-	// No local trunk: fall back to the remote default, then origin/main|master —
-	// covers a branch worked off origin/main with no local main.
 	if out, err := r.run("rev-parse", "--abbrev-ref", "origin/HEAD"); err == nil {
 		if name := strings.TrimSpace(out); name != "" && name != "origin/HEAD" {
 			return name
@@ -253,22 +223,17 @@ func (r *Repo) MainBranch() string {
 			return name
 		}
 	}
-	// Return "" rather than a fabricated "main" that would fail merge-base;
-	// callers then require an explicit base.
+	// "" rather than a fabricated "main": callers then require an explicit base.
 	return ""
 }
 
-// ErrNoMergeBase reports that two refs share no common ancestor — an orphan branch,
-// or two histories grafted into one repo. That's a legitimate answer about the
-// refs, not a failure, and it needs its own error: the raw one is
-// "exit status 1" with empty stderr, which tells a reviewer nothing.
+// ErrNoMergeBase reports that two refs share no common ancestor.
 var ErrNoMergeBase = errors.New("no common history")
 
 func (r *Repo) MergeBase(a, b string) (string, error) {
 	out, err := r.run("merge-base", a, b)
 	if err != nil {
-		// git merge-base exits 1 specifically for "no merge base found"; a bad ref or
-		// a broken repo exits 128. Only the former is this case.
+		// Exit 1 is "no merge base"; a bad ref or a broken repo exits 128.
 		var ee *exec.ExitError
 		if errors.As(err, &ee) && ee.ExitCode() == 1 {
 			return "", fmt.Errorf("%w: %s and %s", ErrNoMergeBase, a, b)
@@ -278,30 +243,23 @@ func (r *Repo) MergeBase(a, b string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-// --verify + ^{commit} fails cleanly on a missing ref, instead of the confusing
-// "ambiguous argument" a bare rev-parse emits.
+// ResolveSHA resolves ref to a commit sha; --verify fails cleanly on a missing ref.
 func (r *Repo) ResolveSHA(ref string) (string, error) {
 	out, err := r.run("rev-parse", "--verify", ref+"^{commit}")
 	return strings.TrimSpace(out), err
 }
 
-// EmptyTreeSHA is git's canonical empty tree — the before side for a root commit,
-// which has no parent to diff against, so its diff is its whole content.
+// EmptyTreeSHA is git's canonical empty tree, the before side for a root commit.
 const EmptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
-// ParentSHA resolves ref's first parent — the before side that makes a picked
-// commit's *own* changes part of the diff ("from this commit onwards", inclusive).
-// A merge's later parents sit behind the first, so the first is the branch's own
-// line of history; a root commit has none, so it reports the empty tree. One
-// rev-list tells the two apart, where `rev-parse <ref>^` would fail identically
-// for a root commit and for a ref that doesn't exist.
+// ParentSHA resolves ref's first parent, or EmptyTreeSHA for a root commit; one rev-list
+// tells a root commit from a missing ref, where `rev-parse <ref>^` fails identically for both.
 func (r *Repo) ParentSHA(ref string) (string, error) {
 	out, err := r.run("rev-list", "--parents", "-n", "1", ref+"^{commit}")
 	if err != nil {
 		return "", err
 	}
-	// "<sha> [<parent>…]" — no parent means a root commit; no sha at all means git
-	// answered nothing, which is not something to read as "parentless".
+	// "<sha> [<parent>…]": no parent is a root commit; no sha at all is not "parentless".
 	f := strings.Fields(out)
 	switch len(f) {
 	case 0:
@@ -312,25 +270,20 @@ func (r *Repo) ParentSHA(ref string) (string, error) {
 	return f[1], nil
 }
 
-// ErrNotFound reports that there was nothing to read — the path, or the ref
-// itself, doesn't exist on the side asked for. Callers separate it from a real
-// git/IO failure: a vanished path is ordinary here, since a comment outlives the
-// file it was anchored to.
+// ErrNotFound reports that the path, or the ref itself, doesn't exist on the side asked for.
 var ErrNotFound = errors.New("not found")
 
 func (r *Repo) FileContent(ref, path string) (string, error) {
 	return r.showObject(ref + ":" + path)
 }
 
-// IndexFile reads a path's staged content — the stage-0 index blob (`git show
-// :path`) — which is the new side of the "staged" diff (index vs HEAD).
+// IndexFile reads a path's staged (index) content.
 func (r *Repo) IndexFile(path string) (string, error) {
 	return r.showObject(":" + path)
 }
 
-// showObject reads a `<ref>:<path>`-style object, reporting a missing ref or path
-// as ErrNotFound. Absence is confirmed with `cat-file -e` rather than by matching
-// git's stderr, whose wording varies across git versions and locales.
+// showObject reads a `<ref>:<path>` object; absence (ErrNotFound) is confirmed with
+// `cat-file -e`, not by matching stderr, whose wording varies by git version and locale.
 func (r *Repo) showObject(spec string) (string, error) {
 	out, err := r.run("show", spec)
 	if err != nil {
@@ -341,20 +294,8 @@ func (r *Repo) showObject(spec string) (string, error) {
 	return out, err
 }
 
-// BatchObjects reads many `<ref>:<path>`-style objects in one `git cat-file --batch`
-// instead of one `git show` each. Process spawn is the entire cost of these reads —
-// 60 sequential `git show` calls measured 0.64s against 0.01s for one batched
-// command — and a review read needs one per commented and per reviewed file, on
-// every SSE ping. Absent specs are simply missing from the result, so a caller can
-// tell "not there" from "not asked for" without an error per path.
-//
-// The returned map is keyed by the spec as given, and holds **blobs only** — a spec
-// naming a tree or tag is left out so it falls through to the single-object path and
-// keeps whatever `git show` did for it. Specs containing a newline can't ride the
-// line-oriented protocol and are left out for the same reason.
-//
-// An error means the batch didn't run: the caller must not read a spec's absence
-// from the map as the object being absent, only as "unknown".
+// BatchObjects reads many `<ref>:<path>` blobs in one `git cat-file --batch`, keyed by spec.
+// Absent specs and non-blobs are left out; on error nothing was read, so absence means unknown.
 func (r *Repo) BatchObjects(specs []string) (map[string]string, error) {
 	out := map[string]string{}
 	usable := make([]string, 0, len(specs))
@@ -374,8 +315,6 @@ func (r *Repo) BatchObjects(specs []string) (map[string]string, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", "-C", r.Path, "cat-file", "--batch")
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
-	// Same reason the poller passes it: this runs on every review read, and must
-	// never take index.lock out from under a concurrent `git commit`.
 	cmd.Env = append(cmd.Env, optionalLocksOff...)
 	cmd.Stdin = strings.NewReader(strings.Join(usable, "\n") + "\n")
 	var buf, errb bytes.Buffer
@@ -388,15 +327,8 @@ func (r *Repo) BatchObjects(specs []string) (map[string]string, error) {
 	return out, nil
 }
 
-// parseBatch walks cat-file --batch's output, which answers each input in order:
-//
-//	<oid> SP <type> SP <size> LF <size bytes> LF     — found
-//	<spec> SP missing LF                             — not found (also "ambiguous")
-//
-// Records are correlated to inputs by position, since a found record reports the
-// resolved oid rather than echoing the spec. The payload is taken by its declared
-// size and never by scanning for a delimiter: file content is arbitrary bytes and
-// may hold newlines, NULs, or something that looks exactly like a header.
+// parseBatch correlates cat-file --batch records to specs by position (a found record
+// reports the oid, not the spec) and takes each payload by its declared size, never by delimiter.
 func parseBatch(data []byte, specs []string, out map[string]string) {
 	pos, i := 0, 0
 	for pos < len(data) && i < len(specs) {
@@ -416,10 +348,7 @@ func parseBatch(data []byte, specs []string, out map[string]string) {
 		if err != nil || size < 0 || pos+size > len(data) {
 			return // truncated or unparseable: keep what we have rather than guess
 		}
-		// Blobs only. `git show <ref>:<dir>` prints a formatted tree listing where
-		// the raw tree object is binary, so recording one here would quietly change
-		// what such a spec resolves to; leaving it out sends the caller to the
-		// single-object path that produced the old answer.
+		// Blobs only: a raw tree is binary where `git show <ref>:<dir>` prints a listing, so let it fall through.
 		if fields[1] == "blob" {
 			out[specs[i]] = string(data[pos : pos+size])
 		}
@@ -428,9 +357,7 @@ func parseBatch(data []byte, specs []string, out map[string]string) {
 	}
 }
 
-// ListFiles returns the tracked file paths at ref, for the "comment on a
-// non-changed file" picker. quotePath=false keeps non-ASCII paths verbatim, to
-// match the diff parser (see diffArgs).
+// ListFiles returns the tracked file paths at ref; quotePath=false keeps non-ASCII paths verbatim, like diffArgs.
 func (r *Repo) ListFiles(ref string) ([]string, error) {
 	out, err := r.run("-c", "core.quotePath=false", "ls-tree", "-r", "--name-only", ref)
 	if err != nil {
@@ -454,12 +381,7 @@ type Commit struct {
 	RelDate  string `json:"relDate"`
 }
 
-// RecentCommits lists up to limit commits that ref introduces over base
-// (`git log base..ref`), newest first, for the diff "from" picker — so it offers
-// only the branch's own commits, not base-branch history behind the merge point.
-// An empty base falls back to ref's full ancestry (`git log ref`). Fields are
-// unit-separated (0x1f) so a subject can't split them; records are newline-separated
-// (subjects are one line).
+// RecentCommits lists up to limit commits of base..ref, newest first; an empty base lists ref's full ancestry.
 func (r *Repo) RecentCommits(base, ref string, limit int) ([]Commit, error) {
 	rangeArg := ref
 	if base != "" {
@@ -486,19 +408,16 @@ func (r *Repo) RecentCommits(base, ref string, limit int) ([]Commit, error) {
 	return commits, sc.Err()
 }
 
-// Reads the working-tree (on-disk) side, which git show can't. The path is
-// confined to the repo below — no ".." escape, no reaching into .git.
+// WorktreeFile reads path from the on-disk working tree, confined to the repo and kept out of .git.
 func (r *Repo) WorktreeFile(path string) (string, error) {
 	sep := string(filepath.Separator)
 	clean := filepath.Clean(path)
-	// On a case-insensitive FS (macOS/Windows) ".GIT/config" hits the real .git,
-	// so reject every case variant.
+	// A case-insensitive FS resolves ".GIT" to the real .git, so reject every case variant.
 	if lower := strings.ToLower(clean); lower == ".git" || strings.HasPrefix(lower, ".git"+sep) {
 		return "", fmt.Errorf("invalid path %q", path)
 	}
 	full := filepath.Join(r.Path, clean)
-	// Resolve symlinks and confirm the target stays inside the repo, so an in-repo
-	// symlink pointing outward can't be followed out of the tree.
+	// Resolve symlinks first, so an in-repo link pointing outward can't be followed out.
 	root, err := filepath.EvalSymlinks(r.Path)
 	if err != nil {
 		return "", err
@@ -511,9 +430,7 @@ func (r *Repo) WorktreeFile(path string) (string, error) {
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+sep) {
 		return "", fmt.Errorf("invalid path %q", path)
 	}
-	// Re-run the .git check on the *resolved* path: the textual check above sees the
-	// pre-symlink input, so an in-repo symlink (link -> .git) would slip through and
-	// serve .git internals (config, hooks) that resolve back inside the root.
+	// Re-check .git on the resolved path: a symlink into .git passes the textual check above.
 	if lower := strings.ToLower(rel); lower == ".git" || strings.HasPrefix(lower, ".git"+sep) {
 		return "", fmt.Errorf("invalid path %q", path)
 	}
@@ -531,14 +448,8 @@ func notFoundIfAbsent(err error) error {
 	return err
 }
 
-// WorktreeFingerprint is a cheap, content-free signal of whether anything the
-// review renders could have changed. It hashes three parts: the committed HEAD
-// (catches commits/amends, which don't touch working-tree mtimes), the set of
-// tracked and untracked changes (catches new/deleted/renamed files), and each of
-// those paths' mtime (catches a re-edit that leaves a file's git status unchanged).
-// It reads no file content, so its cost stays flat even when the diff includes
-// large files. Any git error is returned so the caller can treat it as "no change"
-// (e.g. a transient failure mid-rebase).
+// WorktreeFingerprint is a content-free change signal — HEAD, the changed-path set and
+// those paths' mtimes — so its cost stays flat however large the diff.
 func (r *Repo) WorktreeFingerprint() (string, error) {
 	head, err := r.runEnv(optionalLocksOff, "rev-parse", "HEAD")
 	if err != nil {
@@ -558,8 +469,7 @@ func (r *Repo) WorktreeFingerprint() (string, error) {
 	h.Write([]byte(untracked))
 	for _, p := range append(splitNUL(tracked), splitNUL(untracked)...) {
 		h.Write([]byte(p))
-		// A deleted path (listed by --name-only) fails to stat; the "absent" marker
-		// is a stable stand-in, and the deletion already shows in the set hash above.
+		// A deleted path fails to stat; "absent" is a stable stand-in.
 		if fi, err := os.Stat(filepath.Join(r.Path, p)); err == nil {
 			fmt.Fprintf(h, ":%d", fi.ModTime().UnixNano())
 		} else {
@@ -618,13 +528,10 @@ type FileDiff struct {
 	Hunks   []Hunk     `json:"hunks"`
 }
 
-// quotePath=false keeps non-ASCII paths verbatim (the default octal-escapes them,
-// which the parsers can't unwrap); the forced a//b/ prefixes let parseDiff strip
-// them regardless of the user's diff.*prefix config. The -c flags must precede diff.
+// diffArgs pins the output shape the parser relies on: verbatim non-ASCII paths and the
+// a/ b/ prefixes, regardless of the user's diff.*prefix config.
 func diffArgs(rest ...string) []string {
-	// --no-ext-diff / --no-textconv: ignore any diff.external, GIT_EXTERNAL_DIFF, or
-	// *.x diff=… textconv the user/repo configured — those emit free-form output the
-	// parser can't read (and would make binaries parse as transformed "text").
+	// --no-ext-diff / --no-textconv: a configured external diff or textconv emits output the parser can't read.
 	base := []string{"-c", "core.quotePath=false", "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--find-renames", "--src-prefix=a/", "--dst-prefix=b/"}
 	return append(base, rest...)
 }
@@ -637,10 +544,7 @@ func (r *Repo) Diff(base, head string) ([]FileDiff, error) {
 	return parseDiff(out)
 }
 
-// DiffFile is Diff restricted to one path — cheap when only one file's status is
-// needed. Restricting to the path prevents rename pairing (the new side is out of
-// scope), so a renamed file shows here as a plain deletion; callers needing the
-// rename target fall back to the whole-tree Diff.
+// DiffFile is Diff restricted to one path; the pathspec defeats rename pairing, so a rename shows as a bare deletion.
 func (r *Repo) DiffFile(from, to, path string) ([]FileDiff, error) {
 	out, err := r.run(diffArgs(from, to, "--", path)...)
 	if err != nil {
@@ -649,8 +553,7 @@ func (r *Repo) DiffFile(from, to, path string) ([]FileDiff, error) {
 	return parseDiff(out)
 }
 
-// Maps a 1-based old-side line to its new-side line; alive=false means the line
-// was deleted or modified (no new-side counterpart).
+// MapOldLine maps a 1-based old-side line to its new-side line; alive=false means it was deleted or modified.
 func MapOldLine(hunks []Hunk, old int) (newLine int, alive bool) {
 	offset := 0
 	for _, h := range hunks {
@@ -681,10 +584,7 @@ func MapOldLine(hunks []Hunk, old int) (newLine int, alive bool) {
 	return old + offset, true // unchanged region after the last hunk
 }
 
-// HunksOldExtent returns the highest old-side (pre-image) line number these hunks
-// touch. Every old line beyond it lies in an unchanged trailing region that
-// MapOldLine maps 1:1 by a constant offset, so a caller walking a range to check
-// contiguity can stop here instead of iterating to an arbitrary end line.
+// HunksOldExtent returns the highest old-side line the hunks touch; beyond it MapOldLine is a constant offset.
 func HunksOldExtent(hunks []Hunk) int {
 	max := 0
 	for _, h := range hunks {
@@ -702,9 +602,7 @@ func HunksOldExtent(hunks []Hunk) int {
 	return max
 }
 
-// Only meaningful when the checked-out branch is base's other side; untracked
-// non-ignored files are added as new (see below). base "HEAD" gives the whole
-// uncommitted delta (staged + unstaged).
+// DiffWorktree diffs base against the working tree, untracked files included as added.
 func (r *Repo) DiffWorktree(base string) ([]FileDiff, error) {
 	out, err := r.run(diffArgs(base)...)
 	if err != nil {
@@ -717,11 +615,7 @@ func (r *Repo) DiffWorktree(base string) ([]FileDiff, error) {
 	return r.appendUntracked(files)
 }
 
-// DiffStaged is the index vs `from` (`git diff --cached <from>`) — the staged
-// changes (plus any commits between from and HEAD, which the index reflects), with
-// the index as the new side. from "HEAD" gives just the staged changes; a
-// merge-base or older commit widens the before side. No untracked files (those are
-// never staged).
+// DiffStaged diffs from against the index (`git diff --cached`); untracked files are never staged, so none appear.
 func (r *Repo) DiffStaged(from string) ([]FileDiff, error) {
 	out, err := r.run(diffArgs("--cached", from)...)
 	if err != nil {
@@ -730,8 +624,7 @@ func (r *Repo) DiffStaged(from string) ([]FileDiff, error) {
 	return parseDiff(out)
 }
 
-// git diff omits untracked files, so add them explicitly — else a brand new file
-// wouldn't appear until `git add`ed. (Untracked files are unstaged.)
+// git diff omits untracked files, so a new file wouldn't appear until `git add`ed.
 func (r *Repo) appendUntracked(files []FileDiff) ([]FileDiff, error) {
 	untracked, err := r.untrackedFiles()
 	if err != nil {
@@ -794,8 +687,7 @@ func parseDiff(text string) ([]FileDiff, error) {
 				hunk = nil
 			}
 			if cur.Hunks == nil {
-				// No hunks (binary, pure rename, mode-only): emit [] not nil so the
-				// frontend's hunks[] contract holds.
+				// [] not nil: the frontend's hunks[] contract
 				cur.Hunks = []Hunk{}
 			}
 			files = append(files, *cur)
@@ -811,8 +703,7 @@ func parseDiff(text string) ([]FileDiff, error) {
 			flush()
 			cur = &FileDiff{Status: FileModified}
 			hunk = nil
-			// Seed paths from the header so binary/mode-only changes (no ---/+++ or
-			// rename lines) still get a name; authoritative lines override below.
+			// Seed paths from the header: a binary or mode-only change has no ---/+++ lines to name it.
 			cur.OldPath, cur.NewPath = parseGitHeaderPaths(line)
 		case cur == nil:
 			// preamble before first file; ignore
@@ -823,9 +714,7 @@ func parseDiff(text string) ([]FileDiff, error) {
 			oldLn, newLn = parseHunkHeader(line)
 			hunk = &Hunk{Header: line}
 		case hunk != nil:
-			// Inside a hunk every line is content. Must precede the ---/+++ cases:
-			// a deleted "-- …" line becomes "--- …" and an added "++ …" becomes
-			// "+++ …", which would else match those headers and corrupt numbering.
+			// Must precede the ---/+++ cases: a deleted "-- …" line reads as a "--- " header.
 			if len(line) == 0 {
 				hunk.Lines = append(hunk.Lines, DiffLine{Kind: LineContext, OldLine: oldLn, NewLine: newLn, Content: ""})
 				oldLn++
@@ -867,17 +756,14 @@ func parseDiff(text string) ([]FileDiff, error) {
 		}
 	}
 	if err := sc.Err(); err != nil {
-		// A line over the 16MB buffer (minified bundle, source map) trips
-		// ErrTooLong. Surface it rather than silently drop every file after it.
+		// A line over the buffer trips ErrTooLong; surface it rather than drop every file after it.
 		return nil, fmt.Errorf("parse diff: %w", err)
 	}
 	flush()
 	return files, nil
 }
 
-// Splitting the "diff --git a/<old> b/<new>" header on " b/" is reliable because
-// diffArgs forces a//b/ prefixes; a path containing " b/" is a text/rename case
-// the authoritative ---/+++/rename lines correct anyway.
+// Splitting on " b/" holds because diffArgs forces the prefixes; the ---/+++ lines correct any path containing it.
 func parseGitHeaderPaths(line string) (oldPath, newPath string) {
 	rest := strings.TrimPrefix(line, "diff --git ")
 	i := strings.Index(rest, " b/")
@@ -899,10 +785,7 @@ func stripDiffPath(p string) string {
 }
 
 func parseHunkHeader(h string) (oldStart, newStart int) {
-	// h looks like: @@ -12,7 +12,9 @@ optional section heading
-	// Only the two fixed-position range tokens are line numbers; the trailing
-	// section heading can contain "-"/"+" (e.g. "->" or "x += 1"), so don't scan
-	// the whole line.
+	// "@@ -12,7 +12,9 @@ heading": only the two fixed-position tokens are ranges; the heading can hold "-"/"+".
 	parts := strings.Split(h, " ")
 	if len(parts) < 3 {
 		return

@@ -9,16 +9,13 @@ import (
 	"strconv"
 )
 
-// A Touch failure is non-fatal — the mutation already landed. Metadata-only
-// (comment/reply/reviewed-file) never moves file content, so it publishes a
-// diff=false ping and the client refetches the review but not the diff.
+// notify sends a metadata-only ping; a failed Touch is non-fatal, the mutation already landed.
 func (s *Server) notify(reviewID int64) {
 	_ = s.Store.Touch(reviewID)
 	s.hub.publish(reviewID, false)
 }
 
-// maxBodyBytes caps a request body: comment/reply bodies are small, so this only
-// stops a buggy/hostile client from spilling a huge payload into memory and the DB.
+// maxBodyBytes stops a buggy or hostile client from spilling a huge payload into memory and the DB.
 const maxBodyBytes = 8 << 20 // 8 MiB
 
 func decodeBody[T any](w http.ResponseWriter, r *http.Request) (req T, ok bool) {

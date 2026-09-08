@@ -1,13 +1,4 @@
-/* Bundled webfonts. Vendored under web/src/fonts (with each licence — all three are
-   SIL OFL 1.1) and referenced by url() so Vite hashes them into web/dist, which
-   go:embed then ships inside the binary: this tool has no network at runtime, so a
-   font it doesn't carry is a font it doesn't have.
-   Deliberately woff2 only (every browser that can run this app reads it, so a woff
-   sibling would be dead weight in the binary) and deliberately **not subsetted** —
-   a diff can contain any character at all, and a code font missing glyphs shows the
-   reviewer tofu where the file has text.
-   font-display: swap rather than block: if a face ever fails to resolve, swap keeps
-   the text readable in the fallback instead of hiding it for three seconds. */
+/* Bundled webfonts: woff2 only, never subsetted (a diff can hold any glyph), font-display: swap. */
 @font-face {
   font-family: "Inter";
   font-style: normal;
@@ -15,8 +6,6 @@
   font-display: swap;
   src: url("./fonts/InterVariable.woff2") format("woff2");
 }
-/* A real italic, not a synthesized shear: markdown emphasis is common in comment
-   bodies, and Inter's italic has its own letterforms. */
 @font-face {
   font-family: "Inter";
   font-style: italic;
@@ -31,9 +20,7 @@
   font-display: swap;
   src: url("./fonts/MonaspaceNeonVar.woff2") format("woff2");
 }
-/* JetBrains Mono ships no variable woff2, only a variable .ttf, so these are the two
-   static weights the UI actually asks for: 400 everywhere and 700 on the explorer's
-   status letter. Anything between resolves to the nearer of the two. */
+/* JetBrains Mono ships no variable woff2, so two static weights (400 and 700). */
 @font-face {
   font-family: "JetBrains Mono";
   font-style: normal;
@@ -50,36 +37,20 @@
 }
 
 :root {
-  /* Corner-radius scale: xs for controls too small for anything larger (the 14px
-     checkbox — sm's 6px leaves a 2px straight edge, i.e. a circle, and a checkbox
-     that reads as a radio is worse than a square one), sm for inline chips
-     (labels, code, kbd, thumbnails), md for controls & cards (buttons, inputs,
-     threads, code blocks), lg for large surfaces (file cards, modals), pill for
-     count/type badges. */
+  /* Radius scale; xs exists for the 14px checkbox, where sm leaves a 2px edge and reads as a radio. */
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-pill: 999px;
 
-  /* Elevation: two steps, composed here once from the two colors each theme
-     brings. A drop shadow alone only reads on a light surface — on #0d1117 a
-     black blur is invisible — so both steps also carry a 1px inset top
-     highlight, which is what makes a raised surface read as raised in the dark
-     themes. sm lifts a bar off what scrolls under it (topbar, sticky headers);
-     lg is for surfaces that float free of the page (modal, dropdown, popover). */
+  /* Both steps carry a 1px inset highlight: a drop shadow alone is invisible on a dark surface. */
   --elev-1: inset 0 1px 0 var(--highlight-color), 0 1px 3px var(--shadow-color);
   --elev-2: inset 0 1px 0 var(--highlight-color), 0 2px 6px var(--shadow-color),
     0 12px 32px var(--shadow-color);
 
-  /* Soft tints: the translucent fill of a semantic color, used behind badges,
-     status chips and the hover/active states of controls that carry that color.
-     Derived from the semantic tokens with color-mix rather than hand-picked per
-     theme — they're the same formula in every palette, and one that a theme can
-     get subtly wrong (the three hand-written --danger-soft values differed only
-     by rounding). A new semantic color gets its -soft here, not in three blocks. */
+  /* Derived with color-mix rather than hand-picked per theme, so three themes can't round it three ways. */
   --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
-  /* The halo around a keyboard focus ring — wider and fainter than the ring. */
   --accent-ring: color-mix(in srgb, var(--accent) 32%, transparent);
   --danger-soft: color-mix(in srgb, var(--danger) 12%, transparent);
   --success-soft: color-mix(in srgb, var(--success) 14%, transparent);
@@ -87,31 +58,15 @@
   --info-soft: color-mix(in srgb, var(--info) 14%, transparent);
   --muted-soft: color-mix(in srgb, var(--muted) 14%, transparent);
 
-  /* The outline of a small control that has to be findable on its own — the
-     checkbox. --border is a *divider* colour, picked to separate two surfaces
-     without drawing attention, which is the opposite requirement: on --bg-elev it
-     lands at ~1.4:1 in all three themes, and at the bottom of the luminance range
-     (github-dark's #30363d on #161b22) that reads as nothing at all. Pulling it
-     two thirds of the way to --muted puts every theme at ~3:1, the non-text
-     contrast floor for a UI component, without making the box shout. Derived from
-     the two tokens rather than hand-picked per theme, so the three can't drift. */
+  /* --border is a divider (~1.4:1 on --bg-elev); two thirds of the way to --muted lands at ~3:1. */
   --control-border: color-mix(in srgb, var(--border) 35%, var(--muted));
 
-  /* The UI face. --font-mono is deliberately *not* here: it belongs to the theme
-     (see the blocks below), since a theme that borrows an editor's colors should
-     borrow the code face that editor is designed around. Each stack keeps the old
-     system fallbacks behind the bundled family, so a face that fails to load
-     degrades to what the app used before rather than to Times. */
+  /* --font-mono is per theme: a theme borrowing an editor's colors borrows its code face. */
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
     sans-serif;
 }
 
-/* Color themes: one block per theme, selected by the data-theme attribute theme.ts
-   keeps on <html>. Every color the UI paints is a token below — Shiki's syntax
-   colors and mermaid's fills are the only ones that aren't, and theme.ts maps those
-   per theme by name. The default block also matches a bare :root, so a missing or
-   unknown data-theme paints github-dark rather than nothing. The dark block
-   documents each token's role; the others only restate the values. */
+/* Color themes: one full token block per theme, keyed by <html data-theme>. Bare :root gets github-dark. */
 :root,
 :root[data-theme="github-dark"] {
   --bg: #0d1117;
@@ -121,34 +76,17 @@
   --text: #e6edf3;
   --muted: #8b949e;
   --accent: #2f81f7;
-  /* The hover shade of saturated accent fills (primary buttons) — brighter here,
-     darker on a light theme — so they lift on hover instead of falling through
-     to the grey .btn:hover surface. */
   --accent-hover: #4b93f9;
   --add-bg: #12261e;
   --add-border: #238636;
   --del-bg: #25171c;
   --del-border: #da3633;
-  /* The parts of a changed line that actually changed, sitting on top of the
-     row shade above. Opaque and clearly distinct from their row, since against
-     --add-bg/--del-bg a translucent tint is almost invisible. Hand-picked per
-     theme for the same reason: they can't be derived from the row shade. */
+  /* Opaque: over the row shades a translucent tint is almost invisible. */
   --add-word-bg: #205c33;
   --del-word-bg: #6b2b33;
-  /* Range-select highlight — an accent-family blue so selecting lines matches
-     the blue gutter-hover, rather than an olive that belonged to neither the
-     add/del shades nor the accent. Opaque like its siblings; it fully overrides
-     the row shade it sits on. */
   --sel-bg: #1c2e4a;
-  /* Every other occurrence of the word you selected. Translucent so the syntax
-     colors stay readable through it, and warm because none of the row shades it
-     can land on (add, del, range-select) are. */
   --occ-bg: rgba(210, 153, 34, 0.28);
-  /* The one match the find bar is parked on, saturated enough to pick out from
-     its siblings at a glance. */
   --occ-bg-active: rgba(210, 153, 34, 0.55);
-  /* Semantic status/feedback colors — text shade + matching border shade.
-     Used by status/fstat marks, comment-type badges, and danger controls. */
   --danger: #f85149;
   --danger-border: #da3633;
   --success: #3fb950;
@@ -157,27 +95,18 @@
   --warn-border: #9e6a03;
   --info: #58a6ff;
   --info-border: #1f6feb;
-  /* The two colors elevation is built from (see --elev-1/--elev-2): the drop
-     shadow, and the 1px inset top highlight that carries the lift on a dark
-     surface where the shadow can't. */
   --shadow-color: rgba(0, 0, 0, 0.45);
   --highlight-color: rgba(255, 255, 255, 0.06);
-  /* Foreground on saturated accent/success fills (primary button, active
-     toggle, hovered gutter) where --text would lack contrast. */
   --on-accent: #fff;
-  /* Checkerboard behind transparent images: base color + square color. */
   --checker-bg: #1c2128;
   --checker-fg: #262c36;
-  /* Scrim behind modals. */
   --backdrop: rgba(0, 0, 0, 0.6);
-  /* GitHub's own code face. */
   --font-mono: "Monaspace Neon", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     monospace;
-  /* Render native controls (checkboxes, selects, default scrollbars) dark. */
   color-scheme: dark;
 }
 
-/* GitHub's light palette (Primer), matched token for token to the dark block. */
+/* GitHub light (Primer). */
 :root[data-theme="github-light"] {
   --bg: #ffffff;
   --bg-elev: #f6f8fa;
@@ -210,19 +139,12 @@
   --checker-bg: #ffffff;
   --checker-fg: #d8dee4;
   --backdrop: rgba(0, 0, 0, 0.4);
-  /* GitHub's own code face. */
   --font-mono: "Monaspace Neon", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     monospace;
   color-scheme: light;
 }
 
-/* JetBrains Darcula: the editor scheme's values — editor #2b2b2b, panels #3c3f41,
-   selection #214283, and the diff's rows, where a deletion is grey rather than red
-   (that is the look). Three departures, each for legibility on our surfaces: --text
-   is the scheme's panel-label grey (#bbbbbb) rather than its bluish editor text,
-   since it paints UI as well as plain code; --muted sits a step above the IDE's
-   #808080, which falls under 3:1 on a panel; and the occurrence highlight is a
-   muted gold — the IDE's is green and would vanish on an added row. */
+/* JetBrains Darcula. Deletions are grey, as in the IDE; --text and --muted sit a step lighter for contrast. */
 :root[data-theme="darcula"] {
   --bg: #2b2b2b;
   --bg-elev: #3c3f41;
@@ -255,32 +177,13 @@
   --checker-bg: #2b2b2b;
   --checker-fg: #3c3f41;
   --backdrop: rgba(0, 0, 0, 0.6);
-  /* The IDE this scheme comes from ships its own code face; use it. */
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     monospace;
   color-scheme: dark;
 }
 
-/* JetBrains Rider's New UI themes — "Rider Night" and "Rider Day", which are the New
-   UI chrome (they inherit ExperimentalDark/ExperimentalLight) over Rider's *own* editor
-   schemes, Rider Dark and Rider Light. Both halves come from JetBrains/rider-theme-pack,
-   the plugin bundled with Rider: the greys, blues and semantic colors are numbered steps
-   of that theme's palette, and everything the editor paints — the surface, the diff rows,
-   the selection, the find highlight — is a color from the scheme XML. Rider's greys are
-   *neutral* where IntelliJ's New UI tints them blue, which is most of what separates the
-   two on screen.
-
-   Four things worth knowing before editing either block. A deleted row is grey
-   (DIFF_DELETED) while its edge is red (DELETED_LINES_COLOR, the gutter marker Rider
-   draws beside a deleted line) — the fill is the JetBrains convention, the edge is what
-   makes a deletion findable anyway, and they are meant to disagree. The word marks are
-   the one pair the schemes can't supply, since the IDE computes its inline-fragment
-   shade rather than storing it, so each steps one rung along its row's own family. And
-   two deliberate departures from the IDE, both for our surfaces rather than its:
-   --muted sits above the IDE's infoForeground (Gray7 in both), which lands under 3:1 on
-   a panel, and --bg-elev is a step above Rider's panel grey (#2B2B2B), which sits only
-   five points off the editor's #262626 — a gap the IDE can leave flat but this app
-   can't, since a thread is drawn as a raised fill and has no border to fall back on. */
+/* Rider Dark (JetBrains rider-theme-pack). Deleted rows are grey with a red edge, as the IDE draws them;
+   --bg-elev and --muted sit a step above the IDE's, for a visible raised fill and 3:1 text. */
 :root[data-theme="rider-night"] {
   --bg: #262626;
   --bg-elev: #303030;
@@ -313,15 +216,12 @@
   --checker-bg: #262626;
   --checker-fg: #303030;
   --backdrop: rgba(0, 0, 0, 0.6);
-  /* The IDE these schemes come from ships its own code face; use it. */
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     monospace;
   color-scheme: dark;
 }
 
-/* The light half. --bg-hover is the New UI's blue hover tint (Blue12) rather than a
-   grey, which is both what the IDE paints and what leaves the grey ramp free to carry
-   deletions: a grey hover and a grey deleted row would be the same shade. */
+/* Rider Light. --bg-hover is the IDE's blue hover tint, leaving the grey ramp free for deletions. */
 :root[data-theme="rider-day"] {
   --bg: #ffffff;
   --bg-elev: #f7f7f7;
@@ -354,31 +254,13 @@
   --checker-bg: #ffffff;
   --checker-fg: #e3e3e3;
   --backdrop: rgba(0, 0, 0, 0.4);
-  /* The IDE these schemes come from ships its own code face; use it. */
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     monospace;
   color-scheme: light;
 }
 
-/* What WebStorm's New UI shows. WebStorm ships no theme or scheme of its own, so this
-   is the *platform* pair — "Dark" and "Light" — and equally what IDEA, PyCharm and
-   GoLand show; it is named for WebStorm because that is the IDE it is offered as. Every
-   value is a numbered step of the platform's palettes (expUI_dark.theme.json /
-   expUI_light.theme.json) or a color from the matching editor scheme
-   (expUI_darkScheme.xml / expUI_lightScheme.xml), so a token is a step of the IDE's ramp
-   rather than a hand-mixed shade. Compare themes/rider.ts, whose colors come from a
-   Rider-specific bundle: these greys are blue-tinted where Rider's are neutral, and the
-   syntax half is a different palette entirely.
-
-   Three things worth knowing before editing either block. The diff rows are the schemes'
-   own DIFF_INSERTED / DIFF_DELETED, which is why a deletion is grey here as it is in
-   Darcula (that is the look), and the row edges are the gutter markers the IDE draws
-   beside a changed line (ADDED_LINES_COLOR / DELETED_LINES_COLOR) — note Rider disagrees
-   on that second half, marking a deletion red. The word marks are the one pair the
-   schemes can't supply — the IDE computes its inline-fragment shade rather than storing
-   it — so they step one rung further along the same ramp as their row. And --muted sits
-   a step above the IDE's own infoForeground (Gray7 in both schemes), which lands under
-   3:1 on a panel; Darcula's block departs from the IDE for exactly the same reason. */
+/* WebStorm: the platform's own New UI Dark (WebStorm ships no scheme; IDEA/PyCharm/GoLand show the same).
+   Deleted rows are grey (the IDE's look); --muted sits a step above the IDE's for 3:1 on a panel. */
 :root[data-theme="webstorm-dark"] {
   --bg: #1e1f22;
   --bg-elev: #2b2d30;
@@ -411,15 +293,12 @@
   --checker-bg: #1e1f22;
   --checker-fg: #2b2d30;
   --backdrop: rgba(0, 0, 0, 0.6);
-  /* The IDE these schemes come from ships its own code face; use it. */
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     monospace;
   color-scheme: dark;
 }
 
-/* The light half. --bg-hover is the New UI's blue hover tint (Blue12) rather than a
-   grey, which is both what the IDE paints and what leaves the grey ramp free to carry
-   deletions: a grey hover and a grey deleted row would be the same shade. */
+/* WebStorm Light. --bg-hover is the IDE's blue hover tint, leaving the grey ramp free for deletions. */
 :root[data-theme="webstorm-light"] {
   --bg: #ffffff;
   --bg-elev: #f7f8fa;
@@ -452,34 +331,13 @@
   --checker-bg: #ffffff;
   --checker-fg: #dfe1e5;
   --backdrop: rgba(0, 0, 0, 0.4);
-  /* The IDE these schemes come from ships its own code face; use it. */
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     monospace;
   color-scheme: light;
 }
 
-/* Material Theme's Oceanic variant — the palette's default face, and the one that
-   reaches editors twice over: equinusocio's Material Theme for VS Code, which Shiki
-   bundles and which colors the code here, and Mallowigi's Material Theme UI for the
-   JetBrains IDEs. Unlike the four blocks above this one is paired with a *bundled*
-   Shiki theme rather than a hand-written one, so the syntax half needs no themes/
-   module. Every value below is either a color the theme itself paints (the editor
-   ground, its input and peek surfaces, the gutter change markers, the find-range
-   highlight) or a numbered step of the Material Design ramps it is built from — Blue
-   Grey for the greys, Teal for the accent, Red/Light Green/Amber/Indigo for the
-   semantic fills.
-
-   Four things worth knowing before editing. The diff rows come from the theme's
-   *gutter* markers (editorGutter.addedBackground / deletedBackground), not from its
-   diffEditor colors, which are cyan for an insertion and pink for a removal: in a
-   review tool cyan reads as a highlight rather than as an addition, and it would leave
-   --add-border disagreeing with --success. --accent is Teal 500, the accent Material
-   Theme UI gives Oceanic, and not the editor's own #80cbc4, which is a highlight color
-   — at 1.9:1 against white it cannot carry --on-accent on a primary button. --muted
-   sits above the theme's own sideBar.foreground (#6c8692, 2.96:1 on --bg-elev), the
-   same departure the JetBrains blocks above document. And the palette has no amber dark
-   enough to carry white (Amber 900 is still #ff6f00), so --warn-border is that yellow
-   taken down to the weight the block's other fills sit at. */
+/* Material Theme, Oceanic (Shiki bundles its syntax theme, so no themes/ module). Diff rows come from the
+   gutter markers, not the cyan/pink diffEditor colors; --accent is Teal 500, dark enough to carry --on-accent. */
 :root[data-theme="material-oceanic"] {
   --bg: #263238;
   --bg-elev: #303c41;
@@ -512,9 +370,7 @@
   --checker-bg: #263238;
   --checker-fg: #303c41;
   --backdrop: rgba(0, 0, 0, 0.6);
-  /* The palette ships no code face of its own, and its most-installed home is a
-     JetBrains plugin; borrow that IDE's face rather than add a fourth family to the
-     binary. */
+  /* No code face of its own; borrow JetBrains Mono rather than ship a fourth family. */
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     monospace;
   color-scheme: dark;
@@ -524,14 +380,7 @@
   box-sizing: border-box;
 }
 
-/* Checkboxes are drawn here, not by the platform. A native one is OS-painted:
-   it ignores every token but color-scheme, sizes itself differently per browser,
-   and lands at a visual weight that has nothing to do with the tinted chips and
-   bordered controls around it — which is what made it the most dated element in
-   the app. `appearance: none` keeps the real <input> (so the wrapping <label>,
-   the :checked state and the tree's `indeterminate` property all still work) and
-   leaves us the box; the mark is a ::after — a rotated L for the check, a bar for
-   indeterminate — so a row costs no icon component and no extra SVG. */
+/* Drawn here, not by the platform: a native checkbox ignores every token but color-scheme. */
 input[type="checkbox"] {
   appearance: none;
   flex: none;
@@ -548,23 +397,16 @@ input[type="checkbox"] {
 input[type="checkbox"]:hover:not(:checked):not(:indeterminate) {
   border-color: var(--text);
 }
-/* --accent, not --success: this is "on", and --success is spoken for by the
-   explorer's reviewed-progress fill right above these rows. White on the accent
-   also clears the greens on contrast, which matters for a 2px glyph. */
+/* --accent, not --success: the reviewed-progress bar right above these rows owns the green. */
 input[type="checkbox"]:checked,
 input[type="checkbox"]:indeterminate {
   background: var(--accent);
   border-color: var(--accent);
 }
-/* The tick: a 3x7 box showing only its right and bottom edges, turned 45°. Sized
-   in px against the 14px box rather than in relative units — at this size a
-   fractional stroke is the difference between a crisp mark and a grey smudge. */
 input[type="checkbox"]:checked::after {
   content: "";
   position: absolute;
-  /* The `*` reset above doesn't match pseudo-elements and box-sizing isn't
-     inherited, so this one states it: without it the borders are added to the
-     4x8 and the tick overhangs the box. */
+  /* border-box: the * reset doesn't reach pseudo-elements, and box-sizing isn't inherited. */
   box-sizing: border-box;
   left: 4px;
   top: 1px;
@@ -574,8 +416,7 @@ input[type="checkbox"]:checked::after {
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
-/* Partial (a folder with some of its files reviewed). Last, so it wins over the
-   tick above on the impossible-in-practice checked+indeterminate pair. */
+/* Indeterminate. Last, so it wins over the tick on the checked+indeterminate pair. */
 input[type="checkbox"]:indeterminate::after {
   content: "";
   position: absolute;
@@ -608,8 +449,6 @@ input[type="checkbox"]:indeterminate::after {
 ::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: var(--radius-md);
-  /* Transparent border + padding-box clip gives the thumb breathing room on any
-     background without hardcoding the surface color. */
   border: 2px solid transparent;
   background-clip: padding-box;
 }
@@ -645,10 +484,7 @@ body {
   box-shadow: var(--elev-1);
   flex-wrap: wrap;
 }
-/* The bar is three tracks. Both ends are `flex: 1 1 0` — equal widths whatever
-   they hold — because that is the only thing that puts the selection at the centre
-   of the *bar*; give either end a content-sized basis and it lands at the centre of
-   whatever the logo and the review's actions leave over, which is well left of it. */
+/* Both ends are flex: 1 1 0, so the selection centres on the bar rather than on the leftover space. */
 .topbar-side {
   display: flex;
   align-items: center;
@@ -658,11 +494,6 @@ body {
 .topbar-side-end {
   justify-content: flex-end;
 }
-/* The selection — repo/head/base, the range's two knobs, reload — as one centred
-   cluster that wraps within itself. Sizing it `0 1 auto` is what makes that the
-   first thing to give: it shrinks to its widest row and wraps while the ends still
-   hold their content, so a narrow bar folds the selection onto a second line
-   instead of breaking the toolbar up around it. */
 .topbar-center {
   display: flex;
   align-items: center;
@@ -675,25 +506,17 @@ body {
   font-weight: 700;
   letter-spacing: -0.02em;
 }
-/* The two words of the range phrase, "from … to …": muted like the crumb separators,
-   since they're the grammar and the controls between them are the values. */
 .range-word {
   color: var(--muted);
   font-size: 12px;
   user-select: none;
 }
-/* One cluster of controls: tighter than the topbar's own gap, so the groups read
-   as groups without a divider rule between them. */
 .topbar-group {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-/* The repo/head/base breadcrumb, and the range phrase after it. Their pickers wear
-   no chrome at rest — the values and the words between them are the sentence, and
-   bordered boxes in a row made the toolbar read as a form. The border comes back on
-   hover and focus, where the control is actually being used; the caret is always
-   visible, so it still reads as a picker at rest. */
+/* No chrome at rest: bordered boxes in a row made the toolbar read as a form. */
 .crumbs {
   display: flex;
   align-items: center;
@@ -720,9 +543,6 @@ body {
 .spacer {
   flex: 1;
 }
-/* The review's readout — the changed-file count and the +/- badge — as one unit,
-   since they describe one comparison. The count carries the title that names both
-   ends of it. */
 .topbar-readout {
   display: flex;
   align-items: center;
@@ -761,9 +581,7 @@ select {
   position: absolute;
   right: 8px;
   top: 50%;
-  /* Centre with a margin, not translateY — a transform here would override the
-     chevron's own rotate() (equal specificity, .chevron.open wins on order) and
-     make the ▸→▾ spin look off-centre. -6px = half the 12px icon. */
+  /* margin, not translateY: a transform here would override the chevron's own rotate(). */
   margin-top: -6px;
   color: var(--muted);
   pointer-events: none;
@@ -820,15 +638,7 @@ select {
   color: var(--muted);
   font-size: 13px;
 }
-/* The range preview (the from picker's list). The list is a timeline, newest first,
-   and a pick means "from here onward" — which rows of sha + subject can't say. So
-   the rows on the rail carry a dot on a line, the row under the pointer is the
-   origin (filled dot), and every rail row above it tints as included; All, which
-   isn't on the rail, includes them all. Dots and line are pseudo-elements (no DOM
-   per row), and the dot states its own box-sizing — the `*` reset doesn't reach
-   pseudo-elements. The tinted run drops its inner corners: adjacent rounded rows
-   notch at every seam. `.included` sits after `.active` so the origin row keeps
-   the tint rather than the hover grey. */
+/* Range preview: the dot states box-sizing (the * reset misses pseudo-elements); .included must follow .active. */
 .range-list .combobox-option {
   position: relative;
   padding-left: 24px;
@@ -898,12 +708,6 @@ select {
   cursor: not-allowed;
 }
 
-/* Shared interactive-state polish. Subtle hover/press feedback so controls
-   don't snap, and one keyboard focus ring everywhere: the accent outline sits
-   just off the control with a wider, fainter halo behind it, so focus reads at a
-   glance on any of our surfaces rather than hugging the border it's drawn over.
-   Inputs are matched by element, not by class — every text field in the app
-   should ring the same way, including ones added later. */
 .btn,
 .btn-icon,
 .link,
@@ -944,9 +748,7 @@ textarea:focus-visible {
   outline-offset: 1px;
   box-shadow: 0 0 0 4px var(--accent-ring);
 }
-/* The one control that can't take the offset ring: .view-toggle clips to its
-   rounded ends with overflow:hidden, which would cut both the offset outline and
-   the halo, so its buttons keep the inset ring. */
+/* .view-toggle clips its overflow, which would cut the offset ring, so its buttons keep the inset one. */
 .view-toggle button:focus-visible {
   outline-offset: -2px;
   box-shadow: none;
@@ -963,7 +765,6 @@ textarea:focus-visible {
 .btn.danger:hover:not(:disabled) {
   background: var(--danger-soft);
 }
-/* Square button holding a single icon (e.g. the GitHub link) */
 .btn-icon {
   display: inline-flex;
   align-items: center;
@@ -974,8 +775,6 @@ textarea:focus-visible {
 .btn-icon:hover {
   color: var(--text);
 }
-/* A disabled .btn is dimmed, which on its own reads the same as "nothing to
-   reload" — the spin is what says the review is being re-run. */
 .btn-icon.is-loading svg {
   animation: spin 900ms linear infinite;
 }
@@ -994,8 +793,7 @@ textarea:focus-visible {
   border-color: var(--accent);
   color: var(--on-accent);
 }
-/* Own hover shade — otherwise .btn:hover (higher specificity) would repaint the
-   primary button grey on hover. */
+/* Own hover shade, or .btn:hover (higher specificity) repaints the primary button grey. */
 .btn-primary:hover:not(:disabled) {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
@@ -1019,14 +817,7 @@ textarea:focus-visible {
   grid-template-columns: 260px 6px 1fr 6px 380px;
   overflow: hidden;
 }
-/* The 6px track is the grab target, not the divider: the divider is the 1px
-   hairline drawn down its middle, which thickens and takes the accent while
-   grabbed. Filling the whole track (what this used to do) put a 6px bar of
-   --border on each side of the diff, and since the panes carried their own edge
-   as well it read as a 7px grey slab — hence no border on .explorer-column or
-   .side-column below either: those panes are --bg-elev against the diff's --bg,
-   so the surface change already separates them and this hairline lands between.
-   Focus is drawn inset, since the panes on both sides clip their overflow. */
+/* The 1px hairline is the divider — the panes carry no border of their own. Focus is inset: they clip overflow. */
 .resizer {
   cursor: col-resize;
   display: flex;
@@ -1057,10 +848,7 @@ textarea:focus-visible {
   overflow-y: auto;
   background: var(--bg-elev);
 }
-/* Holds the find bar below the scrolling diff. It can't be sticky inside the
-   scroller (the file headers already own top:0 there), and below rather than
-   above because a bar entering above would shift the scroller's top edge down
-   and make the whole diff jump every time a highlight appears. */
+/* The find bar sits below the scroller: entering above, it would jump the whole diff. */
 .diff-pane {
   display: flex;
   flex-direction: column;
@@ -1093,13 +881,10 @@ textarea:focus-visible {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  /* No top padding: the file headers are sticky at top:0, so a top padding
-     would leave a band where scrolling content shows above the stuck header.
-     The ::before restores the top gap as scrollable space instead. */
+  /* No top padding: the sticky headers sit at top:0. The ::before supplies the gap as scroll space. */
   padding: 0 8px 8px;
 }
-/* This is the diff column's top padding — keep it equal to the horizontal value
-   above, or the first file card sits closer to the top than to the sides. */
+/* Keep equal to the horizontal padding above. */
 .diff-column::before {
   content: "";
   display: block;
@@ -1110,11 +895,7 @@ textarea:focus-visible {
   background: var(--bg-elev);
 }
 
-/* A collapsed pane keeps a 28px stub rather than going to zero (see RAIL_WIDTH
-   in usePanelResize): a pane with no edge left on screen is one the reviewer has
-   no way back to, and the 6px resizer beside it is a hairline that says nothing
-   about what it hides. overflow:hidden rather than the panes' own auto — at 28px
-   a scrollbar would be most of the pane. */
+/* A collapsed pane keeps a 28px rail (RAIL_WIDTH) so it can be reopened; a scrollbar would be most of it. */
 .pane-collapsed {
   overflow: hidden;
 }
@@ -1136,15 +917,10 @@ textarea:focus-visible {
   background: var(--bg-hover);
   color: var(--text);
 }
-/* Inset, like the resizer's: the column clips its overflow, so an offset ring
-   would be cut off on three sides. */
 .pane-rail:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
-/* The pane's name, read top-to-bottom down the rail. It takes the leftover
-   height and clips, so a short window loses the tail of the word rather than
-   pushing the chevron and count out of the pane. */
 .pane-rail-label {
   writing-mode: vertical-rl;
   min-height: 0;
@@ -1159,16 +935,11 @@ textarea:focus-visible {
   border-radius: var(--radius-pill);
   padding: 0 5px;
 }
-/* The divider beside a collapsed pane is still the edge, but no longer a handle:
-   a drag would clamp the stored width back up to the minimum while the pane
-   stayed shut. */
+/* Inert while collapsed: a drag would clamp the stored width up while the pane stayed shut. */
 .resizer-inert {
   pointer-events: none;
   cursor: default;
 }
-/* The collapse control in each pane's header. Quiet — it's the pane's escape
-   hatch, not one of its tools — so it drops .btn's surface and border and only
-   takes a fill on hover. */
 .pane-collapse {
   padding: 3px 4px;
   background: none;
@@ -1178,9 +949,7 @@ textarea:focus-visible {
   background: var(--bg-hover);
   color: var(--text);
 }
-/* Empty states (see EmptyState.tsx): a centred stack — a large, faint icon over a
-   one-line statement and a hint saying what to do about it. The loading variants
-   use the bare .empty with a spinner, which stacks the same way. */
+/* Empty states */
 .empty {
   padding: 40px 24px;
   display: flex;
@@ -1190,8 +959,6 @@ textarea:focus-visible {
   text-align: center;
   color: var(--muted);
 }
-/* The spinner's margin is for its inline use (in the add-file modal); in this
-   centred column it would just pull the disc off centre. */
 .empty .spinner {
   margin-right: 0;
 }
@@ -1208,13 +975,10 @@ textarea:focus-visible {
 }
 .empty-hint {
   margin: 0;
-  /* Held to a readable measure: these hints name refs and flags, and centred text
-     running the width of the diff column is hard to come back to line by line. */
   max-width: 52ch;
   font-size: 13px;
   line-height: 1.5;
 }
-/* Indeterminate spinner for load states (diff column, initial repo discovery). */
 .spinner {
   display: inline-block;
   width: 16px;
@@ -1236,8 +1000,7 @@ textarea:focus-visible {
     animation: none;
   }
 }
-/* Hold copy buttons at a stable width so the transient "Copied ✓ / Copy failed"
-   swap doesn't reflow the toolbar row. */
+/* Stable width, so the Copied / failed swap doesn't reflow the row. */
 .copy-btn {
   min-width: 8rem;
 }
@@ -1247,8 +1010,7 @@ textarea:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   margin-bottom: 16px;
-  /* No overflow:hidden here — it would scope the sticky header to this
-     (non-scrolling) box. Corner clipping lives on .file-body / the header. */
+  /* No overflow:hidden here: it would scope the sticky header to this box. */
 }
 .file-placeholder {
   opacity: 0.5;
@@ -1266,25 +1028,15 @@ textarea:focus-visible {
   z-index: 1;
   box-shadow: var(--elev-1);
 }
-/* Collapsed file (header is the only child) — round all corners. */
 .file-header:last-child {
   border-radius: var(--radius-lg);
   border-bottom: none;
 }
-/* Clips the diff/media to the rounded bottom without breaking header sticky. */
 .file-body {
   overflow: hidden;
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  /* File cards mount once and never unmount (LazyFile), so the browser would
-     otherwise style, lay out and paint every file ever scrolled past on every
-     frame. This skips the off-screen ones while React keeps them mounted, which
-     is what makes staying mounted affordable — the point of never unmounting is
-     that scrolling back doesn't refetch and re-tokenize.
-     It belongs here rather than on .file: the containment would clip the sticky
-     .file-header to its own card, and .file-body already excludes the header
-     (that's what its overflow:hidden is for). `auto` remembers each body's
-     last-rendered height, so the scrollbar doesn't jump; the fallback only
-     applies in the frame between mounting and first render. */
+  /* Cards mount once and never unmount; this skips the off-screen ones. On .file-body, not .file,
+     which would clip the sticky header. */
   content-visibility: auto;
   contain-intrinsic-size: auto 600px;
 }
@@ -1303,13 +1055,9 @@ textarea:focus-visible {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-/* Only the path gives up space when the header is tight — the controls keep
-   their size, so a long path ellipsizes instead of overflowing the header. */
 .file-header > :not(.file-path) {
   flex-shrink: 0;
 }
-/* Monochrome comment-count marker (speech-bubble icon + number), replacing the
-   color 💬 emoji in the file header and the comments panel. */
 .comment-count {
   display: inline-flex;
   align-items: center;
@@ -1351,9 +1099,6 @@ textarea:focus-visible {
   background: var(--accent);
   color: var(--on-accent);
 }
-/* A group with only one reachable value (the side toggle off the checked-out
-   branch) dims whole, active segment included — dimming only the unavailable ones
-   would read as "these three are still a choice". */
 .view-toggle:has(button:disabled) {
   opacity: 0.5;
 }
@@ -1361,12 +1106,7 @@ textarea:focus-visible {
   cursor: not-allowed;
 }
 
-/* File-status and comment-type marks are tinted fills, not outlines: at rest the
-   UI shows a dozen of these at once (a status per file card, a type per thread,
-   the anchor-drift badges), and an outline on each is a dozen more hairlines
-   competing with the borders that actually divide the layout. The fill is the
-   mark's own -soft tint, so the color still carries the meaning; the transparent
-   border only holds the metrics the outlined version had. */
+/* Tinted fills, not outlines: a dozen show at rest. The transparent border only holds the metrics. */
 .status {
   font-size: 11px;
   text-transform: uppercase;
@@ -1402,9 +1142,6 @@ textarea:focus-visible {
 .explorer {
   padding: 8px 0;
 }
-/* Header + search pin together above the scrolling rows (which have
-   hover/active backgrounds), mirroring .file-header. Keeping them in one sticky
-   wrapper avoids hard-coding the header's height as the search row's top offset. */
 .explorer-sticky {
   position: sticky;
   top: 0;
@@ -1420,8 +1157,7 @@ textarea:focus-visible {
   font-weight: 600;
   font-size: 13px;
 }
-/* The head's bottom edge *is* the reviewed-progress bar — hence no border-bottom
-   above; re-adding one puts a second rule right beneath this one. */
+/* No border-bottom: the progress bar below is the head's edge. */
 .explorer-progress {
   height: 2px;
   background: var(--border);
@@ -1444,9 +1180,7 @@ textarea:focus-visible {
   padding: 6px 10px;
   border-bottom: 1px solid var(--border);
 }
-/* SearchInput — the file explorer's search, the comments pane's and the add-file
-   picker's: one look for "narrow this list", wherever the list is. The rows around
-   them differ. */
+/* SearchInput (the explorer's, the comments pane's, the add-file picker's) */
 .search-wrap {
   position: relative;
   display: flex;
@@ -1502,8 +1236,6 @@ textarea:focus-visible {
 }
 .explorer-item.active {
   background: var(--bg-hover);
-  /* An accent rail distinguishes the selected row from a merely-hovered one
-     (both share --bg-hover). */
   box-shadow: inset 2px 0 0 var(--accent);
 }
 .explorer-item.reviewed .fname {
@@ -1546,18 +1278,13 @@ textarea:focus-visible {
 .fstat-unchanged {
   color: var(--muted);
 }
-/* No font-family: the tree is a list of names, not code, and that's the call every
-   IDE's file pane makes. It also puts files and folders in one face — .tree-folder
-   was already inheriting the UI sans — where the mono set the two apart for no
-   reason the reader could act on. The mono face stays where the characters have to
-   line up: the status letter beside it, the +/- counts, the diff itself. */
+/* No font-family: the tree is names, not code; mono stays where columns must line up. */
 .fname {
   font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* The +N -M line counts (file header, explorer row, review total). */
 .diff-stat {
   flex: none;
   display: inline-flex;
@@ -1589,8 +1316,7 @@ textarea:focus-visible {
   padding-top: 2px;
   padding-bottom: 2px;
   padding-right: 10px;
-  /* Clear the sticky header+search block when scrollIntoView aligns a row to the
-     top of the explorer, so the active row isn't tucked behind it. */
+  /* Clears the sticky header+search when scrollIntoView aligns a row to the top. */
   scroll-margin-top: 76px;
 }
 .tree-dir {
@@ -1604,17 +1330,7 @@ textarea:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
-/* An unmarked check target stays out of the way until the reviewer reaches for
-   the pane. At rest a tree row shows what it is — status letter, name, +/-
-   counts, comment count — and five always-on marks per row was four too many.
-   Revealed for the whole pane at once rather than per row, the same bargain the
-   comments pane's delete buttons make: marking off a pass of files is a run down
-   the list, and a box that only exists under the pointer makes each one a
-   separate act of aiming. Opacity, never display, so nothing reflows under the
-   pointer, and a checked or indeterminate box always shows: that one is state,
-   not an affordance. Row-level :focus-within carries the keyboard, which has no
-   hover. The .explorer-list part of both reveals is there for specificity —
-   without it they lose to the :not() pair above and the box never appears. */
+/* Shown on pane hover; opacity, never display. .explorer-list is for specificity, or the :not() pair above wins. */
 .explorer-list input[type="checkbox"]:not(:checked):not(:indeterminate) {
   opacity: 0;
 }
@@ -1624,12 +1340,8 @@ textarea:focus-visible {
 }
 .tree-chevron {
   flex: none;
-  /* fill=currentColor on the svg → muted triangle in the tree. */
   color: var(--muted);
 }
-/* The shared disclosure triangle (see Chevron.tsx) — an SVG whose centroid is
-   at its centre, so rotating it 90° to point down when expanded spins it in
-   place. display:block drops the inline-svg baseline gap. */
 .chevron {
   display: block;
   transition: transform 0.15s ease;
@@ -1688,7 +1400,6 @@ textarea:focus-visible {
   max-height: 320px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  /* checkerboard so transparent images are legible */
   background-color: var(--checker-bg);
   background-image: linear-gradient(45deg, var(--checker-fg) 25%, transparent 25%),
     linear-gradient(-45deg, var(--checker-fg) 25%, transparent 25%),
@@ -1701,7 +1412,6 @@ textarea:focus-visible {
   color: var(--muted);
   font-style: italic;
 }
-/* Inline load error inside a file body (e.g. Full view fetch failed). */
 .file-error {
   margin: 8px;
   border: 1px solid var(--border);
@@ -1709,11 +1419,6 @@ textarea:focus-visible {
   background: var(--bg-elev);
   font-size: 13px;
 }
-/* File-level (line-0) comments under a markdown or media view. Items stretch to
-   the pane's width — a thread sized to its own content ends up as wide as its
-   meta row happens to be, so a column of them has a ragged right edge, and a
-   composer shrunk to fit-content is a textarea at its ~20-character intrinsic
-   width. Only the add button opts out, hence its align-self below. */
 .file-comments {
   margin-top: 12px;
   display: flex;
@@ -1729,20 +1434,10 @@ textarea:focus-visible {
   border-collapse: collapse;
   font-family: var(--font-mono);
   font-size: 12.5px;
-  /* A fixed row height, not a ratio: the gutter, the code and the smaller-type
-     hunk headers all have to sit on the same baseline grid, and a unitless
-     line-height would give the 11.5px hunk row a shorter line than the 12.5px
-     code beside it. 19px at this size is the density an editor uses — the ~15px
-     a default line-height gave was tight enough to read as a wall. */
+  /* Fixed, not a ratio: gutter, code and the smaller-type hunk headers share one baseline grid. */
   line-height: 19px;
 }
-/* No padding reset here, deliberately. `.diff td` is specificity (0,1,1) and the
-   cell rules below (.gutter, .line-content, .gap-gutter) are all (0,1,0), so a
-   `padding: 0` on this selector silently beat every one of them — the gutter and
-   the code have been running flush against their borders, and four rounds of
-   editing .gutter's padding changed nothing at all. Nothing needs the reset: the
-   UA stylesheet gives a td no padding of its own, and cells that want none
-   (.thread-gutter) simply don't ask for any. */
+/* No padding reset: .diff td is (0,1,1) and would beat every (0,1,0) cell rule. Cells wanting none don't ask. */
 .diff td {
   vertical-align: top;
 }
@@ -1750,13 +1445,7 @@ textarea:focus-visible {
   width: 1%;
   min-width: 42px;
   text-align: right;
-  /* Weighted left, and that's the non-obvious part. The numbers are right-aligned,
-     so padding-right is the gap to the rule the cell ends in — but any slack from
-     min-width above lands on the *left*, which is the gap to the card edge (first
-     cell) or to the old/new divider (second). Widening padding-right therefore
-     makes the left gap worse: past ~42px total the column stops being min-width
-     and the numbers get pinned to padding-left. Keep the right side small so the
-     slack stays on the left. */
+  /* Keep padding-right small: min-width slack lands on the left, and a wider right pins the numbers. */
   padding: 0 4px 0 14px;
   color: var(--muted);
   user-select: none;
@@ -1771,23 +1460,14 @@ textarea:focus-visible {
   color: var(--on-accent);
 }
 .line-content {
-  /* Both sides match .sign's right padding, so one gap size runs the whole row:
-     change bar to +/-, +/- to code, and code to the row's end. Keep the two rules
-     in step if either moves. */
+  /* Both sides match .sign's right padding, so one gap size runs the row. */
   padding: 0 3px;
   white-space: pre-wrap;
   word-break: break-word;
   width: 100%;
 }
-/* The +/- column stays muted grey on every row, deliberately: the row's fill and
-   the change bar on its gutter already say added or deleted, and a third green or
-   red mark on the same row read as noise rather than emphasis. Padding on the right
-   only: .line-content's own 8px already holds the sign off the change bar, so a
-   left padding here would just push the code further in. Every code row renders a
-   .sign (a context row's is a space), so the content column shifts by the same
-   amount and nothing misaligns.
-   box-sizing has to be content-box: the global border-box would take the padding
-   *out* of the 1ch cell, shrinking the glyph's box instead of spacing it. */
+/* Muted on every row: the fill and the change bar already say add/del. Right padding only.
+   content-box: border-box would take the padding out of the 1ch cell. */
 .sign {
   display: inline-block;
   box-sizing: content-box;
@@ -1801,9 +1481,7 @@ textarea:focus-visible {
 .row-del .word-diff {
   background: var(--del-word-bg);
 }
-/* Both of these swap the row's add/del shade for --sel-bg (with !important), so
-   the word marks would otherwise sit on a background they were never picked
-   against. Any future rule that replaces a row shade belongs here too. */
+/* Both swap the row shade for --sel-bg; any rule that replaces a row shade belongs here too. */
 .row-selected .word-diff,
 .row-comment-active .word-diff {
   background: none;
@@ -1814,15 +1492,8 @@ textarea:focus-visible {
 .row-del {
   background: var(--del-bg);
 }
-/* The change bar: the hairline already dividing the gutter from the code carries
-   the row's status, so a changed row is marked at its edge as well as by its
-   fill — which is what lets the eye find the changes in a long hunk without the
-   fill having to shout. Deliberately just the 1px border it recolors: widened to
-   2px (with an inset shadow, since a border-width that differed by row would
-   shift the code column a pixel on every add) it read as a stripe down the diff
-   rather than an edge on a row.
-   Not on the gutter's *left* edge: .row-commented / .row-comment-active own that
-   one, and a row can be both commented and changed. */
+/* The change bar: the 1px border it recolors, not wider (2px read as a stripe down the diff).
+   On the right edge — .row-commented / .row-comment-active own the left. */
 .row-add .gutter {
   border-right-color: var(--add-border);
 }
@@ -1874,17 +1545,13 @@ textarea:focus-visible {
 .row-commented .gutter {
   border-left: 2px solid var(--accent);
 }
-/* The line range of the thread you jumped to (n/p or the comments panel) stays
-   lit until another is picked, so it's clear which lines the thread is about.
-   !important to override the add/del row shades, like .row-selected. */
+/* !important to beat the add/del row shades, like .row-selected. */
 .row-comment-active {
   background: var(--sel-bg) !important;
 }
 .row-comment-active .gutter {
   border-left: 3px solid var(--accent);
 }
-/* Ranges registered by useOccurrenceHighlight. The native selection paints
-   above this, so the word you actually picked still reads as selected. */
 ::highlight(occ) {
   background-color: var(--occ-bg);
 }
@@ -1899,18 +1566,10 @@ textarea:focus-visible {
 .thread-gutter {
   background: var(--bg);
 }
-/* Just padding: the thread inside is a raised card, so the cell it sits in needs
-   no fill or rules of its own. Banding the whole cell (what this used to do) drew
-   two more full-width hairlines across the diff and made the thread read as a
-   strip spliced into the table rather than a card sitting on it. */
 .thread-cell {
   padding: 8px 12px 8px 24px;
 }
-/* A raised card, not a bordered box: the fill is a step up from the diff behind
-   it and --elev-1 lifts it, so the shape needs no outline. That also makes the
-   thread read the same in both places it renders — inline in the diff, and in the
-   file-level list under a markdown or media view, where the surface behind it is
-   --bg either way. */
+/* A raised card, not a bordered box: the fill step and --elev-1 draw the shape. */
 .thread {
   border-radius: var(--radius-md);
   padding: 8px 10px;
@@ -1919,24 +1578,11 @@ textarea:focus-visible {
   box-shadow: var(--elev-1);
   font-family: var(--font-sans);
 }
-/* Every block in a thread — the root comment and each reply — is a header band
-   over a body, so "a block starts here" is a shape rather than a gap. The band
-   is full-bleed to its card's inner edge via negative margins that cancel the
-   card's own padding (hence the coupling: .thread-meta's -8px/-10px mirror
-   .thread's 8px 10px, .reply-meta's -6px/-8px mirror .reply's 6px 8px), which is
-   what makes it read as a header strip instead of an inset rule. One token fills
-   both: --bg-hover is a step up from --bg-elev (.thread) and from --bg (.reply)
-   alike — and the fill change *is* the boundary, so neither band needs a rule
-   under it. Deliberately no author-hue here — the type and anchor-drift badges in
-   this same row already own the semantic palette, and .meta-author already leads
-   the row on weight and contrast. */
+/* Full-bleed band: the -8px/-10px mirror .thread's 8px 10px padding (.reply-meta mirrors .reply). */
 .thread-meta {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  /* Tighter row gap than column gap: these rows wrap often in a narrow thread,
-     and now that the row is a filled band the slack shows as band height.
-     Matches .comment-meta in the panel. */
   gap: 4px 8px;
   margin: -8px -10px 8px;
   padding: 6px 10px;
@@ -1955,12 +1601,8 @@ textarea:focus-visible {
 .thread-reply-count {
   font-size: 11px;
 }
-/* One-line body preview shown while a thread is collapsed. */
 .thread-collapsed {
-  /* Wrap + clamp to 2 lines rather than a single nowrap line: nowrap makes this
-     the only non-wrapping cell in the auto-layout diff table, forcing the table
-     past width:100% (and the ellipsis never fires). line-clamp keeps it a compact
-     teaser while staying contained. */
+  /* Clamp, not nowrap: a nowrap cell forces the auto-layout table past width:100%. */
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -1982,16 +1624,6 @@ textarea:focus-visible {
 .thread-body {
   font-size: 13px;
 }
-/* Replies nested under a thread's root comment. Each reply is its own bordered
-   card, because the root comment's body is plain text on the thread card: the
-   first reply's top edge is then where the root ends, and the gap between two
-   cards is where one reply ends and the next begins. A single shared left rail
-   (what this used to be) can only bracket the whole run — it says nothing about
-   the boundaries inside it. The indent carries the nesting instead. Borderless
-   like the thread: a reply is recessed to --bg against the thread's --bg-elev, so
-   the fill still draws each card's edges — and it puts the .md-body code chips
-   (--bg-hover) two steps clear of the body behind them, where against the old
-   --bg-elev fill they nearly sank into it. */
 .thread-replies {
   margin-top: 8px;
   margin-left: 12px;
@@ -2017,23 +1649,13 @@ textarea:focus-visible {
 .reply-body {
   font-size: 13px;
 }
-/* Meta-row decluttering. The #id is the least useful token in a thread/reply
-   header, so dim it a notch below the other muted metadata; the type badge and
-   line label lead. */
 .meta-id {
   opacity: 0.7;
 }
-/* The author is the one token in a meta row that says "a new comment or reply
-   starts here", so it leads at full contrast and weight while everything else in
-   the row stays muted — otherwise the row reads as an undifferentiated run of
-   grey and a thread has no visible internal structure. */
 .meta-author {
   color: var(--text);
   font-weight: 600;
 }
-/* Action links (resolve/edit/delete) recede to muted at rest so a thread reads
-   as calm metadata, then take their action color when reached for. The
-   standalone "Reply" link lives outside .thread-meta, so it stays accent. */
 .thread-meta .link,
 .reply-meta .link {
   color: var(--muted);
@@ -2050,8 +1672,7 @@ textarea:focus-visible {
 .reply-meta .link.danger:focus-visible {
   color: var(--danger);
 }
-/* Rendered markdown inside comment & reply bodies. Kept tight — these live in
-   the narrow inline threads, not the full-width export preview. */
+/* Markdown in comment & reply bodies */
 .md-body {
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -2083,8 +1704,6 @@ textarea:focus-visible {
 .md-body li {
   margin: 0.15em 0;
 }
-/* Links and inline-code chips render the same in both markdown scopes (inline
-   threads and the export preview), so the two share these rules. */
 .md-body a,
 .markdown-body a {
   color: var(--accent);
@@ -2098,9 +1717,7 @@ textarea:focus-visible {
   border-radius: var(--radius-sm);
   padding: 0.1em 0.35em;
 }
-/* Comment threads sit on --bg, so code on --bg (as the export preview uses on its
-   lighter --bg-elev modal) would vanish into the card. Lift it to --bg-hover here
-   so code stands out from the prose. */
+/* Threads sit on --bg, so code at --bg would sink in; lift it to --bg-hover. */
 .md-body code {
   background: var(--bg-hover);
 }
@@ -2118,9 +1735,7 @@ textarea:focus-visible {
   border: none;
   padding: 0;
 }
-/* A rendered ```mermaid fence, in either markdown scope. Diagrams draw at their
-   natural size (mermaid.ts turns useMaxWidth off), so a wide one has to scroll
-   here rather than shrink its labels to fit the column. */
+/* Diagrams draw at natural size (useMaxWidth off), so a wide one scrolls here. */
 .mermaid-diagram {
   margin: 0.6em 0;
   overflow-x: auto;
@@ -2151,8 +1766,6 @@ textarea:focus-visible {
   border: 1px solid var(--border);
   padding: 3px 8px;
 }
-/* Both sit at the thread's left edge, not the replies' indent — they act on the
-   thread, not on the reply above them. */
 .reply-add {
   margin-top: 8px;
 }
@@ -2183,7 +1796,6 @@ textarea:focus-visible {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  /* extra right padding reserves room for the corner delete button */
   padding: 8px 26px 8px 10px;
   cursor: pointer;
   color: var(--text);
@@ -2191,7 +1803,6 @@ textarea:focus-visible {
 .comment-nav:hover {
   background: var(--bg-hover);
 }
-/* Corner delete button — a sibling of the jump button, stacked top-right */
 .comment-nav-delete {
   position: absolute;
   top: 5px;
@@ -2211,11 +1822,7 @@ textarea:focus-visible {
 .comment-nav-delete:hover {
   background: var(--danger-soft);
 }
-/* Revealed for the whole pane at once, not per card. Deciding which thread to
-   drop is a pass down the list, and a mark that only exists under the pointer
-   turns that into hunting one card at a time — while a --danger glyph on every
-   card at rest is a red rash down a narrow column. Focus-visible carries the
-   keyboard, which has no hover to trigger. */
+/* Revealed on pane hover, not per card, like the explorer's checkboxes. */
 .comment-nav-delete {
   opacity: 0;
 }
@@ -2257,7 +1864,6 @@ textarea:focus-visible {
   margin-top: 8px;
   align-items: center;
 }
-/* Sits at the left of the actions row; pushes Cancel/Submit to the right. */
 .composer-hint {
   margin-right: auto;
   color: var(--muted);
@@ -2287,7 +1893,6 @@ textarea:focus-visible {
   font-size: 13px;
   color: var(--muted);
 }
-/* The summary is a paragraph, not a line note, so its composer opens taller. */
 .review-summary .composer textarea {
   min-height: 90px;
 }
@@ -2311,20 +1916,12 @@ textarea:focus-visible {
   font-size: 14px;
   margin: 0;
 }
-/* Keeps the collapse button, the title and the awaiting count together on the
-   left, so the header's space-between still pushes only the sort select to the
-   right. The button leads the row rather than ending it: both panes put their
-   collapse control against the edge the diff is on, so the two sit either side
-   of it in mirror image. */
 .comments-title {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
 }
-/* The count of threads waiting on you, which is also the control that filters to
-   them. Its number is review-wide and so doesn't move when the filter is applied
-   — the point being that it's what's left to do, not what's on screen. */
 .awaiting-toggle {
   background: none;
   border: 1px solid var(--info-border);
@@ -2375,7 +1972,6 @@ textarea:focus-visible {
   font-size: 12px;
   color: var(--muted);
   margin-bottom: 6px;
-  /* Wrap long paths at sensible points (not mid-character like break-all). */
   overflow-wrap: anywhere;
 }
 .comment-meta {
@@ -2389,9 +1985,7 @@ textarea:focus-visible {
   margin-left: auto;
   font-size: 11px;
 }
-/* Anything holding an icon beside (or instead of) a label centres it optically:
-   an inline svg otherwise sits on the text baseline and hangs a descender's worth
-   too low. .badge is in the list because the resolved badge leads with a check. */
+/* An inline svg sits on the baseline and hangs too low; .badge is here for the resolved check. */
 .badge,
 .meta-id,
 .meta-icon {
@@ -2429,8 +2023,6 @@ textarea:focus-visible {
   background: var(--success-soft);
   text-transform: none;
 }
-/* Anchor-drift badges: the commented code moved (relocated to a new line) or
-   went outdated (snippet no longer at head). */
 .badge-moved {
   color: var(--info);
   background: var(--info-soft);
@@ -2441,22 +2033,13 @@ textarea:focus-visible {
   background: var(--warn-soft);
   text-transform: none;
 }
-/* The outdated badge doubles as a toggle for the original-code snippet: reset the
-   button chrome so it reads as the badge, with a chevron affordance. Deliberately
-   sets no background — .badge already covers the UA button chrome, and a `none`
-   here would win on source order and strip the tint off this one badge. */
+/* Sets no background: a none here would win on source order and strip .badge's tint. */
 .badge-toggle {
   font-family: inherit;
   cursor: pointer;
 }
 
-/* The composer's comment-type picker: the type badges above, made clickable, so
-   each pill already wears the color it will show in the thread. Deliberately
-   built on .badge/.badge-<type> rather than restated, or the two would drift.
-   Each pill therefore already wears its type's tint at rest; what the pills add
-   is a hairline in their own color (faint, full on hover) so they read as
-   controls, and a solid fill in that type's -border shade — the darker,
-   fill-suitable half of each semantic pair — for the selected one. */
+/* Built on .badge-<type> rather than restated, or the two would drift. */
 .type-pills {
   display: flex;
   flex-wrap: wrap;
@@ -2485,16 +2068,12 @@ textarea:focus-visible {
   background: var(--warn-border);
   border-color: var(--warn-border);
 }
-/* nit has no color of its own (it reads muted everywhere else), so its selected
-   state is a neutral fill rather than a borrowed semantic one. */
 .type-pill.badge-nit.active {
   background: var(--border);
   border-color: var(--border);
   color: var(--text);
 }
 
-/* A `#<id>` reference to another comment: a subtle inline link (click to jump,
-   hover/focus for the preview popover). */
 .comment-ref {
   color: var(--accent);
   text-decoration: none;
@@ -2505,8 +2084,6 @@ textarea:focus-visible {
 .comment-ref:focus-visible {
   border-bottom-style: solid;
 }
-/* The hover/focus preview of a referenced comment: floating, non-interactive
-   (clicks/hover pass through to the ref underneath), clipped to a preview height. */
 .comment-ref-popover {
   position: fixed;
   z-index: 100;
@@ -2526,8 +2103,6 @@ textarea:focus-visible {
   overflow: visible;
 }
 
-/* An outdated thread surfaces the code as it was when the comment was written
-   (the captured snippet), since head no longer holds it. */
 .thread-snippet {
   margin-bottom: 8px;
 }
@@ -2544,8 +2119,6 @@ textarea:focus-visible {
   overflow: auto;
 }
 
-/* A resolved or outdated thread / nav item is dimmed but still visible and
-   actionable; hover restores it. */
 .thread-resolved,
 .thread-outdated,
 .comment-nav-resolved,
@@ -2560,24 +2133,13 @@ textarea:focus-visible {
   opacity: 1;
 }
 
-/* A thread whose newest comment or reply isn't the reviewer's is waiting on them.
-   Only that side is marked — one marked state is what makes "unmarked = handled"
-   readable down a long pane — and it's an edge rather than a dim, so it composes
-   with the resolved/outdated opacity above instead of fighting it. The padding
-   gives back the 2px the thicker border takes, keeping the text aligned with the
-   unmarked items above and below. */
+/* An edge, not a dim, so it composes with the resolved/outdated opacity; padding gives back the 2px. */
 .comment-nav-awaiting {
   border-left: 3px solid var(--info-border);
   padding-left: 8px;
 }
 
-/* Entrance motion. Only surfaces that appear because the reviewer just did
-   something get it — a modal, a dropdown, the hover popover, a composer.
-   Deliberately not threads, diff rows or comment items: those re-render on every
-   SSE ping (every comment, reply and reviewed mark, plus the ~1.5s filesystem
-   poller), so an entrance there would fire continuously the whole time an agent
-   is working. Short and small: 120-160ms and a 4-8px rise — long enough to read
-   as motion, short enough that it never stands between a click and the result. */
+/* Entrance motion only for summoned surfaces — never threads, rows or comment items, which re-render on every ping. */
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -2643,24 +2205,14 @@ textarea:focus-visible {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
 }
-/* Compact, content-sized modal (settings, confirm dialogs) — overrides the
-   export modal's full-height default. */
 .modal-sm {
   width: min(440px, 94vw);
   height: auto;
   max-height: 88vh;
 }
-/* Narrower than the export modal (the agent prompts are prose and curl lines, not a
-   wide document) but full-height like it: the body is a textarea, which fills the
-   dialog rather than sizing to the text in it. */
 .modal-md {
   width: min(880px, 94vw);
 }
-/* Settings: the theme row, the shortcut tables and the repo link, stacked as one
-   centred column. Nothing in here is a form to fill in top to bottom — it's a
-   handful of unrelated things a reviewer looks at once — so a left-hugging stack
-   left the dialog lopsided. The tables set their own cell padding, so the body's
-   own stays small. */
 .settings-body {
   display: flex;
   flex-direction: column;
@@ -2683,8 +2235,6 @@ textarea:focus-visible {
 .settings-label {
   font-size: 13px;
 }
-/* The repo link closes the dialog rather than sitting in the toolbar: it's a
-   destination, not a control, so it reads as a line of text with its mark. */
 .settings-link {
   display: inline-flex;
   align-items: center;
@@ -2705,7 +2255,6 @@ textarea:focus-visible {
   gap: 10px;
   padding: 12px 16px 16px;
 }
-/* The picker's field sits over a 13px list, so it takes the list's size. */
 .addfile-body .search-input {
   padding: 6px 24px 6px 10px;
   font-size: 13px;
@@ -2758,8 +2307,6 @@ textarea:focus-visible {
 .confirm-actions {
   padding: 0 16px 16px;
 }
-/* Shrink-to-fit rather than full width, so the centred column has something to
-   centre; a long description still wraps, since a table caps at the room it has. */
 .shortcuts {
   border-collapse: collapse;
   width: auto;
@@ -2803,9 +2350,6 @@ kbd {
   cursor: pointer;
 }
 
-/* Second head row of the agent-prompt modal: which review focus is being edited.
-   Its own row rather than more buttons in .modal-head — the group toggle, four
-   focuses, Copy and Close don't fit one row at .modal-md's width. */
 .modal-subhead {
   display: flex;
   align-items: center;
@@ -2818,9 +2362,6 @@ kbd {
   font-size: 12px;
 }
 
-/* Agent-prompt editor: the modal body is an editable textarea rather than a preview,
-   so it owns the scroll (flex:1 + min-height:0) and the Reset/Save pair sits in a
-   foot below it. Borderless — the head's and foot's rules already frame it. */
 .prompt-editor {
   flex: 1;
   min-height: 0;
@@ -2873,9 +2414,6 @@ kbd {
   font-size: 14px;
   line-height: 1.5;
 }
-/* The same rendered markdown inside a diff file card, not the export modal:
-   flow with the card (which sizes to content) instead of filling a fixed-height
-   modal pane, with padding matched to the media (image) view. */
 .md-file {
   flex: none;
   padding: 12px 16px;
@@ -2947,7 +2485,6 @@ kbd {
   display: flex;
   align-items: center;
   gap: 12px;
-  /* Full-width bar under the header: no margin, square corners, bottom rule. */
   margin: 0;
   border-width: 0 0 1px;
   border-radius: 0;
@@ -2970,10 +2507,6 @@ kbd {
   color: var(--text);
 }
 
-/* The last-resort crash screen (ErrorBoundary). Deliberately plain: it renders
-   when the app itself failed, so it leans only on the base tokens. */
-/* The crash panel is an .empty with more air between its parts and full-contrast
-   text — it's an error, not an absence. */
 .crash {
   gap: 16px;
   color: var(--text);

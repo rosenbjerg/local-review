@@ -8,10 +8,7 @@ interface Params {
   onProgrammaticScroll?: () => void;
 }
 
-// Owns comment/file navigation: the active comment, the expand signals that mount
-// a lazy file (expandTarget) and open a collapsed thread (expandComment), and the
-// jump handlers. Returns what DiffView/FileExplorer/CommentsPanel and the keyboard
-// shortcuts consume.
+// Comment/file navigation: the active comment, the expand signals that mount a lazy file / open a collapsed thread, and jumpTo.
 export function useJump({ comments, setSelectedFile, onProgrammaticScroll }: Params) {
   const [activeComment, setActiveComment] = useState<number | null>(null);
   const [expandTarget, setExpandTarget] = useState<{ path: string; n: number } | null>(null);
@@ -45,13 +42,10 @@ export function useJump({ comments, setSelectedFile, onProgrammaticScroll }: Par
     }
     onProgrammaticScroll?.();
     setActiveComment(id);
-    // Expand the thread if it's collapsed (resolved threads start collapsed), so
-    // jumping to it reveals the body. Set before the early return below, since a
-    // collapsed thread's node exists and flashComment would otherwise return first.
+    // Set before the early return: a collapsed thread's node exists, so flashComment would return first without expanding it.
     setExpandComment({ id, n: ++expandCommentN.current });
     if (flashComment(id)) return;
-    // The file may be lazy-unmounted/collapsed: signal expand, scroll to trigger
-    // mount, then retry the flash once it renders.
+    // The file may be lazy-unmounted or collapsed: signal expand, scroll to mount it, then retry the flash.
     const c = comments.find((x) => x.id === id);
     if (!c) return;
     setExpandTarget({ path: c.filePath, n: ++expandN.current });
@@ -73,7 +67,6 @@ export function useJump({ comments, setSelectedFile, onProgrammaticScroll }: Par
     document.getElementById(`file-${path}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  // Clear navigation state (e.g. on a repo switch), cancelling any in-flight jump.
   function resetJump() {
     if (jumpPoll.current !== null) {
       clearTimeout(jumpPoll.current);

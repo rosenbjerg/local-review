@@ -8,20 +8,14 @@ interface Params {
   comments: Comment[];
   setComments: Dispatch<SetStateAction<Comment[]>>;
   setError: (msg: string | null) => void;
-  // The anchor side for new comments, from the active diff scope: the working tree
-  // or the git index (staged), else head_ref. The server captures the snippet from
-  // that side so the stored text matches what the staleness check reads.
+  // The anchor side for new comments; the server captures the snippet from it.
   side: Side;
 }
 
-// The comment/reply CRUD handlers, as optimistic mutations over the comments
-// state. Returns the CommentActions bag (for CommentThread) plus the add/delete
-// handlers used directly by DiffView and CommentsPanel.
+// Comment/reply CRUD as optimistic mutations over the comments state.
 export function useCommentActions({ review, comments, setComments, setError, side }: Params) {
-  // These handlers reach every memoized file card, so they must not take a new
-  // identity each time the comment list does — that alone would re-render every
-  // mounted card whenever a comment lands anywhere. Only handleUpdate needs the
-  // list, and a ref hands it the live one without capturing it.
+  // These handlers reach every memoized file card, so they must not take a new identity when the comment list
+  // does; a ref hands handleUpdate the live list instead.
   const commentsRef = useRef(comments);
   useEffect(() => {
     commentsRef.current = comments;

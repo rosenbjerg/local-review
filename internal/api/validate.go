@@ -1,5 +1,4 @@
-// What the API refuses. These run before anything reads a repo or the store, so
-// a malformed request answers the same 400 whichever side would have rejected it.
+// What the API refuses; these run before any repo or store read, so a bad request is a 400 on every side.
 package api
 
 import (
@@ -10,8 +9,7 @@ import (
 	"local-review/internal/store"
 )
 
-// validRef rejects empty refs and refs starting with "-" (which git would treat
-// as a flag, e.g. "--output=/path"); legitimate ref names never start with "-".
+// validRef rejects empty refs and refs starting with "-", which git would read as a flag.
 func validRef(ref string) error {
 	if ref == "" {
 		return errString("empty ref")
@@ -22,12 +20,8 @@ func validRef(ref string) error {
 	return nil
 }
 
-// validPath rejects what can't name a file inside the repo: an absolute path, a
-// ".." escape, or .git itself (in any case variant — a case-insensitive filesystem
-// resolves ".GIT" to the real one). Malformed input is the caller's mistake, so it
-// answers 400 on every side rather than reaching a read and surfacing as whatever
-// that side's failure happens to be. git.WorktreeFile guards the same ground for
-// paths that reach it from elsewhere.
+// validPath rejects what can't name a repo file: an absolute path, a ".." escape, or .git in
+// any case variant, since a case-insensitive filesystem resolves ".GIT" to the real one.
 func validPath(p string) error {
 	if p == "" {
 		return errString("path is required")
@@ -45,10 +39,7 @@ func validPath(p string) error {
 	return nil
 }
 
-// validBody rejects a comment/reply body with no text in it. An empty body reaches
-// the export as a heading with nothing under it — a thread that says nothing but
-// still counts toward the review — and the browser already refuses to submit one
-// (CommentComposer trims and disables), so this only closes the raw API path.
+// validBody rejects a blank body, which would export as a heading with nothing under it.
 func validBody(body string) error {
 	if strings.TrimSpace(body) == "" {
 		return errString("body is required")
@@ -64,10 +55,7 @@ func validCommentType(t store.CommentType) bool {
 	return false
 }
 
-// sanitize turns a ref into a filename component. A git ref may legally contain a
-// double quote, and the export's `.md` variant puts this filename inside a quoted
-// Content-Disposition parameter, so the quote (and the backslash that could escape
-// it) go too — a malformed header parameter is worse than a hyphen in a filename.
+// sanitize turns a ref into a filename component; `"` and `\` go too, since the export's Content-Disposition quotes it.
 func sanitize(s string) string {
 	return strings.NewReplacer("/", "-", " ", "-", ":", "-", `"`, "-", `\`, "-").Replace(s)
 }

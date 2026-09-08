@@ -8,11 +8,7 @@ interface State {
   error: Error | null;
 }
 
-// The one class component in the app: React offers no hook equivalent for error
-// boundaries. Without it a render-time throw unmounts the whole tree and leaves a
-// blank page with nothing to act on — and since the repo selection is remembered in
-// localStorage, a crash tied to that selection would repeat on every reload. Showing
-// the message plus a way out turns any such bug into something reportable.
+// The one class component: React has no hook for error boundaries, and without one a throw leaves a blank page.
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
 
@@ -35,8 +31,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <button className="btn btn-primary" onClick={() => window.location.reload()}>
             Reload
           </button>
-          {/* The remembered repo/branch selection is the most likely thing a crash
-              is tied to, so offer the reset that a reload alone won't do. */}
+          {/* The remembered selection is the likeliest thing a crash is tied to, and a reload won't undo it. */}
           <button
             className="btn"
             onClick={() => {

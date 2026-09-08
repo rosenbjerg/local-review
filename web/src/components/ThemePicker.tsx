@@ -1,10 +1,7 @@
 import { THEMES, isThemePref, setThemePref, useThemePref } from "../theme";
 
-// The color-theme select in the settings modal. Reads and writes the theme store
-// directly: the theme is chrome, not review state, so it doesn't pass through App the
-// way the review's own controls do — the store knows which repo is selected. It shows
-// the stored *preference*, not the resolved theme — "System" has to stay visibly
-// selected while it follows the OS.
+// Reads and writes the theme store directly, since the theme isn't review state; shows the stored
+// *preference*, not the resolved theme, so "System" stays visibly selected.
 export function ThemePicker() {
   const pref = useThemePref();
   return (

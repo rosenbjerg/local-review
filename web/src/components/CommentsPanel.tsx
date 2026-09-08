@@ -21,8 +21,7 @@ interface Props {
   // Already filtered and sorted — the same list the n/p shortcuts step through.
   comments: Comment[];
   total: number;
-  // Threads awaiting the reviewer across the whole review — not just the filtered
-  // list, so narrowing on another axis can't read as "nothing left to do".
+  // Over the whole review, not the filtered list, so narrowing can't read as "nothing left to do".
   awaitingYou: number;
   sort: CommentSort;
   onSortChange: (sort: CommentSort) => void;
@@ -34,8 +33,7 @@ interface Props {
   onCollapse: () => void;
 }
 
-// `comments` arrives sorted (see commentSort.sortComments), which keeps each
-// file's comments contiguous — so the groups are just runs of one path.
+// `comments` arrives sorted with each file's comments contiguous, so the groups are runs of one path.
 function fileRuns(comments: Comment[]): { path: string; items: Comment[] }[] {
   const runs: { path: string; items: Comment[] }[] = [];
   for (const c of comments) {
@@ -62,8 +60,7 @@ export function CommentsPanel({
 }: Props) {
   const narrowed = isFiltered(filter);
   const needle = queryNeedle(filter.query);
-  // A filtered-on author whose last thread just went away still needs its option,
-  // or the select would sit blank on a filter that is quietly hiding everything.
+  // A filtered-on author whose last thread went away keeps its option, or the select sits blank while hiding everything.
   const authorOptions =
     filter.author === ANY || authors.includes(filter.author) ? authors : [...authors, filter.author];
   const awaitingFilter = filter.status === "awaiting-you";
@@ -84,9 +81,7 @@ export function CommentsPanel({
             Comments{" "}
             <span className="muted">({narrowed ? `${comments.length} of ${total}` : total})</span>
           </h2>
-          {/* The count doubles as the filter for what it counts. It stays while
-              that filter is on even at zero, so answering the last thread can't
-              strand you in an empty pane with the toggle gone. */}
+          {/* Stays while its filter is on, even at zero, or answering the last thread strands you with the toggle gone. */}
           {(awaitingYou > 0 || awaitingFilter) && (
             <button
               className="awaiting-toggle"
@@ -148,8 +143,6 @@ export function CommentsPanel({
               </option>
             ))}
           </select>
-          {/* One author is every author — the choice only means something once a
-              second identity (an agent) has commented. */}
           {authorOptions.length > 1 && (
             <select
               aria-label="Filter by author"

@@ -6,8 +6,7 @@ interface Props {
   term: string;
   count: number;
   index: number;
-  // The origin file is showing changed lines only, so matches elsewhere in it
-  // aren't rendered and can't be found.
+  // The origin file shows changed lines only, so matches elsewhere in it aren't rendered.
   changedOnly: boolean;
   onNext: () => void;
   onPrev: () => void;
@@ -15,8 +14,7 @@ interface Props {
   onClear: () => void;
 }
 
-// Pressing a control would otherwise collapse the text selection, and an empty
-// selection dismisses the very highlight these buttons operate on.
+// A press would collapse the text selection, and an empty selection dismisses the highlight these act on.
 const keepSelection = (e: ReactMouseEvent) => e.preventDefault();
 
 export function FindBar({

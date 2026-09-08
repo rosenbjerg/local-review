@@ -1,7 +1,6 @@
 import type { PromptKind } from "./prompts";
 
-// Best-effort localStorage: private-mode/quota/disabled throws fall back to the
-// caller's default instead of propagating.
+// Best-effort localStorage: a throwing store falls back to the caller's default.
 export const LS = {
   leftWidth: "lr.leftWidth",
   rightWidth: "lr.rightWidth",
@@ -82,17 +81,13 @@ export function writeBasePref(repo: string, base: string): void {
   setJSON(LS.baseByRepo, map);
 }
 
-// Per-repo remembered diff-view axes, under lr.diffViewByRepo (a { repo: pref } map).
-// Keyed by repo alone: the axes describe how you like to look at a repo, not a
-// property of the branch or review being read.
+// Per-repo diff-view axes, keyed by repo alone: they describe how you look at a repo, not a branch or review.
 export interface DiffViewPref {
   uncommitted: boolean;
   unstaged: boolean;
 }
 
-// `unstaged` is only meaningful while `uncommitted` is on, and the hook resets it to
-// true whenever that goes off — normalize on both sides so a stored (or hand-edited)
-// pref can't restore a combination the app itself would never hold.
+// `unstaged` only means anything while `uncommitted` is on; normalize so a stored pref can't restore a combination the app never holds.
 function normalizeDiffView(v: unknown): DiffViewPref {
   const o = (v ?? {}) as Partial<DiffViewPref>;
   const uncommitted = o.uncommitted === true;
@@ -109,15 +104,10 @@ export function writeDiffViewPref(repo: string, pref: DiffViewPref): void {
   setJSON(LS.diffViewByRepo, map);
 }
 
-// Per-repo agent-prompt overrides, under lr.agentPromptsByRepo (a { repo: { kind:
-// template } } map). Keyed by repo alone, like the base and diff-view prefs: an edited
-// prompt is how you brief an agent about a repo, not about one review — which is also
-// why the volatile values stay placeholders (see prompts.ts).
+// Per-repo agent-prompt overrides, keyed by repo alone; the volatile values stay placeholders (see prompts.ts).
 type PromptOverrides = Partial<Record<PromptKind, string>>;
 
-// A stored template counts only if it is a non-blank string. Blank reads as absent
-// (and the editor refuses to save one), so a hand-edited or truncated entry can't
-// leave the modal showing an empty box with no default left to fall back to.
+// Blank reads as absent (and the editor refuses to save one), so the modal always has a default to fall back to.
 export function readPromptOverride(repo: string, kind: PromptKind): string | null {
   const map = getJSON<Record<string, PromptOverrides>>(LS.agentPromptsByRepo, {});
   const v = map[repo]?.[kind];
@@ -130,10 +120,7 @@ export function writePromptOverride(repo: string, kind: PromptKind, template: st
   setJSON(LS.agentPromptsByRepo, map);
 }
 
-// Drop the override (back to the built-in template), and the repo's entry with it once
-// it holds nothing: the other prompt kind must not read as customised because this one
-// once was, and an accreting map of empty objects is a stored value that says
-// "edited here" when nothing is.
+// Drop the repo's entry too once it's empty, so the other kind doesn't read as customised because this one once was.
 export function clearPromptOverride(repo: string, kind: PromptKind): void {
   const map = getJSON<Record<string, PromptOverrides>>(LS.agentPromptsByRepo, {});
   const entry = map[repo];
@@ -143,16 +130,8 @@ export function clearPromptOverride(repo: string, kind: PromptKind): void {
   setJSON(LS.agentPromptsByRepo, map);
 }
 
-// Per-repo remembered color theme, under lr.themeByRepo (a { repo: pref } map).
-// Keyed by repo alone, like the base and diff-view prefs: a theme is picked for the
-// code you're looking at — the JetBrains one for a repo you edit in Rider, GitHub
-// Dark for the rest — not for a branch or a review.
-//
-// `lr.theme`, the single global choice this replaced, is now the *default*: what a
-// repo with no pick of its own shows, and where a pick made before any repo is
-// selected goes. That doubles as the migration — a theme chosen before the split
-// keeps applying everywhere until a repo is themed outright. The value stays a raw
-// string here; theme.ts validates it, since the type it has to name lives there.
+// Per-repo color theme. `lr.theme`, the global choice this replaced, is the default for a repo with no pick and
+// where a pick made with no repo selected goes — which is also the migration. Raw string; theme.ts validates it.
 export function readThemePref(repo: string): string {
   const v = getJSON<Record<string, string>>(LS.themeByRepo, {})[repo];
   return typeof v === "string" ? v : getString(LS.theme);

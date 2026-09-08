@@ -1,5 +1,4 @@
-// Review-level endpoints: create/resume, read, reset, delete, the free-text
-// summary, the reviewed-file marks, and the markdown export.
+// Review-level endpoints: create/resume, read, reset, delete, summary, reviewed marks, export.
 package api
 
 import (
@@ -39,9 +38,7 @@ func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	// Store the main branch name (readable in the export); the diff endpoint resolves
-	// it to the merge-base with head at query time. Fall back to the main branch when
-	// none is given or the given one no longer resolves, so a stale base isn't stored.
+	// A base that no longer resolves falls back to the main branch, so a stale one isn't stored.
 	base := resolveBase(repo, req.Base)
 	if base == "" {
 		httpError(w, http.StatusBadRequest, errString("no main or master branch found; select a base branch"))
@@ -53,9 +50,7 @@ func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) {
 			"could not resolve branch %q — it may have been deleted, renamed, or is mid-rebase; reload to refresh the branch list", req.Head))
 		return
 	}
-	// Probe the merge-base the diff will need, so a base that can't be compared to
-	// head fails here rather than after a review row exists. Without it the reviewer
-	// lands holding a review, an empty file list and an error about neither.
+	// Probe the merge-base now, so an incomparable base fails before a review row exists.
 	if _, err := repo.MergeBase(base, req.Head); err != nil {
 		httpError(w, mergeBaseStatus(err), mergeBaseError(err, base, req.Head))
 		return
@@ -117,11 +112,8 @@ func (s *Server) handleResetReview(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// safeBaseURL turns the request Host into the base URL embedded in the exported
-// curl instructions. The Host is client-controlled and Go's server accepts spaces,
-// semicolons, and backticks in it, so a crafted value would inject shell into a
-// snippet a coding agent might run; anything outside a hostname/IP[:port] charset
-// falls back to the loopback default rather than being echoed verbatim.
+// safeBaseURL derives the exported curl URL from Host, which is client-controlled and
+// could inject shell into a snippet an agent runs; odd characters fall back to loopback.
 func safeBaseURL(host string) string {
 	const fallback = "http://127.0.0.1:7777"
 	if host == "" {
@@ -137,12 +129,7 @@ func safeBaseURL(host string) string {
 	return "http://" + host
 }
 
-// The export has two shapes over one rendering. The browser wants JSON: it renders
-// the markdown in a preview and needs the download filename alongside it. An agent
-// wants the markdown itself — digging it out of a JSON envelope costs a `jq` the
-// copyable prompt shouldn't assume is installed, and that pipeline's failure mode is
-// the first instruction in the prompt not working. Both run the same render and the
-// same status transition; only the envelope differs.
+// renderExport is the one render (and status transition) behind both export shapes.
 func (s *Server) renderExport(w http.ResponseWriter, r *http.Request) (md, filename string, ok bool) {
 	id, ok := pathID(w, r)
 	if !ok {
@@ -169,12 +156,7 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"markdown": md, "filename": filename})
 }
 
-// The `.md` variant: the markdown as the body, so reading a review is one `curl -s`
-// with nothing to parse. The filename rides in Content-Disposition, the only place
-// left to carry it once the envelope is gone (`curl -OJ` picks it up), and stays
-// `inline` so a client that displays the response doesn't turn it into a download.
-// Errors stay JSON, like every other endpoint's — a 404 here is read by the same
-// clients and logged by the same wrapper.
+// handleExportMarkdown serves the markdown as the body, filename in Content-Disposition; errors stay JSON.
 func (s *Server) handleExportMarkdown(w http.ResponseWriter, r *http.Request) {
 	md, filename, ok := s.renderExport(w, r)
 	if !ok {
@@ -226,9 +208,7 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, err)
 		return
 	}
-	// Capture the fingerprint of each file's on-screen side — dropped later if the
-	// content changes (see reviewed.go). A folder-level toggle arrives as one batch,
-	// so the reads are warmed in a single git command rather than one per file.
+	// Fingerprint the on-screen side (dropped later if the content changes), warmed as one batch.
 	var cache *contentCache
 	if req.Reviewed {
 		if repoPath, hr, err := s.Store.ReviewRepoHead(id); err == nil {

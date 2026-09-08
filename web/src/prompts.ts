@@ -10,23 +10,13 @@ export interface ReviewVars {
   baseRef: string;
 }
 
-// Everything a prompt interpolates: the review's values plus the selected prompt's
-// own `author`, which is a property of the prompt kind rather than of the review
-// (see AGENT_PROMPTS). The modal merges the two at copy time.
+// The review's values plus the selected prompt's own `author`; the modal merges the two at copy time.
 export interface PromptVars extends ReviewVars {
   author: string;
 }
 
-// Copyable agent prompts shown in AgentPromptsModal: the ways to hand a coding agent
-// a review over the API — one to address a review, and one per review *focus* to
-// produce findings. The canonical markdown export lives on the server
-// (internal/export) — nothing here generates review content.
-//
-// They are *templates*, not finished strings. A reviewer can edit one and save it per
-// repo (`readPromptOverride` in storage.ts), where it outlives the review it was
-// edited against — so the volatile values stay as `{{placeholders}}` that
-// `renderPrompt` fills in at copy time. Baking them in at edit time would save a
-// prompt naming one review's id and refs and silently mis-brief the next agent.
+// The copyable agent prompts (AgentPromptsModal). They are templates saved per repo, so volatile values
+// stay `{{placeholders}}` filled at copy time — baked in, a saved prompt would carry one review's id and refs.
 
 const REPLY_TEMPLATE = `This is a code review produced with local-review. Fetch it from the API and work through every open comment.
 
@@ -41,15 +31,8 @@ curl -s -X POST {{origin}}/api/comments/<id>/replies \\
   -d '{"body": "your reply here", "author": "{{author}}"}'
 `;
 
-// The review prompts are one focus each, deliberately: the focuses differ by how the
-// agent *traverses* the code (security follows untrusted input inward, design reads
-// well outside the diff, tests enumerate behaviours), and merging them into one brief
-// collapses those into a single cheap pass over the diff. Run several by running the
-// agent several times — they file into the same review under different authors.
-//
-// Only the brief differs, so the framing and the API block are shared here rather
-// than copy-pasted per focus: a change to the API has one place to land. What a
-// reviewer *saves* is still one complete self-contained template per focus.
+// One focus per prompt, deliberately: the focuses differ in how the agent traverses the code, and one
+// merged brief collapses that into a single cheap pass. Only the brief differs, so head and API block are shared.
 
 const REVIEW_HEAD = `Review the changes branch \`{{headRef}}\` introduces over \`{{baseRef}}\` in this repo, through one specific lens, then file your findings as comments via the local-review API so the human reviewer sees them next to their own.
 
@@ -83,8 +66,7 @@ curl -s -X POST {{origin}}/api/comments/<id>/resolved \\
   -d '{"resolved": true}'
 `;
 
-// Shared by every focus, and placed after the brief: the lens says what to look for,
-// this says what a finding may cost the reviewer to read.
+// Shared by every focus, after the brief: what a finding may cost the reviewer to read.
 const REVIEW_STYLE = `Keep every comment short — a few sentences, one short paragraph at most. State what is wrong and what to do about it, and stop. No preamble, no restating the code you are commenting on, no summary of the file: the reviewer reads these beside the diff, not instead of it. A long comment gets skimmed, which is how a real finding gets missed.
 `;
 
@@ -114,15 +96,8 @@ Look for new behaviour with no test at all, error and edge paths where only the 
 
 Point at the specific untested behaviour, not at a file's coverage in general, and say what the missing test should assert. Use type "suggestion" for a missing test and "bug" only where an existing test is actively wrong about what it claims to verify.`;
 
-// `kind` is the storage key (see storage.ts) and is deliberately independent of both
-// `label` and `author`, so renaming either can't orphan a reviewer's saved template.
-// Correctness keeps the original `review` key for that reason.
-//
-// Authors share a `-review-agent` suffix: it keeps the family recognisable in the
-// comments pane's author filter and in the export headings, and makes "any review
-// agent" expressible later without renaming anything. They must stay distinct — two
-// focuses under one author would merge into a single filter choice and a single
-// `?author=` poll.
+// `kind` is the storage key, independent of `label` and `author` so renaming either can't orphan a saved template.
+// Authors must stay distinct, or two focuses merge into one filter choice and one `?author=` poll.
 export const AGENT_PROMPTS: {
   kind: PromptKind;
   group: PromptGroup;
@@ -167,23 +142,17 @@ export const AGENT_PROMPTS: {
   },
 ];
 
-// The modal's first row. The second row (which focus) only applies to `review`, so
-// the groups are listed rather than derived — one prompt in a group needs no toggle.
+// The modal's first row; listed rather than derived, since a one-prompt group needs no focus toggle.
 export const PROMPT_GROUPS: { group: PromptGroup; label: string }[] = [
   { group: "reply", label: "Address the review" },
   { group: "review", label: "Do a review" },
 ];
 
-// The placeholder names `renderPrompt` substitutes — the keys of the map it builds,
-// pinned by prompts.test.ts. Shown in the editor, since a saved template may rely on
-// them and nothing else on screen says which names resolve.
+// The placeholders `renderPrompt` substitutes; shown in the editor, since nothing else says which names resolve.
 export const PROMPT_PLACEHOLDERS = ["origin", "reviewId", "headRef", "baseRef", "author"] as const;
 
-// Fill in `{{token}}` for each of PROMPT_PLACEHOLDERS. Two rules, both about the text
-// being hand-edited: an unrecognised token is left standing rather than blanked (a
-// typo that reads back as `{{orgin}}` says what went wrong, where an empty gap would
-// not), and the lookup is own-property only, so `{{constructor}}` is an unknown token
-// and not a function off the prototype chain.
+// An unrecognised token is left standing rather than blanked (a `{{orgin}}` typo shows what went wrong);
+// the lookup is own-property only, so `{{constructor}}` is an unknown token, not a prototype function.
 export function renderPrompt(template: string, vars: PromptVars): string {
   const values: Record<string, string> = {
     origin: vars.origin,

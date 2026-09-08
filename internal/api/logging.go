@@ -36,8 +36,7 @@ func (s *statusRecorder) Write(b []byte) (int, error) {
 	return s.ResponseWriter.Write(b)
 }
 
-// Flush forwards to the underlying writer so the SSE handler's Flusher assertion
-// still succeeds through the wrapper.
+// Flush forwards so the SSE handler's Flusher assertion still holds through the wrapper.
 func (s *statusRecorder) Flush() {
 	if f, ok := s.ResponseWriter.(http.Flusher); ok {
 		f.Flush()

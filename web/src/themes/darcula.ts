@@ -1,13 +1,7 @@
 import type { ThemeRegistrationRaw } from "shiki/core";
 
-// JetBrains Darcula's editor scheme (Darcula.icls) as a TextMate theme. Hand-written
-// rather than vendored: Shiki ships no JetBrains theme, and the scheme is about twenty
-// colors — most identifiers (classes, parameters, locals, calls) stay the default text
-// color, which is what makes it read as Darcula. Each rule maps an .icls attribute
-// (KEYWORD, STRING, NUMBER, FUNCTION_DECLARATION, INSTANCE_FIELD, ANNOTATION_NAME,
-// HTML_TAG_NAME, …) onto the TextMate scopes the bundled grammars emit for it. Where a
-// grammar can't tell a declaration from a call (C#, TS method names) both take the
-// declaration color, as every VS Code port of the scheme does.
+// JetBrains Darcula's editor scheme (Darcula.icls) as a TextMate theme — Shiki ships no JetBrains theme.
+// Most identifiers stay the default text color; that restraint is what makes it read as Darcula.
 const c = {
   text: "#a9b7c6",
   bg: "#2b2b2b",
@@ -72,8 +66,7 @@ export const darcula: ThemeRegistrationRaw = {
     { scope: ["string", "constant.character", "string.regexp"], settings: { foreground: c.string } },
     { scope: ["constant.character.escape"], settings: { foreground: c.keyword } },
     { scope: ["constant.numeric", "keyword.other.unit"], settings: { foreground: c.number } },
-    // fontStyle "" is an explicit reset: a `const f = () =>` is also variable.other.constant,
-    // which would otherwise lend the function name its italic.
+    // fontStyle "" is an explicit reset: `const f = () =>` is also variable.other.constant, which would lend it italic.
     {
       scope: ["entity.name.function", "entity.name.function.member"],
       settings: { foreground: c.func, fontStyle: "" },

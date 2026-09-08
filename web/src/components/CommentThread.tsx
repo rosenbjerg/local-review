@@ -9,9 +9,7 @@ import { Markdown } from "./Markdown";
 import { MetaTimestamps } from "./MetaTimestamps";
 import { IconCheck, IconReply } from "./icons";
 
-// Wrap the captured snippet in a fenced code block for <Markdown>, tagged with the
-// file's language and using a fence longer than any backtick run inside it so the
-// snippet can't close the block early (mirrors the export's fenceFor).
+// A fence longer than any backtick run inside, so the snippet can't close the block early.
 function snippetSource(snippet: string, path: string): string {
   const lang = langForPath(path) ?? "";
   let maxRun = 0;
@@ -42,7 +40,6 @@ interface Props {
   actions: CommentActions;
   // Bumped by a jump-to; expands this thread when it targets this comment.
   expandSignal?: { id: number; n: number } | null;
-  // The review's comment ids, so `#<id>` references in bodies/replies linkify.
   commentIds: Set<number>;
 }
 
@@ -100,21 +97,16 @@ export function CommentThread({ comment, actions, expandSignal, commentIds }: Pr
   const { onUpdate, onDelete, onAddReply, onUpdateReply, onDeleteReply, onResolve } = actions;
   const [editing, setEditing] = useState(false);
   const [replying, setReplying] = useState(false);
-  // Resolved threads start collapsed — they're done and dimmed, so tuck them away.
   const [collapsed, setCollapsed] = useState(comment.resolved);
   const replies = comment.replies ?? [];
 
-  // Expand when jumped to (e.g. n/p navigation or the comments panel), so a
-  // collapsed thread reveals its body. Keyed on the signal's nonce, so a manual
-  // re-collapse afterwards sticks until the next jump.
+  // Keyed on the signal's nonce, so a manual re-collapse sticks until the next jump.
   useEffect(() => {
     if (expandSignal && expandSignal.id === comment.id) setCollapsed(false);
   }, [expandSignal, comment.id]);
 
   const outdated = comment.anchorStatus === "outdated";
-  // For an outdated comment the anchored code is gone from head, so the captured
-  // snippet ("original code") can be revealed by clicking the outdated badge —
-  // hidden by default.
+  // The outdated badge toggles the captured snippet, hidden by default.
   const hasSnippet = outdated && comment.snippet.trim() !== "";
   const [snippetOpen, setSnippetOpen] = useState(false);
   const snippetMd = useMemo(
@@ -136,7 +128,6 @@ export function CommentThread({ comment, actions, expandSignal, commentIds }: Pr
   function handleResolve() {
     const next = !comment.resolved;
     onResolve(comment.id, next);
-    // Resolving tucks the thread away; reopening brings it back.
     setCollapsed(next);
     if (next) {
       setEditing(false);
@@ -144,7 +135,6 @@ export function CommentThread({ comment, actions, expandSignal, commentIds }: Pr
     }
   }
 
-  // Markdown flattened to one line for the collapsed preview.
   const preview = comment.body.replace(/\s+/g, " ").trim();
 
   return (

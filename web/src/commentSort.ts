@@ -18,9 +18,7 @@ function time(iso: string): number {
   return Number.isFinite(t) ? t : 0;
 }
 
-// The last time anything in the thread changed. Resolving deliberately doesn't
-// bump the comment's updated_at (see store.SetCommentResolved), so it doesn't
-// count as activity here either.
+// Resolving deliberately doesn't bump updated_at, so it doesn't count as activity.
 export function lastActivityAt(c: Comment): string {
   let best = c.createdAt;
   const consider = (iso: string) => {
@@ -51,10 +49,7 @@ function itemKey(c: Comment, sort: CommentSort): number {
   }
 }
 
-// Comments group by file in every sort, so ordering is two-level: the item order
-// within a file, and the file order. Timestamps are second-granular (the store
-// writes RFC3339), so batch-created comments tie constantly — id keeps that
-// stable.
+// Two-level in every sort: items within a file, then files. Timestamps are second-granular, so id is the tie-break.
 export function sortComments(
   comments: Comment[],
   sort: CommentSort,
@@ -78,11 +73,8 @@ export function sortComments(
     });
   }
 
-  // A file sits where its first-listed comment would sit in a flat sort, so the
-  // grouped list reads as that flat order with each file hoisted to its first
-  // appearance. Reading the key after the within-file sort keeps a bumped
-  // resolved thread — which sinks to the bottom of its group — from hoisting its
-  // file to the top.
+  // A file sits where its first-listed comment would in a flat sort. The key is read *after* the within-file
+  // sort, or a bumped resolved thread (sunk to the bottom of its group) would hoist its file.
   const orderIndex = new Map(fileOrder.map((p, i) => [p, i]));
   const groupKey = (path: string, items: Comment[]) =>
     sort === "file" ? (orderIndex.get(path) ?? Infinity) : itemKey(items[0], sort);

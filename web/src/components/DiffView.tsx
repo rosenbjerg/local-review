@@ -42,8 +42,7 @@ interface Props {
   }) => Promise<boolean>;
   actions: CommentActions;
   reviewed: boolean;
-  // Takes the path so App can pass one shared handler rather than a per-card
-  // closure, which would defeat the memo below.
+  // Takes the path so App can pass one shared handler; a per-card closure would defeat the memo.
   onToggleReviewed: (path: string, reviewed: boolean) => void;
   expandTarget: { path: string; n: number } | null;
   expandComment: { id: number; n: number } | null;
@@ -55,14 +54,9 @@ interface Props {
 export const LARGE_FILE_LINES = 500;
 const HIGHLIGHT_MAX_LINES = 2000;
 
-// Cards mount once and never unmount, so an un-memoized card re-renders on every
-// App render — for every file the reviewer has scrolled past, each rebuilding every
-// row and a style object per syntax token. The React Compiler can't cache
-// per-iteration inside App's file map, so the boundary has to be explicit.
-//
-// Every prop compares by identity, which App keeps stable, except `comments`: that
-// one is rebuilt from JSON on each review read, so it compares by value instead.
-// Adding a prop that changes identity every render silently disables all of this.
+// Cards never unmount, and the React Compiler can't cache inside App's file map, so the memo
+// boundary is explicit. Every prop compares by identity except `comments` (rebuilt per read);
+// a prop that takes a new identity each render silently disables the whole thing.
 function samePropsExceptComments(a: Props, b: Props): boolean {
   const x = a as unknown as Record<string, unknown>;
   const y = b as unknown as Record<string, unknown>;
@@ -72,10 +66,7 @@ function samePropsExceptComments(a: Props, b: Props): boolean {
   return sameComments(a.comments, b.comments);
 }
 
-// A file the diff genuinely touched can still carry no hunks: a pure rename, a
-// mode-only change, an empty file added or deleted. Changed view builds its rows
-// from the hunks, so such a card renders as a blank table — which reads as a broken
-// card, and as a file counted in the review with nothing to show for it.
+// A touched file can still have no hunks (pure rename, mode change, empty file); Changed view would render blank.
 function noHunksNote(status: FileDiff["status"]): string {
   switch (status) {
     case "renamed":
@@ -113,8 +104,7 @@ export const DiffView = memo(function DiffView({
   const stat = useMemo(() => fileStat(file), [file]);
   const isLarge = changedLines > LARGE_FILE_LINES;
 
-  // A synthetic "unchanged" file (opened to comment on, no diff hunks) has
-  // nothing in "changed" view, so it lives entirely in "full" mode.
+  // A synthetic "unchanged" card has no hunks, so it lives in full mode.
   const unchanged = file.status === "unchanged";
   const [mode, setMode] = useState<"changed" | "full">(unchanged ? "full" : "changed");
   const [source, setSource] = useState<string[] | null>(null);
@@ -125,13 +115,10 @@ export const DiffView = memo(function DiffView({
   const [delTokens, setDelTokens] = useState<Map<string, Token[]> | null>(null);
   const [svgAsImage, setSvgAsImage] = useState(false);
   const [mdRendered, setMdRendered] = useState(false);
-  // How much of each hidden region between hunks the reviewer has revealed, keyed
-  // by the gap's index (see hunkGaps).
   const [revealed, setRevealed] = useState<Record<number, Reveal>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
-  // The ref couldn't supply this file, so the server served the on-disk copy. The
-  // hunks still come from the ref, so the text below may not match them.
+  // The ref couldn't supply the file, so the on-disk copy was served; the hunks still come from the ref.
   const [substituted, setSubstituted] = useState(false);
 
   const path = file.newPath || file.oldPath;
@@ -143,10 +130,8 @@ export const DiffView = memo(function DiffView({
   const svg = isSvg(path);
   const asImage = isRasterImage(path) || (svg && svgAsImage);
   const mediaView = asImage || (!!file.binary && !svg);
-  // A markdown file with a new side can be viewed rendered instead of as a diff.
   const markdown = isMarkdown(path) && file.status !== "deleted" && file.newPath !== "";
-  // A gone file has nothing to render, so it falls back to the diff table, whose
-  // leftover-thread row still shows the comments stranded there.
+  // A gone file falls back to the diff table, whose leftover row still shows the stranded comments.
   const docView = markdown && mdRendered && !missing;
   const canToggleMode = !mediaView && !docView && file.newPath !== "" && !unchanged;
   const sideLabel = labelForSide(side, headRef);
@@ -160,25 +145,18 @@ export const DiffView = memo(function DiffView({
     if (expandTarget && expandTarget.path === path) setCollapsed(false);
   }, [expandTarget, path]);
 
-  // The find bar can only search rendered rows, so it offers to widen a
-  // changed-lines-only view to the whole file.
+  // The find bar's "Search full file"; keyed on the signal alone, deliberately not on switchMode.
   useEffect(() => {
     if (showFullSignal && showFullSignal.path === path) void switchMode("full");
   }, [showFullSignal, path]);
 
-  // Drop the cached source when the new side changes (toggle/Reload/branch switch):
-  // the card is keyed by path alone and never remounts, so stale text and tokens
-  // would otherwise persist and render against the current hunks' line numbers.
-  // The key must name *which* side is being read (repo + headRef + the side flags),
-  // not just its content fingerprint: hunks stand in for the content, but a
-  // synthetic "unchanged" card has none, so without the side its key never moves.
+  // Names the side being read (repo/head/side), not the hunks: a synthetic unchanged card has none.
   const contentKey = useMemo(
     () =>
       `${repo} ${headRef} ${side} ${file.status} ${file.newPath} ${JSON.stringify(file.hunks)}`,
     [repo, headRef, side, file]
   );
-  // switchMode writes source outside the fetch effect, so it needs the live key to
-  // check against — its own closure's is the one captured before the await.
+  // switchMode checks against the live key; its own closure's predates the await.
   const contentKeyRef = useRef(contentKey);
   contentKeyRef.current = contentKey;
   useEffect(() => {
@@ -200,8 +178,7 @@ export const DiffView = memo(function DiffView({
         setSource(res.content.replace(/\n$/, "").split("\n"));
       })
       .catch((e) => {
-        // A comment can outlive its file, so the card for a renamed-away path
-        // stays — say why it's empty instead of leaving a blank card.
+        // A comment can outlive its file; say why the card is empty.
         if (!cancelled) setMissing(e instanceof ApiError && e.status === 404);
       });
     return () => {
@@ -226,7 +203,6 @@ export const DiffView = memo(function DiffView({
     };
   }, [source, lang, theme]);
 
-  // Tokenize deleted (old-side) lines individually, keyed by content.
   useEffect(() => {
     if (!lang) {
       setDelTokens(null);
@@ -260,8 +236,7 @@ export const DiffView = memo(function DiffView({
     return () => window.removeEventListener("mouseup", onUp);
   }, [dragAnchor]);
 
-  // Which parts of each changed line actually changed. Keyed by line number, so
-  // Full view marks the additions too even though it renders no deleted rows.
+  // Keyed by line number, so Full view marks the additions though it renders no deleted rows.
   const wordRanges = useMemo(() => hunkWordRanges(file.hunks), [file]);
 
   const rows = useMemo(
@@ -269,9 +244,7 @@ export const DiffView = memo(function DiffView({
     [mode, source, file, revealed]
   );
 
-  // Every decision about the table that isn't rendering — shading, thread
-  // placement, where the composer goes, what didn't fit — in one pure pass
-  // (diffRows.ts), so the rules are testable and this component only draws.
+  // Every non-rendering decision lives in diffRows.ts, so the rules are testable.
   const plan = useMemo(
     () => planRows({ rows, comments, selection, dragging: dragAnchor !== null, activeComment }),
     [rows, comments, selection, dragAnchor, activeComment]
@@ -375,16 +348,12 @@ export const DiffView = memo(function DiffView({
     ));
   }
 
-  // The bar over a hidden region: expanders in the gutter, the count and the
-  // following hunk's @@ header in the content cell. It keeps `row-hunk` so that
-  // occurrence highlighting goes on treating the cell as metadata, not file text.
+  // Keeps `row-hunk`, so occurrence highlighting treats the cell as metadata, not file text.
   function gapRow(r: Row) {
     const gap = r.gap!;
     const hidden = r.hidden ?? 0;
     const step = Math.min(EXPAND_STEP, hidden);
-    // Each arrow points at where its lines will appear. At the file's own ends only
-    // the hunk-adjacent direction is worth offering — the other would strand a run
-    // of lines against the top or bottom of the file.
+    // At the file's own ends only the hunk-adjacent direction is offered; the other would strand lines.
     const stepped = hidden > EXPAND_STEP;
     const showUp = stepped && gap.hunkIndex > 0;
     const showDown = stepped && gap.hunkIndex < file.hunks.length;
@@ -441,7 +410,6 @@ export const DiffView = memo(function DiffView({
     />
   );
 
-  // The plan says what goes where; this only turns it into rows.
   const body: ReactNode[] = [];
   for (const p of plan.rows) {
     const r = p.row;
@@ -589,11 +557,7 @@ export const DiffView = memo(function DiffView({
               <table className="diff">
                 <tbody>{body}</tbody>
               </table>
-              {/* Line commenting anchors to the new side, so a deleted file — every
-                  row a deletion, no new-side line to click — had no way to take a
-                  comment at all, and no file had a way to say something about itself.
-                  Both are the same missing surface, which the media and markdown
-                  views have had all along. */}
+              {/* File-level comments: a deleted file has no new-side line to click. */}
               <FileComments
                 comments={plan.fileComments}
                 renderThread={renderThread}

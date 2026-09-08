@@ -2,11 +2,7 @@ import { useSyncExternalStore } from "react";
 import type { MermaidConfig } from "mermaid";
 import { LS, getString, readThemePref, writeThemePref } from "./storage";
 
-// A theme is one entry here plus a `:root[data-theme="<id>"]` token block in
-// styles.css. The tokens carry every color the UI itself paints; the two renderers
-// that bring their own palettes — Shiki (syntax token colors) and mermaid (diagram
-// fills) — are mapped per theme by name, so a theme is complete only when all three
-// agree.
+// A theme is one entry here plus a `:root[data-theme="<id>"]` token block in styles.css; Shiki and mermaid palettes are named per theme.
 export type ThemeId =
   | "github-dark"
   | "github-light"
@@ -17,9 +13,7 @@ export type ThemeId =
   | "webstorm-light"
   | "material-oceanic";
 
-// The Shiki themes highlight.ts bundles — Shiki's own, or a hand-written one under
-// themes/. A name added here without its registration there is a compile error, not
-// a blank highlight.
+// The Shiki themes highlight.ts registers — Shiki's own, or a hand-written one under themes/.
 export type ShikiTheme =
   | "github-dark"
   | "github-light"
@@ -60,9 +54,7 @@ export const THEMES: readonly Theme[] = [
   { id: "material-oceanic", label: "Material Oceanic", shiki: "material-theme", mermaid: "dark" },
 ];
 
-// What the picker stores: a theme, or "system" — GitHub Dark or Light by the OS
-// setting, followed live until a theme is picked outright. It's the default, so a
-// reviewer who never opens the picker gets the scheme their desktop already uses.
+// "system" follows the OS (GitHub Dark/Light) live until a theme is picked outright.
 export type ThemePref = ThemeId | "system";
 export const DEFAULT_PREF: ThemePref = "system";
 
@@ -78,9 +70,7 @@ export function themeOf(id: ThemeId): Theme {
   return THEMES.find((t) => t.id === id) ?? THEMES[0];
 }
 
-// A stored value counts only if it names a theme or "system": a removed or misspelt
-// id falls back to the default rather than leaving <html> with a data-theme no token
-// block matches.
+// A removed or misspelt stored id falls back to the default rather than leaving <html> with a data-theme no block matches.
 export function readStoredPref(repo: string): ThemePref {
   const v = readThemePref(repo);
   return isThemePref(v) ? v : DEFAULT_PREF;
@@ -88,8 +78,7 @@ export function readStoredPref(repo: string): ThemePref {
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
-// No answer reads as dark: jsdom has no matchMedia, and neither does any browser
-// we'd want to paint light unasked.
+// No matchMedia (jsdom) reads as dark.
 function systemTheme(): ThemeId {
   return typeof matchMedia === "function" && !matchMedia(DARK_QUERY).matches
     ? "github-light"
@@ -100,13 +89,9 @@ export function resolveTheme(pref: ThemePref): ThemeId {
   return pref === "system" ? systemTheme() : pref;
 }
 
-// The active theme lives outside React. DiffView, Markdown and the picker each read
-// it where they are, so it needn't be threaded from App through every card and every
-// rendered body — and the store owns the <html> attribute, so the two can't disagree.
+// The store lives outside React and owns <html data-theme>, so the attribute and the React value can't disagree.
 
-// Whose preference is showing: the theme is picked per repo, so the store is seeded
-// from the remembered selection (lr.repo — the one useReview restores) and the first
-// paint is already that repo's theme rather than a flash of the default.
+// Seeded from lr.repo (the repo useReview restores) so the first paint is already that repo's theme.
 let repo = getString(LS.repo);
 let pref: ThemePref = readStoredPref(repo);
 let current: ThemeId = resolveTheme(pref);
@@ -119,8 +104,7 @@ function paint(id: ThemeId): void {
 }
 paint(current);
 
-// Follow the OS only while the preference is "system": a theme picked outright stays
-// put when the desktop flips.
+// Follow the OS only while the preference is "system".
 if (typeof matchMedia === "function") {
   matchMedia(DARK_QUERY).addEventListener("change", () => {
     if (pref === "system") paint(systemTheme());
@@ -135,10 +119,7 @@ export function getThemePref(): ThemePref {
   return pref;
 }
 
-// Point the store at the selected repo — App calls it on every repo change. An empty
-// repo is "nothing selected yet", the first render before the repo list loads, and
-// not a repo without a preference: repainting to the default there would flash the
-// seeded theme away and back.
+// An empty repo is App's "nothing selected yet" first render, not a repo without a preference; repainting there would flash.
 export function setThemeRepo(next: string): void {
   if (next === "" || next === repo) return;
   repo = next;
@@ -146,8 +127,6 @@ export function setThemeRepo(next: string): void {
   paint(resolveTheme(pref));
 }
 
-// One notification serves both snapshots: a consumer whose own (theme or pref)
-// didn't change bails out of the re-render.
 export function setThemePref(next: ThemePref): void {
   if (next === pref) return;
   pref = next;

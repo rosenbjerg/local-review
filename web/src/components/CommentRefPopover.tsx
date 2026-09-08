@@ -3,9 +3,7 @@ import type { Comment } from "../types";
 import type { RefHover } from "../useCommentRefs";
 import { CommentPreview } from "./CommentPreview";
 
-// A non-interactive (pointer-events: none) preview of the referenced comment,
-// shown on hover/focus of a `#<id>` link and positioned from the anchor's rect:
-// below by default, flipped above near the viewport bottom, and clamped in.
+// A pointer-events: none preview of a `#<id>` reference, positioned from the anchor's rect (flipped above near the bottom).
 export function CommentRefPopover({ hovered, comments }: { hovered: RefHover | null; comments: Comment[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);

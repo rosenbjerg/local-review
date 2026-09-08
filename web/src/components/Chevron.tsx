@@ -1,5 +1,4 @@
-// SVG, not a ▸ glyph whose off-centre ink wobbles when rotated: this path's
-// centroid sits at the viewBox centre (8,8) so `.chevron.open`'s 90° spin is clean.
+// SVG, not a ▸ glyph: this path's centroid sits at the viewBox centre, so the 90° spin is clean.
 export function Chevron({
   open,
   size = 12,

@@ -11,8 +11,7 @@ import (
 	"local-review/internal/store"
 )
 
-// Collapse control runes (newlines especially) to spaces so an interpolated value
-// can't inject a fake heading into the artifact the agent consumes as its tasks.
+// inlineField collapses control runes to spaces, so an interpolated value can't inject a heading.
 func inlineField(s string) string {
 	return strings.TrimSpace(strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
@@ -22,9 +21,7 @@ func inlineField(s string) string {
 	}, s))
 }
 
-// ShortSHA is the abbreviated form used in the artifact's title and in the export
-// filename the API builds — one definition, so the two can't disagree about how
-// many characters "short" is.
+// ShortSHA is the abbreviated sha used in the title and the export filename, so the two can't disagree.
 func ShortSHA(sha string) string {
 	if len(sha) > 7 {
 		return sha[:7]
@@ -37,10 +34,7 @@ func Render(r *store.Review, agentInstructions bool, baseURL string) string {
 
 	fmt.Fprintf(&b, "# Review: %s → %s @ %s\n\n", r.HeadRef, r.BaseRef, ShortSHA(r.HeadSHA))
 
-	// Deliberately not a "## Summary" heading: files are the h2 level, so one here
-	// would read as a file named Summary to anything parsing the artifact by
-	// section. The body goes in raw — like comment bodies, it's the author's
-	// markdown, and it sits above every heading so it can't break out of one.
+	// Not a "## Summary" heading: files own the h2 level, so it would read as a file named Summary.
 	if summary := strings.TrimSpace(r.Summary); summary != "" {
 		fmt.Fprintf(&b, "**Summary**\n\n%s\n\n", summary)
 	}
@@ -136,8 +130,7 @@ func renderReply(b *strings.Builder, rep store.Reply) {
 	}
 }
 
-// fenceFor returns a backtick fence long enough that a ``` inside s can't close
-// the block early: one longer than the longest run inside (CommonMark), min three.
+// fenceFor returns a fence one backtick longer than the longest run in s (min three), so s can't close it early.
 func fenceFor(s string) string {
 	longest, run := 0, 0
 	for _, r := range s {
@@ -157,8 +150,6 @@ func fenceFor(s string) string {
 	return strings.Repeat("`", n)
 }
 
-// effectivePath is where the comment now lives — the rename target when a move
-// followed a rename, else its original (anchored) path.
 func effectivePath(c store.Comment) string {
 	if c.AnchorStatus == store.AnchorMoved && c.CurrentFilePath != "" {
 		return c.CurrentFilePath
@@ -184,13 +175,13 @@ func lineLabel(start, end int) string {
 
 func anchorLabel(c store.Comment) string {
 	if c.StartLine == 0 {
-		return "file" // file-level comment (binary/image), not anchored to a line
+		return "file"
 	}
 	switch c.AnchorStatus {
 	case store.AnchorMoved:
 		from := lineLabel(c.StartLine, c.EndLine)
 		if c.CurrentFilePath != "" {
-			from = c.FilePath + ":" + from // move followed a rename — show the origin path
+			from = c.FilePath + ":" + from
 		}
 		return fmt.Sprintf("%s (moved from %s)", lineLabel(c.CurrentStartLine, c.CurrentEndLine), from)
 	case store.AnchorOutdated:
@@ -200,10 +191,7 @@ func anchorLabel(c store.Comment) string {
 	}
 }
 
-// extToLang maps a lowercased file extension (no dot) to a code-fence language.
-// Each value is both a GitHub-recognized identifier and resolvable by the
-// frontend's Shiki alias map (web/src/highlight.ts langForInfo), so snippet
-// fences highlight in the export preview as well as on GitHub.
+// extToLang maps a lowercased extension to a fence language both GitHub and the frontend's Shiki aliases resolve.
 var extToLang = map[string]string{
 	"go":      "go",
 	"rs":      "rust",

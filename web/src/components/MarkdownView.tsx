@@ -10,10 +10,7 @@ interface Props {
   onSubmitFileComment: (body: string, type: CommentType) => Promise<boolean>;
 }
 
-// The rendered (as-published) view of a markdown file: the document itself plus
-// file-level (line-0) comments, mirroring MediaView's image mode. Line-anchored
-// commenting lives in the Code view, so the rendered view offers only file
-// comments and keeps any existing threads visible.
+// The rendered view of a markdown file plus file-level comments; line-anchored commenting stays in Code view.
 export function MarkdownView({ source, comments, renderThread, onSubmitFileComment }: Props) {
   return (
     <div className="media-body">

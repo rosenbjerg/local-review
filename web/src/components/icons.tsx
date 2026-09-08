@@ -1,17 +1,6 @@
 import type { ReactNode } from "react";
 
-// The app's inline icon set. One 24-grid, stroked in currentColor, sized by prop —
-// so an icon takes the color and the size of the control it sits in, and the whole
-// set stays visually one family.
-//
-// These replace the text glyphs the chrome used to be built from (× ‹ › ↳ ✓), which
-// render at whatever weight, size and baseline the platform's font happens to give
-// them: the same `×` was 15px in the search field, 17px in the comments pane and
-// 18px in the error banner, each optically centred by hand. A stroked path has none
-// of that — one `strokeWidth` sets the weight everywhere.
-//
-// Inline rather than an icon font or a dependency: there are a handful of them, they
-// ship inside the one binary, and `currentColor` is all the theming they need.
+// The app's inline icon set: one 24-grid, stroked in currentColor, sized by prop.
 function Icon({ size, children }: { size: number; children: ReactNode }) {
   return (
     <svg
@@ -31,8 +20,7 @@ function Icon({ size, children }: { size: number; children: ReactNode }) {
   );
 }
 
-// Close / clear. Every caller is a button that already carries its own aria-label,
-// which is why the svg above is aria-hidden throughout.
+// Every caller is a button with its own aria-label, which is why the svg is aria-hidden.
 export function IconX({ size = 14 }: { size?: number }) {
   return (
     <Icon size={size}>
@@ -66,8 +54,6 @@ export function IconCheck({ size = 12 }: { size?: number }) {
   );
 }
 
-// The "this is a reply" marker in a reply's meta row: the branch down and to the
-// right that the ↳ glyph was standing in for.
 export function IconReply({ size = 12 }: { size?: number }) {
   return (
     <Icon size={size}>
@@ -77,8 +63,7 @@ export function IconReply({ size = 12 }: { size?: number }) {
   );
 }
 
-// Larger, decorative icons — the empty states' subjects. Same grid and stroke as
-// the rest, so a 40px one reads as the same family as a 13px one.
+// Larger, decorative icons for the empty states.
 export function IconFolder({ size = 40 }: { size?: number }) {
   return (
     <Icon size={size}>
@@ -120,9 +105,6 @@ export function IconFileDiff({ size = 40 }: { size?: number }) {
   );
 }
 
-// The settings gear. The one place the toolbar's theme picker, the shortcut list
-// and the repo link now live behind, so it carries the conventional symbol rather
-// than a lettered button.
 export function IconSettings({ size = 16 }: { size?: number }) {
   return (
     <Icon size={size}>
@@ -132,8 +114,6 @@ export function IconSettings({ size = 16 }: { size?: number }) {
   );
 }
 
-// Reload. The one toolbar control that acts on the review rather than describing
-// it, so it keeps its place beside the side toggle while shedding its label.
 export function IconRefresh({ size = 15 }: { size?: number }) {
   return (
     <Icon size={size}>
@@ -145,8 +125,7 @@ export function IconRefresh({ size = 15 }: { size?: number }) {
   );
 }
 
-// Reset. The lid and body only — the two tally lines lucide's trash-2 draws inside
-// it turn to noise at toolbar size, where this is a 15px mark in the danger colour.
+// Lid and body only: lucide's two tally lines turn to noise at toolbar size.
 export function IconTrash({ size = 15 }: { size?: number }) {
   return (
     <Icon size={size}>

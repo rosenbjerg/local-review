@@ -17,15 +17,12 @@ interface Props {
   ariaLabel: string;
   disabled?: boolean;
   emptyText?: string;
-  // The list is a timeline, newest first, and a pick means "from here onward": the
-  // row under the pointer (or the arrow keys) is the origin, every `rail` row above
-  // it is included, and a row that isn't on the rail ("All") includes them all.
+  // Draws the list as a timeline: the active row is the origin, every `rail` row above it is
+  // included, and an off-rail row (All) includes them all.
   rangePreview?: boolean;
 }
 
-// A searchable single-select: shows the selected label until focused, then lets
-// you type to filter and pick with the mouse or arrow keys/Enter. Native <select>
-// can't filter, which gets unwieldy with many branches.
+// A searchable single-select; a native <select> can't filter, which gets unwieldy with many branches.
 export function Combobox({
   value,
   options,
@@ -57,12 +54,8 @@ export function Combobox({
   });
   const { active, setActive } = nav;
 
-  // The range preview's shape over the filtered rows: where the rail starts and
-  // ends, and where the included run ends — at the active row when that row is on
-  // the rail, else (All is active) at the rail's last row. Rail rows are contiguous
-  // and the filter keeps their order, so the run is an index range, which is also
-  // what lets its first and last row keep the rounded corners the inner rows give
-  // up (adjacent rounded rows notch at every seam).
+  // Rail rows are contiguous and the filter keeps their order, so the included run is an index
+  // range — which also lets its end rows keep the rounded corners the inner rows give up.
   const rail = useMemo(() => {
     if (!rangePreview) return null;
     let first = -1;
@@ -183,9 +176,7 @@ export function Combobox({
                   aria-selected={o.value === value}
                   data-idx={i}
                   className={rowClass(o, i)}
-                  // Select on mousedown (not click): preventDefault keeps focus so
-                  // this doesn't blur-close mid-pick, and it fires even when a
-                  // following click event wouldn't reach us.
+                  // Mousedown, not click: preventDefault keeps focus, so this can't blur-close mid-pick.
                   onMouseDown={(e) => {
                     e.preventDefault();
                     choose(o);

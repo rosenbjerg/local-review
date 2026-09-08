@@ -19,8 +19,7 @@ export function ExportModal({ reviewId, onClose }: Props) {
   const [instructions, setInstructions] = useState(() => getBool(LS.exportInstructions));
 
   useEffect(() => {
-    // `ignore` drops an out-of-order response: the instructions checkbox refires
-    // this, and a slower earlier request must not overwrite a newer one.
+    // `ignore` drops an out-of-order response: the instructions checkbox refires this.
     let ignore = false;
     api
       .export(reviewId, instructions)

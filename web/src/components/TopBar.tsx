@@ -20,7 +20,6 @@ export interface Selection {
   from: string;
   fromOptions: ComboOption[];
   onFromChange: (v: string) => void;
-  // The branch's own commits over the base — how many the from picker has to offer.
   commitCount: number;
   headIsCurrent: boolean;
   // The base resolves to head, so the committed range is empty by construction.
@@ -31,11 +30,7 @@ export interface Selection {
   onReload: () => void;
 }
 
-// The from picker has a choice to offer only while the branch has two or more commits
-// of its own: with one, starting from it *is* the whole branch, and with none there is
-// nowhere to start. A held pick keeps the control live — it's the way back to All — and
-// like the dimmed Committed segment below, the reason rides on the disabled control's
-// title, since a dimmed control with no explanation reads as a bug.
+// Only two or more own commits give the from picker a choice; a held pick stays live as the way back to All.
 function fromRelevant(s: Selection): boolean {
   return s.commitCount > 1 || s.from !== "all";
 }
@@ -46,10 +41,6 @@ function fromDisabledTitle(s: Selection): string | undefined {
     : "The branch has one commit, so starting from it is the whole branch";
 }
 
-// The diff's after end, as one three-valued control rather than the two dependent
-// checkboxes ("uncommitted", then "unstaged" appearing beside it) this used to be:
-// the three reachable combinations are exactly `Side`, which is what the diff, the
-// comment anchors and the reviewed marks all already speak.
 const SIDE_OPTIONS: { value: Side; label: string; title: string; disabled?: boolean }[] = [
   { value: "head", label: "Committed", title: "Only what's committed on the branch" },
   { value: "index", label: "Staged", title: "Committed, plus what you've staged" },
@@ -60,10 +51,8 @@ const SIDE_OPTIONS: { value: Side; label: string; title: string; disabled?: bool
   },
 ];
 
-// Committed is dimmed when the base resolves to head (`auto` on the main branch, or
-// head picked as its own base): merge-base(head, head) is head, so the range is empty
-// whatever the repo holds. `useReview` forces an uncommitted side in that case, so
-// this dims the option the reviewer can no longer be on rather than the one they are.
+// merge-base(head, head) is head, so Committed is empty by construction; useReview already
+// forces an uncommitted side, so this dims the option the reviewer can no longer be on.
 function sideOptions(s: Selection): typeof SIDE_OPTIONS {
   if (!s.baseIsHead) return SIDE_OPTIONS;
   return SIDE_OPTIONS.map((o) =>
@@ -77,7 +66,6 @@ function sideOptions(s: Selection): typeof SIDE_OPTIONS {
   );
 }
 
-// The review-scoped buttons.
 export interface TopBarActions {
   onShowPrompts: () => void;
   onShowExport: () => void;
@@ -90,9 +78,7 @@ export interface TopBarStatus {
   review: Review | null;
   shortSha?: string;
   baseSha: string;
-  // Files the diff itself changes — never the synthetic cards App adds for files
-  // opened only to comment on, since this is the number a reviewer compares
-  // against their git client.
+  // Files the diff itself changes, never the synthetic cards: this is the number compared with a git client.
   fileCount: number;
   stat: DiffStat;
   openCommentCount: number;
@@ -109,10 +95,8 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
-// Both ends of the comparison spelled out. The four controls can't say this between
-// them — least of all whether a picked "from" commit's own changes are in the diff
-// (they are, so the before side is that commit's parent) — and it's what a reviewer
-// needs to reconcile this diff with what their git client shows.
+// Both ends spelled out, since no control says what they resolve to — nor that a picked "from"
+// commit's own changes are included (the before side is its parent).
 function rangeLines(s: Selection, st: TopBarStatus): string {
   const sha = st.baseSha ? `${st.baseSha.slice(0, 7)} — ` : "";
   const from =
@@ -132,33 +116,20 @@ function compareTitle(s: Selection, st: TopBarStatus): string {
   return `${rangeLines(s, st)}\n${plural(st.fileCount, "file")} changed`;
 }
 
-// Same range, plus what the number does *not* count — the synthetic cards for files
-// opened only to comment on, which a reviewer comparing counts would trip over.
+// Same range, plus what the count excludes: the synthetic cards for files opened only to comment on.
 function fileCountTitle(s: Selection, st: TopBarStatus): string {
   return `${compareTitle(s, st)}\nA file opened only to comment on isn't counted`;
 }
 
-// The top toolbar: repo/head/base pickers, the diff-view controls, reload, and the
-// review-scoped actions (agent prompts / export / reset), plus the gear that opens
-// Settings — where the theme, the shortcut list and the repo link live, since none
-// of them is part of reviewing and the bar is short of room for the ones that are.
+// The top toolbar: the selection cluster, the review's readout and actions, and the settings gear.
 export function TopBar({ selection: s, actions, status }: Props) {
   return (
     <header className="topbar">
       <div className="topbar-side">
         <span className="logo">local-review</span>
       </div>
-      {/* Everything that picks what to look at, as one wrapping cluster: the
-          breadcrumb naming the refs, the two knobs that narrow the range, and the
-          reload that re-runs it. Together they're the selection, so they wrap
-          together — a narrow window folds them onto their own line rather than
-          stranding the range's knobs behind the review's actions. */}
+      {/* The selection wraps as one cluster, so a narrow window folds it onto its own line. */}
       <div className="topbar-center">
-        {/* What's being compared, as one breadcrumb: the pickers carry their own
-            values, so the labels this used to put in front of each ("repo", "head",
-            "base") only said again what the value shows. The separators say the rest —
-            `/` for the repo the branch lives in, `→` for the comparison — and each
-            picker keeps its aria-label for anyone not reading the shape. */}
         <div className="crumbs">
           <Combobox
             ariaLabel="repository"
@@ -189,13 +160,7 @@ export function TopBar({ selection: s, actions, status }: Props) {
             disabled={s.loading || !s.baseRelevant}
           />
         </div>
-        {/* The range's two remaining knobs — where the diff starts, and which side its
-            after end reads — as one phrase, "from … to …". Kept apart from the
-            breadcrumb because neither names a ref (they narrow the comparison it
-            states), and kept as a phrase because as a labelled box the word "from"
-            stood alone beside a form field: the two words are the grammar, the two
-            controls the values, and the picker wears the crumbs' chrome-less dress so
-            the values read at the same weight. */}
+        {/* The range as a phrase, "from … to …": neither knob names a ref, so it sits apart from the crumbs. */}
         <div className="topbar-group range">
           <span
             className="range-word"
@@ -234,9 +199,6 @@ export function TopBar({ selection: s, actions, status }: Props) {
               disabled={s.loading || !s.headIsCurrent}
             />
           </span>
-          {/* Spinning while it loads is what the "Loading…" label used to say: the
-              button is disabled either way, and a dimmed icon alone wouldn't
-              distinguish "running" from "nothing to reload". */}
           <button
             className={`btn btn-icon${s.loading ? " is-loading" : ""}`}
             onClick={s.onReload}
@@ -252,11 +214,7 @@ export function TopBar({ selection: s, actions, status }: Props) {
       <div className="topbar-side topbar-side-end">
         {status.review && (
           <>
-            {/* The head sha and the side it reads were printed here too, and both are
-                already on screen: the branch is in the breadcrumb, the side is the lit
-                segment of its own toggle, and the sha only ever named the tip of the
-                branch beside it. What no control can say is what the two ends resolve
-                to — so that stays, as the count's title. */}
+            {/* Only the count: the sha and side are already on screen; what the ends resolve to is its title. */}
             <div className="topbar-readout">
               <span title={fileCountTitle(s, status)}>{plural(status.fileCount, "file")}</span>
               <DiffStatBadge stat={status.stat} title="Lines added and removed in this diff" />
@@ -276,9 +234,7 @@ export function TopBar({ selection: s, actions, status }: Props) {
               >
                 Export ({status.openCommentCount})
               </button>
-              {/* Icon-only, but still `danger`: .btn.danger outranks .btn-icon on the
-                  color, so it stays red rather than muted like the reload and gear —
-                  the one control here that destroys something shouldn't read as chrome. */}
+              {/* `.btn.danger` outranks `.btn-icon` on color, so the destructive one stays red, not muted. */}
               <button
                 className="btn btn-icon danger"
                 onClick={actions.onReset}

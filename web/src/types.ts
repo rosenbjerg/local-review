@@ -1,8 +1,6 @@
 export interface Repo {
   name: string;
-  // The local calendar date (YYYY-MM-DD) the repo was last worked in, from its
-  // reflog's mtime — a date, not a timestamp, because it's what the picker's order
-  // rests on and that order must hold for the whole day. "" if it couldn't be dated.
+  // Local calendar date (YYYY-MM-DD) off the reflog's mtime — a date, not a timestamp, since the picker's order holds for a day. "" if undated.
   lastActivity: string;
 }
 
@@ -11,8 +9,7 @@ export interface Branch {
   isCurrent: boolean;
   isMain: boolean;
   isRemote: boolean;
-  // The tip commit's committer date (RFC3339), i.e. the branch's last activity —
-  // what the server orders the pickers by. May be "" if git reported none.
+  // The tip commit's committer date (RFC3339), what the server orders the pickers by; "" if git reported none.
   lastCommit: string;
 }
 
@@ -23,14 +20,8 @@ export interface Commit {
   relDate: string;
 }
 
-// The diff view is two orthogonal axes, both transient (not part of a review's
-// identity). `from` sets the before side; the working-tree flags set the after side:
-//   from        — "all" (merge-base(base,head), the whole branch) or a commit sha:
-//                 the diff starts *at* that commit, so its own changes are included
-//                 (the server diffs from its parent)
-//   uncommitted — false: after = head commit; true: after = working tree / index
-//   unstaged    — when uncommitted: true (default) after = working tree
-//                 (staged + unstaged); false after = index (staged only)
+// The diff view's two axes, transient (not review identity). `from` is "all" (merge-base) or a commit sha, inclusive —
+// the server diffs from its parent. `uncommitted` moves the after side to the working tree, or the index when !unstaged.
 export type DiffOpts = {
   from: string;
   base?: string;
@@ -38,15 +29,10 @@ export type DiffOpts = {
   unstaged: boolean;
 };
 
-// Which version of a file a comment or reviewed mark is anchored to — the side
-// its snippet was captured from and its staleness is judged against. One value
-// rather than the pair of mutually-exclusive booleans this used to be, so the
-// impossible "both" state can't be expressed on either side of the wire.
+// The version of a file a comment or reviewed mark is anchored to; one value, so the impossible "both" can't be expressed.
 export type Side = "head" | "worktree" | "index";
 
-// How a side reads in prose, for the notes naming which version of a file is on
-// screen ("No longer in the working tree"). The server has the same function for
-// its 404s (api.sideLabel), so the two surfaces name a side the same way.
+// How a side reads in prose; the server's api.sideLabel names a side the same way for its 404s.
 export function sideLabel(side: Side, headRef: string): string {
   if (side === "index") return "the index";
   if (side === "worktree") return "the working tree";
@@ -55,8 +41,7 @@ export function sideLabel(side: Side, headRef: string): string {
 
 export type LineKind = "context" | "add" | "del";
 
-// "unchanged" is a synthetic status for a file the diff didn't touch, opened so
-// the reviewer (or an agent) can comment on it; such a FileDiff has no hunks.
+// "unchanged" is synthetic: a file the diff didn't touch, opened to comment on; it has no hunks.
 export type FileStatus = "added" | "modified" | "deleted" | "renamed" | "unchanged";
 
 export interface DiffLine {
@@ -123,8 +108,7 @@ export function effectiveLines(c: Comment): { start: number; end: number } {
   return { start: c.startLine, end: c.endLine };
 }
 
-// The path a comment currently lives at: its new home when a move followed a
-// rename, else its original (anchored) path. Comments group/render by this.
+// Where a comment currently lives: its new home when a move followed a rename. Comments group/render by this.
 export function effectivePath(c: Comment): string {
   return c.anchorStatus === "moved" && c.currentFilePath ? c.currentFilePath : c.filePath;
 }
@@ -148,8 +132,7 @@ export interface Review {
   updatedAt: string;
   comments: Comment[] | null;
   reviewedFiles: string[] | null;
-  // Set when the server could not read the repo or head, so staleness and reviewed
-  // marks were left unchecked. Derived per read, never stored.
+  // Set when the server couldn't read the repo or head, so nothing was annotated. Derived per read, never stored.
   annotationError?: string;
 }
 

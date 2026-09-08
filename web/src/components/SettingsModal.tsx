@@ -1,12 +1,7 @@
 import { Modal } from "./Modal";
 import { ThemePicker } from "./ThemePicker";
 
-// Everything the toolbar used to hold that isn't about the review in front of you:
-// the theme, the shortcut list and the repo link. Each was a permanent control in a
-// bar whose left half — repo, branches, from, side, reload — is the actual work, so
-// they now sit one gear click away and the bar has room for it. Still toggled by
-// `?`, the shortcut this was the help overlay for; the global handler in App bails
-// while it's open.
+// The toolbar's non-review controls — theme, shortcut list, repo link — behind the gear, or `?`.
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal onClose={onClose} title="Settings" close="autofocus" className="modal-sm">

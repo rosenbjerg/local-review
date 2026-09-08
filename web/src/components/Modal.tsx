@@ -6,20 +6,15 @@ interface Props {
   // Names the dialog: the head's heading, and what aria-labelledby points at.
   title: string;
   className?: string;
-  // The head's two slots. `controls` sit beside the title (a ViewToggle picking
-  // what the body shows); `actions` sit at the right, before Close.
+  // `controls` sit beside the title; `actions` at the right, before Close.
   controls?: ReactNode;
   actions?: ReactNode;
-  // The head's Close button. Shown by default; `autofocus` makes it the focus
-  // trap's initial target, for a dialog with nothing safer to land on (settings);
-  // `none` for a dialog whose body carries its own way out (the confirm's
-  // Cancel / Delete).
+  // `autofocus` makes Close the focus trap's initial target; `none` is for a body with its own way out.
   close?: "button" | "autofocus" | "none";
   children: ReactNode;
 }
 
-// Render conditionally (mounted only while open) so the focus trap restores focus
-// to the trigger on unmount.
+// Mount only while open, so the focus trap restores focus to the trigger on unmount.
 export function Modal({
   onClose,
   title,
@@ -41,9 +36,8 @@ export function Modal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // A click event fires on the common ancestor of press and release, so a text
-  // selection dragged out of the dialog reports the backdrop as its target:
-  // closing on the click alone loses the reviewer's edits mid-drag.
+  // A click fires on the common ancestor of press and release, so a drag out of the dialog would
+  // read as a backdrop click and discard the edit.
   return (
     <div
       className="modal-backdrop"

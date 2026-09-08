@@ -1,12 +1,7 @@
 import type { ReactNode } from "react";
 
-// The shape every empty state takes: a large, faint icon over a one-line statement
-// of what isn't there, then a hint saying what to do about it — so a pane with
-// nothing in it reads as a state the app is in rather than as a failure to render.
-//
-// No action button in any of them, deliberately: every control these states point at
-// (the branch pickers, the diff side, Reload) already lives in the toolbar, and a
-// second copy down here would be a second way to do the same thing.
+// The shape every empty state takes: a large faint icon, a one-line statement, a hint.
+// No action button, deliberately: every control these point at already lives in the toolbar.
 export function EmptyState({
   icon,
   title,

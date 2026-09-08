@@ -1,23 +1,7 @@
 import type { ThemeRegistrationRaw } from "shiki/core";
 
-// JetBrains Rider's editor schemes — "Rider Dark" and "Rider Light", the pair its New
-// UI themes (Rider Night / Rider Day) name — as TextMate themes. Taken from
-// JetBrains/rider-theme-pack, the plugin bundled with Rider, so these are the colors
-// the IDE actually paints.
-//
-// Rider is *not* IntelliJ's scheme with different greys: it is Visual Studio's palette
-// wearing JetBrains' chrome. Keywords are blue rather than orange, comments green
-// rather than grey, numbers pink, strings tan. Two consequences for the scope map
-// below, both of which the IntelliJ schemes don't have. Rider colors **types**
-// (DEFAULT_CLASS_NAME / _REFERENCE / _INTERFACE_NAME, all #C191FF) where IntelliJ leaves
-// them at the default text color — so a `type` role exists here and is what makes C#
-// and TypeScript read as Rider rather than as a generic dark theme. And it colors a
-// function **call** exactly as it colors a declaration (DEFAULT_FUNCTION_CALL ==
-// DEFAULT_FUNCTION_DECLARATION), so the call scopes join that rule rather than falling
-// through to plain text.
-//
-// One scope map, two color records: the two schemes assign identical roles and differ
-// only in the values, so a shared builder is what stops the pair drifting apart.
+// Rider Dark / Rider Light, from JetBrains/rider-theme-pack (the plugin bundled with Rider), as TextMate themes.
+// One scope map, two color records: the schemes assign identical roles, so a shared builder keeps the pair aligned.
 interface Scheme {
   text: string;
   bg: string;
@@ -25,9 +9,7 @@ interface Scheme {
   docTag: string;
   keyword: string;
   string: string;
-  // JS.REGEXP, which is its own attribute here rather than the string color — and
-  // happens to equal DEFAULT_ENTITY in both schemes. Applied to string.regexp at large,
-  // which a grammar only emits for a real regex literal.
+  // JS.REGEXP — its own attribute here rather than the string color.
   regexp: string;
   escape: string;
   number: string;
@@ -127,8 +109,7 @@ function scheme(
         ],
         settings: { foreground: c.keyword },
       },
-      // DEFAULT_OPERATION_SIGN, _BRACES, _PARENTHS, _COMMA, _DOT, _SEMICOLON and
-      // _PARAMETER / _LOCAL_VARIABLE all take DEFAULT_IDENTIFIER's grey in both schemes.
+      // DEFAULT_OPERATION_SIGN, _BRACES, _PARENTHS, _PARAMETER, _LOCAL_VARIABLE: DEFAULT_IDENTIFIER's grey in both.
       {
         scope: ["keyword.operator", "storage.type.function.arrow"],
         settings: { foreground: c.text },
@@ -137,9 +118,8 @@ function scheme(
       { scope: ["string.regexp"], settings: { foreground: c.regexp } },
       { scope: ["constant.character.escape"], settings: { foreground: c.escape } },
       { scope: ["constant.numeric", "keyword.other.unit"], settings: { foreground: c.number } },
-      // A call and a declaration share one color here, unlike the IntelliJ schemes.
-      // fontStyle "" is an explicit reset: a `const f = () =>` is also
-      // variable.other.constant, which would otherwise lend the name its bold.
+      // DEFAULT_FUNCTION_CALL == DEFAULT_FUNCTION_DECLARATION in Rider, so call scopes join this rule.
+      // fontStyle "" is an explicit reset: `const f = () =>` is also variable.other.constant, which would lend it bold.
       {
         scope: [
           "entity.name.function",
@@ -150,9 +130,7 @@ function scheme(
         ],
         settings: { foreground: c.func, fontStyle: "" },
       },
-      // Types are colored, which is the loudest single difference from Darcula and the
-      // New UI schemes. support.type.primitive stays a keyword: it is a longer selector
-      // than support.type, so it wins on specificity rather than on rule order.
+      // DEFAULT_CLASS_NAME/_REFERENCE/_INTERFACE_NAME: Rider colors types. support.type.primitive stays a keyword by specificity.
       {
         scope: [
           "entity.name.type",
@@ -176,7 +154,7 @@ function scheme(
         ],
         settings: { foreground: c.field },
       },
-      // DEFAULT_CONSTANT is FONT_TYPE 1 — bold, where the IntelliJ schemes italicize it.
+      // DEFAULT_CONSTANT is FONT_TYPE 1 (bold).
       {
         scope: ["variable.other.constant", "constant.other.caps"],
         settings: { foreground: c.field, fontStyle: "bold" },

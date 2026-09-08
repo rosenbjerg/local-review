@@ -5,43 +5,22 @@ import type { Branch, Comment, Commit, DiffOpts, FileDiff, Repo, Review, Side } 
 import { LS, getString, readBasePref, readDiffViewPref, writeDiffViewPref } from "./storage";
 import { relativeDay, relativeTime } from "./time";
 
-// A ping refetches whether or not anything the client holds actually changed —
-// the filesystem poller fires on any on-disk edit, and every comment/reply/
-// reviewed-file mutation pings all tabs. Parsed JSON is a fresh object graph
-// every time, so handing it straight to setState would replace every value's
-// identity and re-render every mounted file card for a ping that changed
-// nothing. Keeping the previous value when the new one is structurally the same
-// is what keeps that cost proportional to real changes. The serialize compares
-// only small payloads (review metadata, comments, branches, commits); the diff's
-// file list is deliberately left out, since a `diff` ping means the git state
-// moved and stringifying a large diff would cost more than it saves.
+// A ping returns a fresh object graph even when nothing changed; keep the old identity so downstream memos hold.
 function keepIfSame<T>(prev: T, next: T): T {
   return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
 }
 
-// The branch pickers are ordered by last activity (grouped by prefix, server-side),
-// so each option states the date it was ordered on — as the comment sorts do, an
-// order the list doesn't explain reads as arbitrary. Any role marker ("current" /
-// "main") keeps its place ahead of it.
+// Each option shows the date the server ordered it on; a role marker ("current" / "main") stays ahead of it.
 function branchHint(b: Branch, role: string | false): string | undefined {
   const rel = relativeTime(b.lastCommit);
   return [role || "", rel].filter(Boolean).join(" · ") || undefined;
 }
 
-// How many of base..head's commits the "from" picker asks for. Both callers pass it
-// explicitly, because the cap is what makes absence from the list inconclusive.
+// How many of base..head's commits the "from" picker asks for; both callers pass it explicitly.
 const COMMIT_LIMIT = 50;
 
-// Whether a refetched commit list proves a picked `from` is gone (rebased or amended
-// away), which is the only reason to drop the reviewer's choice — the next diff would
-// 400 on it. Absence alone doesn't prove that: the list holds only the newest
-// COMMIT_LIMIT commits, so on a longer branch a single new commit slides the window
-// and drops the oldest listed one, which is still perfectly valid to diff from.
-// Resetting on that would silently widen a narrowed view to the whole branch, and
-// `diff` pings are frequent enough (every commit, plus the ~1.5s filesystem poller)
-// that it would happen while an agent works. Only a list shorter than the cap holds
-// every commit and can say the sha is gone; a branch of exactly COMMIT_LIMIT commits
-// therefore keeps its pick, which is the harmless way to be wrong.
+// A picked `from` that was rebased away would 400 the next diff, so drop it — but the list holds only the newest
+// COMMIT_LIMIT commits, so absence proves removal only when the list is shorter than the cap.
 function fromWasRemoved(from: string, list: Commit[]): boolean {
   return from !== "all" && list.length < COMMIT_LIMIT && !list.some((c) => c.sha === from);
 }
@@ -51,19 +30,13 @@ function keepIfSameSet(prev: Set<string>, next: string[]): Set<string> {
   return new Set(next);
 }
 
-// The review data layer: repo/branch selection, the diff-scope view toggle, and
-// the review lifecycle (create, SSE refetch, diff refetch, reviewed-file marks).
-// Owns the reqSeq stale-response guard and the coordinated repo-change reset of
-// its own state. Pure view state (selectedFile/openedFiles) and jump state live
-// in App, which resets them on repo change alongside this.
+// The review data layer: repo/branch/diff-scope selection, create + resume, the diff and SSE refetches, reviewed marks.
 export function useReview() {
   const [repos, setRepos] = useState<Repo[]>([]);
   const [reposLoaded, setReposLoaded] = useState(false);
   const [repo, setRepo] = useState("");
   const [branches, setBranches] = useState<Branch[]>([]);
-  // Whether the branch fetch for the current repo has settled. An empty `branches`
-  // means two different things — still loading, or a repo with no commits — and the
-  // empty state has to tell them apart to say the second one out loud.
+  // Tells "still loading" from "a repo with no commits" — both leave `branches` empty.
   const [branchesLoaded, setBranchesLoaded] = useState(false);
   const [head, setHead] = useState("");
   const [base, setBase] = useState("");
@@ -72,38 +45,25 @@ export function useReview() {
   const [baseSha, setBaseSha] = useState("");
   const [comments, setComments] = useState<Comment[]>([]);
   const [reviewedFiles, setReviewedFiles] = useState<Set<string>>(new Set());
-  // The diff view — two orthogonal axes. `from` is the before side: "all" (the whole
-  // branch) or a picked commit sha, inclusive — the diff starts at that commit, so
-  // its own changes show (the server diffs from its parent). `uncommitted` moves the
-  // after side to the working tree/index; `unstaged` (default) keeps unstaged edits
-  // in. That pair is remembered per repo (restored on the branch load below); `from`
-  // isn't, since a picked sha belongs to one head's history.
+  // uncommitted/unstaged are remembered per repo; `from` isn't, since a picked sha belongs to one head's history.
   const [from, setFrom] = useState("all");
   const [uncommitted, setUncommitted] = useState(false);
   const [unstaged, setUnstaged] = useState(true);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Bumped on each load; in-flight responses check it before applying state, so
-  // a stale repo's review/diff can't repopulate the UI for the new selection.
+  // Bumped on each load; in-flight responses check it so a stale selection's response can't land.
   const reqSeq = useRef(0);
 
-  // The working tree/index only make sense when head is the checked-out branch, so
-  // the uncommitted axis is gated on that (and disabled in the UI otherwise).
+  // The uncommitted axis only makes sense when head is the checked-out branch.
   const currentBranch = branches.find((b) => b.isCurrent)?.name;
   const mainBranch = branches.find((b) => b.isMain)?.name;
   const headIsCurrent = !!head && head === currentBranch;
-  // When the base resolves to head, the committed range is empty by construction:
-  // merge-base(head, head) is head. That isn't a bad selection to refuse — on the
-  // main branch `auto` has nothing else to resolve to, and a single-branch repo has
-  // no other base at all — it's the committed *side* that has nothing to say there,
-  // while the uncommitted sides still mean "just my uncommitted work". So the axis
-  // is forced on (the toolbar dims Committed to match) rather than the base refused.
-  // Only with `from` on "all": a picked commit is the before side, base unused.
+  // A base resolving to head empties only the committed side (merge-base(head, head) is head); the uncommitted
+  // sides still mean "just my uncommitted work", so force that axis on rather than refuse the base.
   const baseIsHead = from === "all" && !!head && (base || mainBranch || "") === head;
   const effectiveUncommitted = (uncommitted || baseIsHead) && headIsCurrent;
-  // The new side comments/reviewed marks anchor to: the working tree (uncommitted
-  // incl. unstaged), the git index (uncommitted, staged only), else head_ref.
+  // The side new comments and reviewed marks anchor to.
   const side: Side = !effectiveUncommitted ? "head" : unstaged ? "worktree" : "index";
 
   function diffOpts(baseRef: string): DiffOpts {
@@ -149,8 +109,7 @@ export function useReview() {
       .branches(repo)
       .then((r) => {
         if (reqSeq.current !== seq) return; // superseded by another repo switch
-        // A repo with no commits has no branches at all; normalize before anything
-        // reads it, since a null reaching `branches` state throws on the next render.
+        // A null here throws on the next render; normalize before anything reads it.
         const list = r.branches ?? [];
         setBranches(list);
         const current = list.find((b) => b.isCurrent);
@@ -158,10 +117,8 @@ export function useReview() {
         // Head is a local-only picker, so never default it to a remote.
         const headName = current?.name ?? firstLocal?.name ?? "";
         setHead(headName);
-        // Restore the remembered view axes here rather than above, in the same update
-        // as `head`: the guard effect below clears `uncommitted` whenever head isn't
-        // the checked-out branch, and while branches are loading it never is. `current`
-        // being set is exactly what makes the defaulted head the checked-out one.
+        // Restored here, in the same update as `head`: the guard effect below clears `uncommitted` whenever head
+        // isn't the checked-out branch, which it never is while branches are loading.
         const view = readDiffViewPref(repo);
         if (view.uncommitted && current) {
           setUncommitted(true);
@@ -180,27 +137,18 @@ export function useReview() {
       });
   }, [repo]);
 
-  // The uncommitted axis is meaningless when head isn't the checked-out branch; if
-  // head moves away while it's on, turn it off.
+  // The uncommitted axis is meaningless once head isn't the checked-out branch.
   useEffect(() => {
     if (!headIsCurrent && uncommitted) setUncommitted(false);
   }, [headIsCurrent, uncommitted]);
 
-  // Only the forced-off path above can now leave `unstaged` where a re-enable would
-  // inherit it (changeSide always sets both axes together), and re-enabling should
-  // start from the default — both staged and unstaged edits in.
+  // Re-enabling should start from the default; only the forced-off path above can leave `unstaged` behind.
   useEffect(() => {
     if (!uncommitted) setUnstaged(true);
   }, [uncommitted]);
 
-  // The reviewer picks a `Side`, not two booleans: which side the diff's after end
-  // reads from is the same three-valued thing comments and reviewed marks anchor to,
-  // so that's what the control speaks and this is where it becomes the two axes the
-  // API takes. Both axes move in one update and one pref write carries both — a
-  // write per axis would persist the other axis's pre-update value.
-  // Persisted from here rather than from an effect on the state: the guard effect
-  // above also moves these, and a forced-off (head left the checked-out branch) must
-  // not overwrite what the reviewer actually chose for this repo.
+  // The one place a Side becomes the two API axes: both move in one update and one pref write. Only the reviewer's
+  // own pick persists — writing from an effect would let the guard above overwrite the stored choice.
   function changeSide(next: Side) {
     const nextUncommitted = next !== "head";
     const nextUnstaged = next !== "index";
@@ -209,11 +157,7 @@ export function useReview() {
     writeDiffViewPref(repo, { uncommitted: nextUncommitted, unstaged: nextUnstaged });
   }
 
-  // Change head via `changeHead` (below), which resets `from` in the same update —
-  // a picked sha belongs to the old head's history. This effect (re)loads the "from"
-  // picker's commit list whenever repo/head/base changes; passing base scopes it to
-  // base..head, so it offers only the branch's own commits (the base picker is
-  // disabled while a commit is picked, so this can't strand a selection).
+  // Passing base scopes the list to base..head, so the picker offers only the branch's own commits.
   useEffect(() => {
     if (!repo || !head) return;
     let cancelled = false;
@@ -228,10 +172,7 @@ export function useReview() {
     };
   }, [repo, head, base]);
 
-  // The SSE effect below is keyed only on review.id, so it can't close over the live
-  // selection — repo/head/scope change without the id moving. Mirror what the ping
-  // refetch needs into a ref: the diff params, plus head/base/from so a `diff` ping
-  // can also refresh the branch list (out-of-band checkout) and the commit picker.
+  // The SSE effect is keyed on review.id alone, so it reads the live selection through this ref.
   const diffParams = useRef<{
     repo: string;
     headRef: string;
@@ -258,11 +199,7 @@ export function useReview() {
     };
   });
 
-  // Refetch on an SSE ping: a `diff` ping (a commit or on-disk edit) refetches the
-  // review and the diff, so an agent's changes surface without a manual reload; a
-  // `meta` ping (comment/reply/reviewed-file) refetches only the review, since those
-  // never move file content. The focus/visibility refetch is a fallback for a dead
-  // stream, gated on the stream not being OPEN so a healthy one doesn't double-fetch.
+  // SSE refetch: a `diff` ping refetches review + diff (+ branches and commits); a `meta` ping only the review.
   useEffect(() => {
     if (!review) return;
     const id = review.id;
@@ -270,40 +207,28 @@ export function useReview() {
     let inFlight = false;
     let pending = false;
     let pendingDiff = false;
-    // A `diff` ping that arrived while hidden. Without this the tab would come back
-    // showing a stale diff: the focus fallback stands down while the stream is OPEN,
-    // so nothing else would ever fetch what the missed ping announced.
+    // A `diff` ping deferred while hidden; the focus fallback stands down while the stream is OPEN, so nothing else would fetch it.
     let missedDiff = false;
     async function refresh(withDiff: boolean) {
       if (cancelled) return;
-      // A hidden tab still takes the review — it's small, and the unseen-activity
-      // badge in the tab title exists precisely to report what you can't see. The
-      // diff is the expensive half and nothing renders it while hidden, so it waits.
+      // A hidden tab still takes the review (it feeds the unseen-activity badge) but defers the diff, which nothing renders.
       const hidden = document.visibilityState !== "visible";
       if (hidden && withDiff) missedDiff = true;
       withDiff = withDiff && !hidden;
       if (inFlight) {
-        // Ping mid-fetch: the in-flight response may predate the change, so queue
-        // exactly one trailing refetch — carrying the diff if any queued ping wanted it.
+        // Ping mid-fetch: queue exactly one trailing refetch, carrying the diff if any queued ping wanted it.
         pending = true;
         pendingDiff = pendingDiff || withDiff;
         return;
       }
       inFlight = true;
       try {
-        // Snapshot the selection this read belongs to: a ping's git state is only
-        // valid for the axes it was fetched under, and an axis toggle mid-flight
-        // (which keeps review.id, so `cancelled` never fires) would otherwise land
-        // hunks from one side while the view reads its file content from another.
+        // Snapshot the selection this read belongs to: an axis toggle keeps review.id, so `cancelled` never fires
+        // and an older ping would otherwise land hunks from the side just left.
         const seq = reqSeq.current;
         const p = diffParams.current;
-        // A `diff` ping means the repo's git state moved (commit, checkout, edit), so
-        // also refresh the branch list (keeps headIsCurrent honest after an out-of-band
-        // checkout) and the commit picker. Diff/branch/commit failures are swallowed so
-        // a transient error never drops the whole refresh — critically, a picked `from`
-        // rebased away 400s the diff, and swallowing it lets the commit-list check below
-        // reset `from` to "all" (which refetches a valid diff) instead of the whole
-        // Promise.all rejecting and stranding the review.
+        // A `diff` ping also refreshes branches (out-of-band checkout) and the commit picker. Their failures are
+        // swallowed: a `from` rebased away 400s the diff, and the check below then resets it instead of stranding the review.
         const [rev, d, br, cm] = await Promise.all([
           api.getReview(id),
           withDiff && p.repo && p.headRef
@@ -315,8 +240,7 @@ export function useReview() {
             : Promise.resolve(null),
         ]);
         if (!cancelled) {
-          // The review is fetched by id, so it stays valid across an axis toggle —
-          // gating it on seq would drop comment/reviewed updates the ping came for.
+          // Fetched by id, so not gated on seq — that would drop the comment/reviewed updates the ping came for.
           setReview((prev) => keepIfSame(prev, rev));
           setComments((prev) => keepIfSame(prev, rev.comments ?? []));
           setReviewedFiles((prev) => keepIfSameSet(prev, rev.reviewedFiles ?? []));
@@ -329,8 +253,7 @@ export function useReview() {
             if (cm) {
               const list = cm.commits ?? [];
               setCommits((prev) => keepIfSame(prev, list));
-              // A rebased/amended-away picked `from` would 400 the next diff — fall
-              // back. Only when the list proves it: see fromWasRemoved.
+              // A rebased-away `from` would 400 the next diff; reset only when the list proves it (see fromWasRemoved).
               setFrom((cur) => (fromWasRemoved(cur, list) ? "all" : cur));
             }
           }
@@ -358,7 +281,7 @@ export function useReview() {
         return;
       }
       if (es.readyState === EventSource.OPEN) return; // stream live — it'll push
-      // A dead stream may have missed a content change, so refetch the diff to be safe.
+      // A dead stream may have missed a content change.
       refresh(true);
     }
     window.addEventListener("focus", onFocus);
@@ -371,12 +294,8 @@ export function useReview() {
     };
   }, [review?.id]);
 
-  // Refetch the diff when a view axis changes — keyed on the axis inputs alone so it
-  // fires only on a later change, not on load (the !review guard no-ops the initial
-  // run; startReview does the first diff). Bail while the review is stale relative to
-  // the head picker (a head change resets `from`, which fires this effect before
-  // startReview has recreated the review): startReview owns that fetch, and running
-  // here would diff the old head and bump reqSeq out from under it.
+  // Refetch the diff on an axis change. Bail while the review is stale relative to the head picker (a head change
+  // resets `from` first): startReview owns that fetch, and running here would bump reqSeq out from under it.
   useEffect(() => {
     if (!review || review.headRef !== head) return;
     const seq = ++reqSeq.current;
@@ -394,28 +313,19 @@ export function useReview() {
       .finally(() => {
         if (reqSeq.current === seq) setLoading(false);
       });
-    // Intentionally keyed on the view axes only — repo/head/review changes go
-    // through startReview, which fetches the first diff itself.
+    // Deliberately keyed on the view axes only — repo/head/review changes go through startReview.
   }, [from, uncommitted, unstaged]);
 
-  // Switch head, resetting `from` to "all" in the same update. Reset must be
-  // synchronous with the head change so the startReview that auto-start fires reads
-  // the fresh `from` (a state reset inside an effect wouldn't reach that closure).
+  // `from` resets in the same update as head, so the auto-started startReview reads the fresh value.
   function changeHead(name: string) {
     setHead(name);
     setFrom("all");
-    // Moving head onto the current base would compare a branch with itself; fall back
-    // to auto rather than leave the picker showing a value it no longer offers. The
-    // stored pref is deliberately left alone — it's still the base for other heads.
+    // Head as its own base would compare a branch with itself; the stored pref stays — it's still the base for other heads.
     if (base === name) setBase("");
   }
 
-  // Switch repo, clearing `head` in the same update. The reset must be synchronous:
-  // the repo-change effect that reloads branches resets `head` too, but only after
-  // this render — leaving the auto-start effect to fire startReview() with the *old*
-  // repo's head, which bumps the shared reqSeq and discards the in-flight branch
-  // fetch (leaving the head picker empty until reload). Clearing head here makes
-  // auto-start's `if (repo && head)` guard false during the switch.
+  // Clearing head synchronously keeps auto-start from firing startReview with the old repo's head, which would bump
+  // reqSeq and discard the in-flight branch fetch.
   function changeRepo(name: string) {
     setRepo(name);
     setHead("");
@@ -438,8 +348,7 @@ export function useReview() {
       setBaseSha(diff.base ?? "");
     } catch (e) {
       if (reqSeq.current !== seq) return;
-      // head may be stale (deleted/renamed/mid-rebase): refetch branches and, if
-      // it's gone, fall back to current (auto-start re-fires); else surface the error.
+      // head may be gone (deleted/renamed/mid-rebase): if so fall back to current and let auto-start re-fire.
       let recovered = false;
       try {
         const r = await api.branches(repo);
@@ -460,8 +369,7 @@ export function useReview() {
     }
   }
 
-  // Auto-start on a complete repo/head/base selection; the view axes have their
-  // own refetch effect, so they're not deps here.
+  // Auto-start on a complete selection; the view axes have their own refetch effect, so they're not deps.
   useEffect(() => {
     if (repo && head) startReview();
   }, [repo, head, base]);
@@ -479,7 +387,6 @@ export function useReview() {
     }
   }
 
-  // Mark/unmark a set of files at once (one file, or every file under a folder).
   async function setReviewedPaths(paths: string[], reviewed: boolean) {
     if (!review || paths.length === 0) return;
     setError(null);
@@ -494,7 +401,6 @@ export function useReview() {
       });
     apply(reviewed); // optimistic
     try {
-      // Fingerprint the side on screen (working tree / index), like addComment.
       await api.setReviewed(review.id, paths, reviewed, side);
     } catch (e) {
       apply(!reviewed); // rollback the whole batch
@@ -504,8 +410,7 @@ export function useReview() {
 
   const toggleReviewed = (path: string, reviewed: boolean) => setReviewedPaths([path], reviewed);
 
-  // Trimmed here as well as server-side, so the optimistic value and the one the
-  // next refetch brings back can't differ by whitespace.
+  // Trimmed here as well as server-side, so the optimistic value matches what a refetch returns.
   async function setSummary(text: string) {
     if (!review) return;
     const summary = text.trim();
@@ -530,12 +435,8 @@ export function useReview() {
     () => localBranches.map((b) => ({ value: b.name, label: b.name, hint: branchHint(b, b.isCurrent && "current") })),
     [localBranches]
   );
-  // Head is offered as its own base only while an uncommitted side is showing, where
-  // it means "only my uncommitted work"; on the committed side that range is empty by
-  // construction, so the pick would do nothing. The `base === head` clause keeps a
-  // value that's already set labelled — Combobox renders a value by finding it among
-  // the options, so dropping the current one blanks the control (reachable when head
-  // stops being the checked-out branch out-of-band, which forces the committed side).
+  // Head is a valid base only while an uncommitted side shows (the committed range would be empty). The
+  // `base === head` clause keeps an already-set value labelled: Combobox blanks a value missing from its options.
   const baseOptions = useMemo<ComboOption[]>(() => {
     const offerHead = effectiveUncommitted || base === head;
     const opts: ComboOption[] = [{ value: "", label: `auto${mainBranch ? ` (${mainBranch})` : ""}` }];
@@ -553,10 +454,7 @@ export function useReview() {
     }
     return opts;
   }, [branches, localBranches, mainBranch, head, base, effectiveUncommitted]);
-  // The "from" picker: "All" (whole branch) plus head's recent commits. The commits
-  // are `rail` options — the points on the timeline the list's range preview draws
-  // (see Combobox) — and All is not, which is what tells the preview that a pick of
-  // it includes every one of them.
+  // The commits are `rail` options (the range preview's timeline); All is not, which tells the preview a pick of it includes them all.
   const fromOptions = useMemo<ComboOption[]>(() => {
     const opts: ComboOption[] = [
       { value: "all", label: "All (whole branch)" },
@@ -567,11 +465,8 @@ export function useReview() {
         rail: true,
       })),
     ];
-    // A pick that slid out of the newest-COMMIT_LIMIT window keeps the view it was
-    // chosen for (see fromWasRemoved), and Combobox labels its value by finding it
-    // in these options — so without an entry the control would render *blank* while
-    // the diff is still narrowed to that commit. Last, since it's older than every
-    // commit the list does hold.
+    // A pick that slid out of the COMMIT_LIMIT window keeps its view (see fromWasRemoved), and Combobox blanks a
+    // value missing from its options — so append it, last, since it's older than every commit listed.
     if (from !== "all" && !commits.some((c) => c.sha === from)) {
       opts.push({ value: from, label: from.slice(0, 7), hint: "picked earlier", rail: true });
     }
@@ -597,8 +492,7 @@ export function useReview() {
     reviewedFiles,
     from,
     setFrom,
-    // How many commits of its own the branch has over the base — what decides whether
-    // the from picker has a choice to offer (TopBar disables it under two).
+    // What decides whether the from picker has a choice to offer (TopBar disables it under two).
     commitCount: commits.length,
     loading,
     error,

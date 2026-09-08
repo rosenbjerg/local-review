@@ -25,9 +25,7 @@ interface Props {
   onSwitchMode: (mode: "changed" | "full") => void;
 }
 
-// The file card's header row: collapse toggle, status + path, +/- line counts,
-// comment count, reviewed checkbox, and the SVG (Text/Image), markdown
-// (Code/Rendered) and diff (Changed/Full) toggles.
+// The file card's header row: collapse, status + path, counts, reviewed checkbox, and the view toggles.
 export function FileHeader({
   status,
   path,

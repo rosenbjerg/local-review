@@ -10,14 +10,10 @@ function refFor(target: EventTarget | null): HTMLElement | null {
   return (el?.closest?.("a.comment-ref") as HTMLElement | null) ?? null;
 }
 
-// Delegated interactions for the `#<id>` comment links the markdown rule emits
-// (they're innerHTML, so no per-node React handlers): click navigates via jumpTo,
-// and hover/focus surfaces a preview popover (the returned `{id, rect}`). One set
-// of document listeners covers every ref anywhere — diff threads and the panel.
+// Delegated document listeners for the `#<id>` links the markdown rule emits (innerHTML, so no React handlers).
 export function useCommentRefs(jumpTo: (id: number) => void) {
   const [hovered, setHovered] = useState<RefHover | null>(null);
-  // Held in a ref so re-created jumpTo closures don't re-subscribe the listeners;
-  // updated in an effect (never during render).
+  // A ref, so a re-created jumpTo doesn't re-subscribe the listeners.
   const jumpRef = useRef(jumpTo);
   useEffect(() => {
     jumpRef.current = jumpTo;

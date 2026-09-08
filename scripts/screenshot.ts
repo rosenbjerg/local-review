@@ -1,14 +1,7 @@
 #!/usr/bin/env bun
-// Regenerates docs/screenshot.png: builds a throwaway fixture repo from this
-// repo's own history, seeds a review through the API, and captures the UI from
-// headless Chromium over the DevTools protocol.
-//
-//   bun scripts/screenshot.ts [--no-build] [--keep] [--out <path>] [--port <n>]
-//                             [--browser <path>] [--width <n>] [--height <n>]
-//                             [--scale <n>]
-//
-// --keep leaves the seeded server running and skips the capture, for framing a
-// shot by hand.
+// Regenerates docs/screenshot.png: a fixture repo from this repo's history, a review seeded via the API, headless Chromium over CDP.
+//   bun scripts/screenshot.ts [--no-build] [--keep] [--out <path>] [--port <n>] [--browser <path>] [--width <n>] [--height <n>] [--scale <n>]
+// --keep leaves the seeded server running and skips the capture, for framing a shot by hand.
 
 import { $ } from "bun";
 import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
@@ -17,24 +10,17 @@ import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dir, "..");
 
-// The commit the fixture review is built from: "Order the repo picker by
-// activity, to the day" spans Go and TypeScript, and its useReview.ts changes
-// are mostly *modified* lines — which is what puts the word-level intra-line
-// shading in the shot.
+// The fixture commit spans Go and TypeScript, and its useReview.ts changes are mostly *modified* lines — what puts the word-level shading in shot.
 const FIXTURE_SHA = "ada5041";
 const FIXTURE_BRANCH = "repo-picker-order";
 const FIXTURE_REPO = "local-review";
 
-// The file whose inline thread the shot is framed on.
 const FRAME_FILE = "web/src/useReview.ts";
 
-// Never the default port or data dir: a real instance is usually already on
-// 7777 against the developer's own reviews, and a seeding POST that reached it
-// would write into them. See CLAUDE.md's first gotcha.
+// Never the default port or data dir: a real instance is usually on 7777, and a seeding POST would write into its reviews.
 const DEFAULT_PORT = 7793;
 
-// The CSS viewport is the framing — how much of the app is in shot; the scale
-// factor is only the pixel density it renders at.
+// The CSS viewport is the framing; the scale factor is only pixel density.
 const VIEWPORT = { width: 1920, height: 1080, scale: 2 };
 
 const CHROMIUMS = [
@@ -105,12 +91,10 @@ async function fixture(root: string) {
   const dest = join(root, FIXTURE_REPO);
   await $`mkdir -p ${root}`.quiet();
   await $`git clone --quiet --no-hardlinks ${REPO_ROOT} ${dest}`.quiet();
-  // The base branch has to sit at the commit's parent so the merge-base is the
-  // commit itself — the review is then exactly this one commit's diff.
+  // main sits at the commit's parent so the merge-base is the commit itself: the review is exactly its diff.
   await $`git -C ${dest} checkout -q -B main ${FIXTURE_SHA}~1`.quiet();
   await $`git -C ${dest} checkout -q -b ${FIXTURE_BRANCH} ${FIXTURE_SHA}`.quiet();
-  // Drop the remote: origin/main points at today's HEAD, which would both
-  // clutter the base picker and outrank the local trunk we just moved.
+  // origin/main points at today's HEAD and would outrank the local trunk we just moved.
   await $`git -C ${dest} remote remove origin`.quiet();
 }
 
@@ -129,8 +113,7 @@ async function startServer(root: string, dataDir: string) {
     try {
       const repos = await (await fetch(`${api}/api/repos`)).json();
       const names = (repos.repos ?? []).map((r: { name: string }) => r.name);
-      // Confirm the server answering is the one we started, not a stray
-      // instance that won the port — it would be serving real repos.
+      // A stray instance that won the port would be serving real repos.
       if (names.length !== 1 || names[0] !== FIXTURE_REPO) {
         throw new Error(`:${port} is serving ${JSON.stringify(names)}, not our fixture`);
       }
@@ -155,9 +138,7 @@ async function post(path: string, body: unknown) {
 
 async function seed() {
   console.log("==> seeding the review");
-  // Base is omitted so the server resolves it exactly as the browser will —
-  // the review is keyed on (repo, base, head), and a mismatch here would leave
-  // the page creating a second, empty review instead of resuming this one.
+  // Base omitted so the server resolves it as the browser will; the review is keyed on (repo, base, head).
   const review = await post("/api/reviews", { repo: FIXTURE_REPO, head: FIXTURE_BRANCH });
   const id = review.id;
 
@@ -166,8 +147,7 @@ async function seed() {
       "Good change — dating a repo by its reflog mtime is the right trade, and keeping the order day-granular is what makes it stable enough to be worth having.\n\nOne thing I want settled before this merges: the DST rounding in `relativeDay`. The rest is questions rather than blockers.",
   });
 
-  // The framed thread — keep it first so it reads as the reviewer's opening
-  // question, and short enough to sit in frame with its reply.
+  // The framed thread: first, so it reads as the opening question, and short enough to fit in frame with its reply.
   const c1 = await post(`/api/reviews/${id}/comments`, {
     filePath: "web/src/useReview.ts",
     startLine: 116,
@@ -263,8 +243,7 @@ async function capture(tmp: string) {
     const cdp = await connect(page.webSocketDebuggerUrl);
     await cdp.send("Page.enable");
     await cdp.send("Runtime.enable");
-    // Dark before the first paint: the app's stored preference is "system", so
-    // the emulated media query is what resolves it to GitHub Dark.
+    // The stored preference is "system", so the emulated media query is what resolves dark before first paint.
     await cdp.send("Emulation.setEmulatedMedia", {
       features: [{ name: "prefers-color-scheme", value: "dark" }],
     });
@@ -296,8 +275,6 @@ async function evaluate(cdp: Cdp, expression: string) {
   return res.result?.value;
 }
 
-// An inline thread is the thing the shot is meant to show, so centre one rather
-// than capturing wherever the initial scroll position leaves it.
 async function frameThread(cdp: Cdp) {
   const card = `document.getElementById(${JSON.stringify(`file-${FRAME_FILE}`)})`;
 
@@ -305,8 +282,7 @@ async function frameThread(cdp: Cdp) {
     throw new Error(`no file card for ${FRAME_FILE}`);
   }
 
-  // LazyFile mounts a card only once it is near the viewport, so the thread
-  // exists only after the scroll above.
+  // LazyFile mounts a card only near the viewport, so the thread exists only after the scroll above.
   let mounted = false;
   for (let i = 0; i < 50 && !mounted; i++) {
     await Bun.sleep(100);
@@ -314,9 +290,7 @@ async function frameThread(cdp: Cdp) {
   }
   if (!mounted) throw new Error(`no thread rendered in ${FRAME_FILE}`);
 
-  // The card should already be in Changed view — hunks are what a diff tool is
-  // for, and Full buries the change in the rest of the file. Correct it rather
-  // than assume, and say what it was, since nothing here should have moved it.
+  // Should already be in Changed view; correct it rather than assume, and say what it was.
   const was = await evaluate(
     cdp,
     `(() => {
@@ -384,9 +358,7 @@ function connect(url: string): Promise<Cdp> {
   });
 }
 
-// Shiki tokenizes asynchronously and fetches each file's grammar lazily, so a
-// capture timed on load alone lands on unhighlighted code. Wait for the token
-// count to stop moving instead of guessing at a delay.
+// Shiki tokenizes async and fetches grammars lazily, so wait for the token count to stop moving, not a delay.
 async function settled(cdp: Cdp) {
   const probe = `JSON.stringify({
     files: document.querySelectorAll(".file").length,

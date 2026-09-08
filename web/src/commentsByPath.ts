@@ -3,8 +3,7 @@ import { effectivePath } from "./types";
 
 export type PathGroups = ReadonlyMap<string, Comment[]>;
 
-// Group comments under the file card that renders them — the effective path, so a
-// rename-moved comment groups with its new file.
+// Grouped by effective path, so a rename-moved comment groups with its new file.
 export function groupByPath(comments: readonly Comment[]): PathGroups {
   const groups = new Map<string, Comment[]>();
   for (const c of comments) {
@@ -19,8 +18,7 @@ export function groupByPath(comments: readonly Comment[]): PathGroups {
 
 const NONE: Comment[] = [];
 
-// One shared empty array for the many files with no comments, so their cards
-// compare equal by identity rather than by value.
+// One shared empty array, so the many files with no comments compare equal by identity.
 export function commentsFor(groups: PathGroups, path: string): Comment[] {
   return groups.get(path) ?? NONE;
 }

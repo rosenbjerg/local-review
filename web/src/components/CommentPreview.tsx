@@ -6,10 +6,8 @@ import { CommentCount } from "./CommentCount";
 import { IconCheck } from "./icons";
 import { Markdown } from "./Markdown";
 
-// The compact read-only view of a comment — id, type, line, anchor state, reply
-// count, and a clamped body. Shared by the comments panel (inline body) and the
-// #-reference hover popover (block body). Never linkifies nested refs, so a preview
-// can't spawn another preview.
+// The compact read-only comment, shared by the pane and the #-ref popover; never linkifies
+// nested refs, so a preview can't spawn another preview.
 export function CommentPreview({
   comment,
   inline = false,
@@ -17,8 +15,7 @@ export function CommentPreview({
 }: {
   comment: Comment;
   inline?: boolean;
-  // The timestamp the comments pane is sorted on, so the order explains itself.
-  // Empty under the file sort, and unset wherever there's no sort context.
+  // The timestamp the pane is sorted on, so the order explains itself; empty under the file sort.
   stamp?: string;
 }) {
   return (

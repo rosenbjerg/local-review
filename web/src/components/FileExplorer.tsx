@@ -84,8 +84,7 @@ function compress(dir: DirNode): DirNode {
   return d;
 }
 
-// Every file path under a folder node. During a search the tree is built from the
-// matching files only, so this naturally covers just the visible matches.
+// Every file path under a folder node — during a search, just the visible matches.
 function collectFilePaths(node: DirNode): string[] {
   const out: string[] = [];
   const walk = (n: TreeNode) => {
@@ -112,26 +111,19 @@ export function FileExplorer({
   const [query, setQuery] = useState("");
   const activeRowRef = useRef<HTMLDivElement>(null);
 
-  // Keep the active file's row in view as the selection follows the diff scroll.
-  // Instant + "nearest" so it only nudges when off-screen and never animates on
-  // every scroll-spy step.
+  // Instant + "nearest", so it only nudges when off-screen and never animates per scroll-spy step.
   useEffect(() => {
     activeRowRef.current?.scrollIntoView({ block: "nearest" });
   }, [selected]);
 
-  // Held behind a memo on purpose: the scroll spy re-renders this component on
-  // every scroll frame, and counting the lines is O(the whole diff).
+  // Memoised on purpose: the scroll spy re-renders this on every scroll frame, and this is O(diff).
   const statByFile = useMemo(
     () => new Map(files.map((f) => [f.newPath || f.oldPath, fileStat(f)])),
     [files]
   );
 
-  // Same reason as statByFile: this walks every file, on every scroll frame.
-  // `unchanged` is exactly App's synthetic-card marker, so it separates "files the
-  // diff changed" from "files opened only to comment on". The progress counts only
-  // the former — it answers "how far through the diff am I", the same population the
-  // topbar's file count names, so the two agree; a file opened purely to comment on
-  // is listed and markable, but it isn't work the branch asked for.
+  // Same reason as statByFile. Only files the diff changed, never the synthetic `unchanged`
+  // cards — the population the topbar's count names, so the two agree.
   const changedFiles = useMemo(
     () => files.filter((f) => f.status !== "unchanged"),
     [files]
@@ -141,15 +133,12 @@ export function FileExplorer({
   const countByFile = new Map<string, number>();
   for (const c of comments) {
     if (c.resolved) continue;
-    // Group by the effective (relocated) path so a rename-moved comment counts
-    // under the file it now renders in — the same key every other view uses.
+    // The effective path, so a rename-moved comment counts under the file it renders in.
     const p = effectivePath(c);
     countByFile.set(p, (countByFile.get(p) ?? 0) + 1);
   }
 
-  // Filtering just reruns buildTree on the matching files — it only ever creates
-  // folders for the files it's given, so the result is exactly the matches plus
-  // their ancestors, already sorted and compressed.
+  // buildTree only creates folders for the files it's given, so the result is the matches plus ancestors.
   const q = query.trim().toLowerCase();
   const searching = q !== "";
   const shown = searching

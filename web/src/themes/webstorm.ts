@@ -1,36 +1,18 @@
 import type { ThemeRegistrationRaw } from "shiki/core";
 
-// What WebStorm's New UI shows: the *platform* schemes "Dark" and "Light"
-// (expUI_darkScheme.xml / expUI_lightScheme.xml in intellij-community). WebStorm ships
-// no scheme of its own — unlike Rider, whose bundled theme pack is where themes/rider.ts
-// comes from — so this is equally what IDEA, PyCharm and GoLand show under the New UI.
-// It is named for WebStorm because that is the IDE it is offered as; keep that in mind
-// before "fixing" a color to match some WebStorm-specific source, because there isn't one.
-//
-// Hand-written for the same reason darcula.ts is (Shiki ships no JetBrains theme), but
-// built from *one* scope map: the two schemes assign the same set of roles
-// (DEFAULT_KEYWORD, DEFAULT_STRING, DEFAULT_FUNCTION_DECLARATION, DEFAULT_INSTANCE_FIELD,
-// DEFAULT_METADATA, …) and differ only in the colors below, so a shared builder is what
-// stops the pair drifting apart rule by rule. Like Darcula, both leave most identifiers —
-// classes, parameters, locals, calls — at the default text color; that restraint is what
-// makes them read as the IDE, and it is the opposite of what Rider does.
+// The platform's New UI schemes "Dark"/"Light" (expUI_darkScheme.xml / expUI_lightScheme.xml in intellij-community),
+// which WebStorm ships unchanged — there is no WebStorm-specific source to match. One scope map, two color records.
 interface Scheme {
   text: string;
   bg: string;
   comment: string;
-  // The Light scheme sets FONT_TYPE 2 on its line and block comments; the Dark one
-  // doesn't, and the difference is visible enough to be worth carrying.
+  // Only the Light scheme sets FONT_TYPE 2 on its comments.
   commentStyle: "" | "italic";
   docComment: string;
   docTag: string;
   keyword: string;
   string: string;
-  // JS.REGEXP — the one JS.* attribute in these schemes that lands on a scope the
-  // grammars reliably emit. The others are either asymmetric between the two schemes
-  // (JS.LOCAL_VARIABLE is set in Light only) or too narrow to map (JS.JSX_CLIENT_COMPONENT
-  // marks a "use client" component, not JSX at large), so they stay unmapped rather than
-  // invented. Applied to string.regexp at large, which is only emitted where a grammar
-  // marks a real regex literal.
+  // JS.REGEXP — the one JS.* attribute that lands on a scope the grammars reliably emit; the rest stay unmapped.
   regexp: string;
   escape: string;
   number: string;
@@ -143,8 +125,7 @@ function scheme(
         ],
         settings: { foreground: c.keyword },
       },
-      // DEFAULT_OPERATION_SIGN, DEFAULT_BRACES and their neighbours are all plain text
-      // in both schemes.
+      // DEFAULT_OPERATION_SIGN, DEFAULT_BRACES and their neighbours are plain text in both schemes.
       {
         scope: ["keyword.operator", "storage.type.function.arrow"],
         settings: { foreground: c.text },
@@ -153,8 +134,7 @@ function scheme(
       { scope: ["string.regexp"], settings: { foreground: c.regexp } },
       { scope: ["constant.character.escape"], settings: { foreground: c.escape } },
       { scope: ["constant.numeric", "keyword.other.unit"], settings: { foreground: c.number } },
-      // fontStyle "" is an explicit reset: a `const f = () =>` is also
-      // variable.other.constant, which would otherwise lend the function name its italic.
+      // fontStyle "" is an explicit reset: `const f = () =>` is also variable.other.constant, which would lend it italic.
       {
         scope: ["entity.name.function", "entity.name.function.member"],
         settings: { foreground: c.func, fontStyle: "" },

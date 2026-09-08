@@ -16,9 +16,7 @@ import { themeOf, type ShikiTheme, type ThemeId } from "./theme";
 
 export type Token = ThemedToken;
 
-// Every Shiki theme a theme.ts entry can name, all loaded up front — they're a few
-// KB each, and a token's color is resolved at tokenize time, so the theme has to be
-// registered before the first file is highlighted under it.
+// All registered up front: a token's color is resolved at tokenize time, so a theme must exist before first use.
 const SHIKI_THEMES: Record<ShikiTheme, ThemeRegistrationAny> = {
   "github-dark": githubDark,
   "github-light": githubLight,
@@ -54,8 +52,6 @@ export function langForPath(path: string): string | null {
   return ALIAS_TO_ID.get(candidate) ?? null;
 }
 
-// Resolve a fenced-code-block info string (```js, ```python, ```ts) to a Shiki
-// language id via the same alias metadata paths do.
 export function langForInfo(info: string): string | null {
   const token = info.trim().split(/\s+/)[0].toLowerCase();
   if (!token) return null;
@@ -68,8 +64,7 @@ function highlighter(): Promise<HighlighterCore> {
     hlPromise = createHighlighterCore({
       themes: Object.values(SHIKI_THEMES),
       langs: [],
-      // Pure-JS regex engine — no wasm to load in the browser. `forgiving`
-      // skips the few oniguruma-only patterns instead of throwing.
+      // Pure-JS engine, no wasm; `forgiving` skips the few oniguruma-only patterns instead of throwing.
       engine: createJavaScriptRegexEngine({ forgiving: true }),
     });
   }
@@ -78,8 +73,7 @@ function highlighter(): Promise<HighlighterCore> {
 
 const loaded = new Set<string>();
 
-// Tokens carry the theme's resolved colors, so a caller keeps its tokens only as
-// long as the theme they were cut for — re-tokenize when the theme changes.
+// Tokens carry the theme's resolved colors — re-tokenize when the theme changes.
 export async function tokenize(
   code: string,
   lang: string,
@@ -98,10 +92,7 @@ export async function tokenize(
   }
 }
 
-// Second pass over rendered-markdown HTML: swap each fenced block's plain text
-// for Shiki's colored spans in the active theme (the same tokens the diff view
-// renders). Async because grammars load lazily; callers show the plain text until
-// it resolves. Returns null when nothing was highlighted (no known-language fence).
+// Swaps each fenced block in rendered-markdown HTML for Shiki spans; null when nothing was highlighted.
 export async function highlightBlocks(baseHtml: string, theme: ThemeId): Promise<string | null> {
   const doc = new DOMParser().parseFromString(baseHtml, "text/html");
   const blocks = [...doc.querySelectorAll("pre > code[class*='language-']")];

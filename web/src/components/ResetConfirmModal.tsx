@@ -8,8 +8,7 @@ interface Props {
   onConfirm: () => void;
 }
 
-// Confirms the destructive Reset (delete all comments, unmark all reviewed files,
-// clear the summary).
+// Confirms the destructive Reset.
 export function ResetConfirmModal({
   commentCount,
   reviewedCount,

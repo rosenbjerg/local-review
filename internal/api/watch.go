@@ -8,16 +8,10 @@ import (
 	"local-review/internal/git"
 )
 
-// How often an actively-watched review's repo is polled for on-disk changes. The
-// poller only runs while a review has at least one SSE subscriber, so idle reviews
-// cost nothing.
 const watchInterval = 1500 * time.Millisecond
 
-// watchRegistry runs one filesystem poller per review that has live SSE
-// subscribers, turning out-of-band changes (an agent editing files or committing)
-// into a `diff` ping so the client refetches the diff, not just the review. It ref-counts
-// subscribers so several tabs on one review share a single poller, and stops
-// polling the instant a review's last tab disconnects.
+// watchRegistry runs one ref-counted filesystem poller per review with live SSE
+// subscribers, turning out-of-band edits and commits into `diff` pings.
 type watchRegistry struct {
 	hub    *hub
 	mu     sync.Mutex
@@ -33,8 +27,7 @@ func newWatchRegistry(hub *hub) *watchRegistry {
 	return &watchRegistry{hub: hub, active: map[int64]*watchEntry{}}
 }
 
-// start registers one subscriber for reviewID and, if it's the first, spawns the
-// poller for repoPath. Every start must be paired with a stop.
+// start adds one subscriber, spawning the poller on the first; every start must be paired with a stop.
 func (wr *watchRegistry) start(reviewID int64, repoPath string) {
 	wr.mu.Lock()
 	defer wr.mu.Unlock()
@@ -47,7 +40,6 @@ func (wr *watchRegistry) start(reviewID int64, repoPath string) {
 	go wr.poll(ctx, reviewID, repoPath)
 }
 
-// stop drops one subscriber; the poller is cancelled once the last one leaves.
 func (wr *watchRegistry) stop(reviewID int64) {
 	wr.mu.Lock()
 	defer wr.mu.Unlock()
@@ -75,16 +67,16 @@ func (wr *watchRegistry) poll(ctx context.Context, reviewID int64, repoPath stri
 		case <-ticker.C:
 			fp, err := repo.WorktreeFingerprint()
 			if err != nil {
-				continue // mid-rebase or transiently unreadable — treat as no change
+				continue // mid-rebase or unreadable: treat as no change
 			}
 			if !haveBaseline {
-				// Seed from the state already on screen so connecting doesn't self-fire.
+				// Seed the baseline so connecting doesn't self-fire.
 				last, haveBaseline = fp, true
 				continue
 			}
 			if fp != last {
 				last = fp
-				wr.hub.publish(reviewID, true) // on-disk change moved content: refetch the diff
+				wr.hub.publish(reviewID, true)
 			}
 		}
 	}

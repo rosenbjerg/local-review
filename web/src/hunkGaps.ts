@@ -1,13 +1,10 @@
 import type { Hunk } from "./types";
 
-// The unchanged regions a changed-lines-only view hides — the geometry behind the
-// diff's expanders. Pure; DiffView turns a gap plus how much of it the reviewer has
-// revealed into context rows read out of the already-fetched full file.
+// The unchanged regions Changed view hides — the geometry behind the diff's expanders.
 
 export const EXPAND_STEP = 20;
 
-// `@@ -oldStart,oldCount +newStart,newCount @@ …` — a count of 1 is written as a
-// bare start.
+// `@@ -oldStart,oldCount +newStart,newCount @@ …`; a count of 1 is written as a bare start.
 const HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
 interface Span {
@@ -28,8 +25,7 @@ function parseHeader(header: string): Span | null {
   };
 }
 
-// git numbers an empty side by the line *before* the change (`+4,0` means "after
-// new line 4"), so both edges are off by one from the usual arithmetic there.
+// git writes a zero-length side as the line *before* the change (`+4,0` = after new line 4), so both edges shift by one.
 const lastBefore = (start: number, count: number) => (count === 0 ? start : start - 1);
 const lastOf = (start: number, count: number) => (count === 0 ? start : start + count - 1);
 
@@ -38,12 +34,10 @@ export interface Gap {
   hunkIndex: number;
   start: number;
   end: number;
-  // Old-side line numbers for the gap's rows: nothing changed in here, so the two
-  // sides run in lockstep and `oldLine = newLine + delta` holds throughout.
+  // `oldLine = newLine + delta` holds throughout, since a gap contains no changes.
   delta: number;
 }
 
-// The hidden regions of `hunks` over a new side of `totalLines` lines, in order.
 export function hunkGaps(hunks: Hunk[], totalLines: number): Gap[] {
   if (hunks.length === 0 || totalLines <= 0) return [];
   const spans: Span[] = [];
@@ -77,8 +71,7 @@ export function hunkGaps(hunks: Hunk[], totalLines: number): Gap[] {
 }
 
 export interface Reveal {
-  // Lines revealed from the top of the gap (down from the previous hunk) and from
-  // its bottom (up from the next one).
+  // Lines revealed from the top of the gap and from its bottom.
   head: number;
   tail: number;
 }
@@ -89,7 +82,6 @@ export interface GapView {
   hidden: number;
 }
 
-// Splits a gap into the two revealed runs and what's still hidden between them.
 export function gapView(gap: Gap, reveal?: Reveal): GapView {
   const size = gap.end - gap.start + 1;
   const head = Math.min(Math.max(reveal?.head ?? 0, 0), size);

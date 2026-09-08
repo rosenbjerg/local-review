@@ -14,8 +14,7 @@ import type {
 // The API defaults author to "agent", so the browser tags its own writes explicitly.
 const REVIEWER = "reviewer";
 
-// Carries the HTTP status so a caller can tell apart the expected failures — a 404
-// for a path that no longer exists — from a real error worth shouting about.
+// Carries the HTTP status so a caller can tell an expected 404 from a real error.
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -44,9 +43,7 @@ async function req<T>(url: string, opts?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-// /api/file and /api/blob read the same bytes from the same side and differ only
-// in how they return them, so they share one param build. `ref` matters only to
-// the head side; the server ignores it for the other two.
+// /api/file and /api/blob share one param build; `ref` matters only to the head side.
 function sideParams(repo: string, path: string, ref: string, side: Side): string {
   const p = new URLSearchParams({ repo, path, ref });
   if (side !== "head") p.set("side", side);
@@ -84,9 +81,7 @@ export const api = {
   },
 
   file: (repo: string, path: string, ref: string, side: Side = "head") => {
-    // `worktree` in the response is where the content came *from*, not what was
-    // asked for: a ref read that the ref can't satisfy is served from disk instead,
-    // and the caller has to label that rather than render it as the ref's content.
+    // `worktree` says where the content came *from*: a ref read the ref can't satisfy is served from disk, and the caller must label that.
     return req<{ path: string; ref: string; content: string; worktree: boolean }>(
       `/api/file?${sideParams(repo, path, ref, side)}`
     );

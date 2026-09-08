@@ -1,8 +1,6 @@
 import type { FileDiff } from "./types";
 
-// How much a file (or a whole review) changes, counted off the hunks the diff
-// already carries. Walking every line is cheap once but not per render — callers
-// hold the result behind a memo keyed on the file list.
+// Per-file / whole-review counts off the hunks; callers memo the result, since this walks every line.
 
 export interface DiffStat {
   added: number;
@@ -32,8 +30,7 @@ export function totalStat(files: FileDiff[]): DiffStat {
   return { added, removed };
 }
 
-// Binary files and the synthetic cards for unchanged files have no hunks, so an
-// empty stat means "nothing to say" rather than "nothing changed".
+// Binary files and synthetic unchanged cards have no hunks, so empty means "nothing to say", not "nothing changed".
 export function isEmptyStat(s: DiffStat): boolean {
   return s.added === 0 && s.removed === 0;
 }

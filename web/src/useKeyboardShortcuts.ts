@@ -1,10 +1,8 @@
 import { useEffect, useRef } from "react";
 
 export interface Shortcuts {
-  // When false (no review open) all shortcuts are inert.
   enabled: boolean;
-  // While any modal is open the shortcuts below are suppressed; only `?` (to close
-  // the settings overlay) still fires — the Modal shell owns Escape.
+  // Suppresses everything but `?` (closing the settings overlay); the Modal shell owns Escape.
   modalOpen: boolean;
   settingsOpen: boolean;
   loading: boolean;
@@ -27,9 +25,7 @@ export interface Shortcuts {
   onDismissHighlight: () => void;
 }
 
-// One window keydown listener for the app's single-key shortcuts. A ref holds the
-// latest handlers so the listener subscribes once yet never goes stale, avoiding a
-// large dependency array. Bails while typing in a field or a modifier is held.
+// One window keydown listener; a ref holds the latest handlers so it subscribes once yet never goes stale.
 export function useKeyboardShortcuts(opts: Shortcuts) {
   const ref = useRef(opts);
   useEffect(() => {
@@ -48,11 +44,8 @@ export function useKeyboardShortcuts(opts: Shortcuts) {
           t.tagName === "TEXTAREA" ||
           t.tagName === "SELECT" ||
           t.isContentEditable ||
-          // An open composer owns the keyboard for its whole subtree, not just its
-          // textarea: the type pills and Cancel/Submit are focusable, and a shortcut
-          // firing off one of them would act on the review (`v` marking the file
-          // reviewed, `e` exporting) while the reviewer is mid-comment. The composer
-          // handles its own Escape and ⌘/Ctrl+Enter.
+          // The whole composer subtree, not just its textarea: the type pills and Cancel/Submit are focusable, and
+          // `v` or `e` firing off one of them would act on the review mid-comment.
           !!t.closest(".composer"))
       ) {
         return;
@@ -112,8 +105,7 @@ export function useKeyboardShortcuts(opts: Shortcuts) {
           e.preventDefault();
           o.onToggleCommentsPane();
           break;
-        // Only claimed while a highlight is live, and never from a control that
-        // Enter would otherwise activate.
+        // Only while a highlight is live, and never from a control Enter would otherwise activate.
         case "Enter":
           if (o.hasHighlight && t?.tagName !== "BUTTON" && t?.tagName !== "A") {
             e.preventDefault();
@@ -121,8 +113,7 @@ export function useKeyboardShortcuts(opts: Shortcuts) {
             else o.onNextMatch();
           }
           break;
-        // Not prevented: with no modal open Escape is free, but the browser may
-        // still want it (stopping a load).
+        // Not prevented: the browser may still want Escape (stopping a load).
         case "Escape":
           o.onDismissHighlight();
           break;

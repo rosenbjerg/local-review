@@ -1,9 +1,6 @@
 // Tree-order navigation over the review's files.
 
-// The next file that still needs reading, scanning forward from `current` and
-// wrapping at the end. `current` is never returned: the caller has just marked it
-// reviewed, and the optimistic state update hasn't landed in `reviewed` yet.
-// Returns null when nothing else is left unreviewed.
+// `current` is never returned: the caller just marked it reviewed, and the optimistic update hasn't landed yet.
 export function nextUnreviewed(
   paths: string[],
   current: string | null,

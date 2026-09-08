@@ -23,8 +23,7 @@ export function absoluteTime(iso: string): string {
   return Number.isFinite(d.getTime()) ? d.toLocaleString() : "";
 }
 
-// The backend leaves updated_at == created_at until a real body/type edit —
-// resolve deliberately doesn't bump it — so updatedAt > createdAt means edited.
+// updated_at moves only on a body/type edit (resolve doesn't bump it), so updatedAt > createdAt means edited.
 export function wasEdited(createdAt: string, updatedAt: string): boolean {
   if (!createdAt || !updatedAt) return false;
   const c = new Date(createdAt).getTime();
@@ -33,11 +32,8 @@ export function wasEdited(createdAt: string, updatedAt: string): boolean {
   return u > c;
 }
 
-// Day-granular relative date, for a value ordered by its date rather than its time
-// (the repo picker's activity). It must not be sub-day precise: two repos worked on
-// the same day are ordered alphabetically, so "2h ago" above "5h ago" would read as
-// a broken sort. Takes a YYYY-MM-DD date, parsed as local — Date("2026-09-02")
-// parses as UTC midnight, which is the previous day west of Greenwich.
+// Day-granular on purpose: same-day repos sort alphabetically, so "2h ago" above "5h ago" would read as a broken sort.
+// Parsed as local — Date("2026-09-02") is UTC midnight, i.e. the day before west of Greenwich.
 export function relativeDay(date: string): string {
   const [y, m, d] = date.split("-").map(Number);
   if (!y || !m || !d) return "";

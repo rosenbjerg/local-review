@@ -1,6 +1,4 @@
-// Comment and reply endpoints. A comment is a thread root carrying the anchor
-// (path, line range, side, and the commit it was resolved against); a reply is
-// body-only and hangs off one.
+// Comment and reply endpoints: a comment is a thread root carrying the anchor, a reply is body-only.
 package api
 
 import (
@@ -17,8 +15,7 @@ type addCommentReq struct {
 	Type      store.CommentType `json:"type"`
 	Body      string            `json:"body"`
 	Author    string            `json:"author"`
-	// The side the range is anchored to. Omitted is the head side, which is what
-	// an API agent commenting on committed code wants — see the agent prompts.
+	// Omitted is the head side, which is what an API agent commenting on committed code wants.
 	Side string `json:"side"` // "" (head) | "head" | "worktree" | "index"
 }
 
@@ -35,9 +32,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, errString("startLine must be >= 0"))
 		return
 	}
-	// The same path rule every read endpoint enforces. Without it the store accepted
-	// paths no file can have — "" and "../../etc/passwd" — which the export then
-	// rendered as an empty or nonsense "## " file heading.
+	// The store accepts any string, so the read endpoints' path rule has to apply here too.
 	if err := validPath(req.FilePath); err != nil {
 		httpError(w, http.StatusBadRequest, err)
 		return
@@ -62,8 +57,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Author == "" {
-		// An omitted author is the coding agent addressing the review; the browser
-		// sends "reviewer" and a review pass sends its focus's "<x>-review-agent".
+		// An omitted author is the coding agent; the browser sends "reviewer".
 		req.Author = "agent"
 	}
 	var repo *git.Repo
@@ -72,9 +66,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		repo, headRef = git.New(repoPath), hr
 		sha, _ = repo.ResolveSHA(hr)
 	}
-	// Capture the snippet from the anchored lines ourselves rather than trust the
-	// client's copy, so the browser and API agents alike only send the range and
-	// the stored text always matches the file. Line-0 file comments stay empty.
+	// Captured server-side so the stored text always matches the file; line-0 file comments stay empty.
 	snippet := ""
 	if req.StartLine > 0 {
 		snippet = captureSnippet(repo, headRef, req.FilePath, req.StartLine, req.EndLine, side)
@@ -160,10 +152,7 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, errString("invalid comment type"))
 		return
 	}
-	// The range may have moved, so re-capture the snippet and re-resolve the anchor
-	// commit against the new range on the comment's own side — else the stored
-	// snippet/commit_sha still describe the old lines and staleness misfires. Read
-	// the existing comment for its side (worktree/index/head) and path.
+	// The range may have moved: re-capture snippet and anchor sha on the comment's own side, or staleness misfires.
 	existing, err := s.Store.GetComment(id)
 	if err != nil {
 		storeError(w, err)
@@ -246,8 +235,6 @@ func (s *Server) handleAddReply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Author == "" {
-		// An omitted author is the coding agent addressing the review; the browser
-		// sends "reviewer" and a review pass sends its focus's "<x>-review-agent".
 		req.Author = "agent"
 	}
 	rep, reviewID, err := s.Store.AddReply(commentID, req.Body, req.Author)

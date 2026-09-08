@@ -6,22 +6,15 @@ interface Props {
   onChange: (value: string) => void;
   ariaLabel: string;
   placeholder?: string;
-  // The caller's own keys (the add-file picker's arrows and Enter). Escape is
-  // handled here and never reaches it.
+  // The caller's own keys; Escape is handled here and never reaches it.
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
-  // For a caller that focuses the field from outside (the `/` shortcut).
   inputRef?: RefObject<HTMLInputElement>;
-  // Marks the field as the focus trap's initial target inside a modal.
   autoFocus?: boolean;
-  // What Escape does on an already-empty field. The panes blur it, handing the
-  // keyboard back to the global shortcuts; inside a modal it bubbles, so the
-  // dialog's own Escape closes it. A non-empty field always clears first.
+  // Escape on an already-empty field: blur (the panes), or bubble so a modal's own Escape closes it.
   emptyEscape?: "blur" | "bubble";
 }
 
-// The "narrow this list" field: a text input with a clear button, and Escape as
-// the dismiss gesture. Shared by the file explorer, the comments pane and the
-// add-file picker, which each had their own copy of the Escape rule.
+// The "narrow this list" field: a text input, a clear button, and Escape as the dismiss gesture.
 export function SearchInput({
   value,
   onChange,
@@ -41,8 +34,7 @@ export function SearchInput({
       return;
     }
     if (value) {
-      // Don't let it bubble to the global shortcuts, which read Escape as "clear
-      // the occurrence highlight", or to a modal, which reads it as close.
+      // Else the global shortcuts read it as "clear the highlight", or a modal as close.
       e.stopPropagation();
       onChange("");
     } else if (emptyEscape === "blur") {

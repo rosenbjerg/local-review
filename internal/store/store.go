@@ -41,9 +41,7 @@ type Review struct {
 	Comments      []Comment    `json:"comments"`
 	ReviewedFiles []string     `json:"reviewedFiles"`
 
-	// Computed by the API layer, never persisted (like Comment.AnchorStatus). Set
-	// when the repo or head couldn't be read at all, so comment staleness and
-	// reviewed marks were left unchecked rather than reported as universally stale.
+	// Set by the API layer, never persisted, when the repo or head couldn't be read and nothing was annotated.
 	AnnotationError string `json:"annotationError,omitempty"`
 }
 
@@ -68,16 +66,13 @@ type Comment struct {
 	Author    string      `json:"author"`
 	Resolved  bool        `json:"resolved"`
 	CommitSHA string      `json:"commitSha"`
-	// The side the comment was anchored to — head_ref, the working tree, or the
-	// git index. Stored as two flags (see side.go); one value everywhere else.
+	// Stored as two flags (see side.go); one value everywhere else.
 	Side      Side      `json:"side"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 	Replies   []Reply   `json:"replies"`
 
-	// Computed by the API layer, never persisted — all zero on rows read from the
-	// store; Current* carry the relocated range when moved, and CurrentFilePath the
-	// new path when the move followed a rename (empty for a same-file move).
+	// Computed by the API layer, never persisted; Current* carry the relocated range and path when moved.
 	AnchorStatus     AnchorStatus `json:"anchorStatus,omitempty"`
 	CurrentStartLine int          `json:"currentStartLine,omitempty"`
 	CurrentEndLine   int          `json:"currentEndLine,omitempty"`
@@ -94,17 +89,12 @@ type Reply struct {
 }
 
 func Open(path string) (*Store, error) {
-	// foreign_keys is per-connection, so set it in the DSN — every pooled
-	// connection then enforces ON DELETE CASCADE (a one-time PRAGMA could stop
-	// applying when the connection is replaced). The non-URI form avoids
-	// URL-encoding a path with spaces; WAL is persisted in the file, so the
-	// one-time PRAGMA below suffices for it.
+	// foreign_keys is per-connection, so it goes in the DSN; WAL persists in the file, so one PRAGMA suffices.
 	db, err := sql.Open("sqlite", path+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		return nil, err
 	}
-	// A single connection serializes DB access — free here and it gives
-	// CreateOrGetReview's check-then-insert transaction full atomicity.
+	// One connection serializes access, which gives CreateOrGetReview's check-then-insert full atomicity.
 	db.SetMaxOpenConns(1)
 	if _, err := db.Exec(`PRAGMA journal_mode=WAL;`); err != nil {
 		return nil, err
@@ -171,10 +161,7 @@ CREATE TABLE IF NOT EXISTS reviewed_files (
 	if err != nil {
 		return err
 	}
-	// Columns added after the initial schema. CREATE TABLE IF NOT EXISTS won't
-	// backfill them onto an older DB, so each is added explicitly (a no-op once
-	// present). Adding a future column means one row here — and it must also go in
-	// the CREATE TABLE above, so a fresh DB gets it without the migration.
+	// Columns added after the initial schema; a new one needs a row here and an entry in the CREATE TABLE above.
 	added := []struct{ table, column, ddl string }{
 		{"reviews", "summary", "summary TEXT NOT NULL DEFAULT ''"},
 		{"comments", "resolved", "resolved INTEGER NOT NULL DEFAULT 0"},
@@ -195,8 +182,7 @@ CREATE TABLE IF NOT EXISTS reviewed_files (
 	return nil
 }
 
-// SQLite lacks ADD COLUMN IF NOT EXISTS, so check first. table/column/ddl are
-// trusted code constants, not user input (they're interpolated into the SQL).
+// SQLite lacks ADD COLUMN IF NOT EXISTS; table/column/ddl are code constants, not user input.
 func (s *Store) ensureColumn(table, column, ddl string) error {
 	rows, err := s.db.Query("PRAGMA table_info(" + table + ")")
 	if err != nil {
@@ -213,7 +199,7 @@ func (s *Store) ensureColumn(table, column, ddl string) error {
 			return err
 		}
 		if name == column {
-			return nil // already present
+			return nil
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -231,9 +217,7 @@ type rowScanner interface {
 	Scan(dest ...any) error
 }
 
-// Column lists paired with the scan* helpers below. The SELECT order here and
-// the Scan order in the matching helper must move together — keeping each pair
-// adjacent is the whole point of single-sourcing them.
+// The SELECT order here and the Scan order in the matching scan* helper must move together.
 const (
 	reviewCols  = `id, repo_path, base_ref, head_ref, head_sha, status, created_at, updated_at, summary`
 	commentCols = `id, review_id, file_path, start_line, end_line, snippet, type, body, created_at, updated_at, resolved, author, commit_sha, worktree, indexed`
@@ -262,7 +246,7 @@ func scanComment(sc rowScanner) (Comment, error) {
 	c.Side = sideFromFlags(worktree, indexed)
 	c.CreatedAt, _ = time.Parse(timeFmt, created)
 	c.UpdatedAt, _ = time.Parse(timeFmt, updated)
-	c.Replies = []Reply{} // never null in JSON; GetReview/getComment fill in any replies
+	c.Replies = []Reply{} // never null in JSON
 	return c, nil
 }
 
@@ -277,12 +261,9 @@ func scanReply(sc rowScanner) (Reply, error) {
 	return rep, nil
 }
 
-// Matched regardless of status, so exporting (which marks it 'exported') doesn't
-// orphan an in-progress review; HeadSHA is refreshed on fetch.
+// CreateOrGetReview matches regardless of status, so exporting never orphans an in-progress review.
 func (s *Store) CreateOrGetReview(repoPath, base, head, sha string) (*Review, error) {
-	// Check-then-insert in a transaction so two concurrent callers for the same
-	// (repo, base, head) can't both insert and split comments across duplicate
-	// rows (the single connection holds the transaction end-to-end).
+	// Check-then-insert in one transaction, so concurrent callers can't create duplicate rows.
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
@@ -374,8 +355,7 @@ func (s *Store) listReviewedFiles(reviewID int64) ([]string, error) {
 type ReviewedFile struct {
 	Path        string
 	ContentHash string
-	// The side the fingerprint was captured from, so the re-hash on the next
-	// review read compares against the same content (see api/reviewed.go).
+	// The side the fingerprint was captured from, so the re-hash reads the same content.
 	Side Side
 }
 
@@ -399,16 +379,13 @@ func (s *Store) ListReviewedFilesFull(reviewID int64) ([]ReviewedFile, error) {
 	return out, rows.Err()
 }
 
-// FileReviewMark pairs a path with the content fingerprint captured for it (empty
-// when unmarking). One batch shares a single reviewed flag and anchor side.
+// FileReviewMark pairs a path with its content fingerprint (empty when unmarking).
 type FileReviewMark struct {
 	Path        string
 	ContentHash string
 }
 
-// SetFilesReviewed marks (or unmarks) a set of files in one transaction, so a
-// folder-level toggle lands atomically and fires a single change notification.
-// The upsert refreshes the fingerprint, so re-reviewing a changed file re-pins it.
+// SetFilesReviewed marks or unmarks a batch in one transaction; the upsert refreshes the fingerprint.
 func (s *Store) SetFilesReviewed(reviewID int64, marks []FileReviewMark, reviewed bool, side Side) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -456,8 +433,7 @@ func (s *Store) DeleteReview(id int64) error {
 	return err
 }
 
-// The review row stays (only its comments and reviewed marks are cleared), so
-// re-opening the branch resumes it empty rather than creating a fresh review.
+// ResetReview clears comments, marks and summary but keeps the row, so reopening the branch resumes it empty.
 func (s *Store) ResetReview(id int64) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -470,16 +446,13 @@ func (s *Store) ResetReview(id int64) error {
 	if _, err := tx.Exec(`DELETE FROM reviewed_files WHERE review_id=?`, id); err != nil {
 		return err
 	}
-	// The summary is review-level feedback like the comments are, so a reset that
-	// left it behind would carry one reviewer's framing into the next pass.
 	if _, err := tx.Exec(`UPDATE reviews SET summary='', updated_at=? WHERE id=?`, nowStr(), id); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 
-// An empty summary is a legitimate value (clearing it), so a missing review is
-// told apart by rows affected rather than by the text being blank.
+// SetReviewSummary reports a missing review via RowsAffected, since an empty summary is a legitimate value.
 func (s *Store) SetReviewSummary(id int64, summary string) error {
 	res, err := s.db.Exec(`UPDATE reviews SET summary=?, updated_at=? WHERE id=?`,
 		summary, nowStr(), id)
@@ -505,7 +478,7 @@ func (s *Store) listComments(reviewID int64) ([]Comment, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []Comment{} // never null in JSON — the API contract promises []
+	out := []Comment{} // never null in JSON
 	for rows.Next() {
 		c, err := scanComment(rows)
 		if err != nil {
@@ -530,9 +503,7 @@ func (s *Store) AddComment(c Comment) (*Comment, error) {
 	return s.GetComment(id)
 }
 
-// UpdateComment rewrites the editable fields plus the anchor basis (snippet +
-// commit_sha): when the range moves, the caller re-captures both against the new
-// range so staleness isn't judged against the old anchor.
+// UpdateComment rewrites the editable fields plus the anchor basis (snippet and commit_sha) for the new range.
 func (s *Store) UpdateComment(id int64, body string, ctype CommentType, start, end int, snippet, commitSHA string) (*Comment, error) {
 	now := nowStr()
 	_, err := s.db.Exec(
@@ -544,8 +515,7 @@ func (s *Store) UpdateComment(id int64, body string, ctype CommentType, start, e
 	return s.GetComment(id)
 }
 
-// updated_at is deliberately left untouched: it tracks the last body/type edit
-// (the UI's "edited" marker), and resolving isn't an edit.
+// SetCommentResolved deliberately leaves updated_at alone, or the UI's "(edited)" marker would fire on resolve.
 func (s *Store) SetCommentResolved(id int64, resolved bool) (int64, error) {
 	if _, err := s.db.Exec(
 		`UPDATE comments SET resolved=? WHERE id=?`, resolved, id); err != nil {
@@ -565,8 +535,7 @@ func (s *Store) DeleteComment(id int64) (int64, error) {
 	return reviewID, nil
 }
 
-// GetComment reads a single comment with its replies. Also used before an update,
-// to recover the anchor side and path needed to re-capture the snippet.
+// GetComment reads one comment with its replies.
 func (s *Store) GetComment(id int64) (*Comment, error) {
 	c, err := scanComment(s.db.QueryRow(`SELECT `+commentCols+` FROM comments WHERE id=?`, id))
 	if err != nil {

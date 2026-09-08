@@ -1,26 +1,20 @@
 import { gapView, hunkGaps, type Gap, type Reveal } from "./hunkGaps";
 import { effectiveLines, type Comment, type Hunk, type LineKind } from "./types";
 
-// One line of the diff table. "hunk" is an @@ header, "gap" the expander bar over a
-// hidden region; both are metadata rather than file text, which is why they carry no
-// line numbers and why the DOM keeps `row-hunk` on each (occurrence highlighting
-// reads that class to know the cell isn't searchable content).
+// One line of the diff table. "hunk"/"gap" rows are metadata, not file text: no line numbers, and the
+// DOM keeps `row-hunk` on each so occurrence highlighting skips them.
 export interface Row {
   key: string;
   kind: LineKind | "hunk" | "gap";
   oldLine?: number;
   newLine?: number;
   content: string;
-  // On a "gap" row: the hidden region its expanders act on, and how much of that
-  // region is still hidden.
+  // On a "gap" row: the hidden region its expanders act on, and how much is still hidden.
   gap?: Gap;
   hidden?: number;
 }
 
-// buildRows turns a file into the rows a view renders. Full view is the source with
-// additions marked from the hunks; Changed view is the hunks, with the unchanged
-// regions between them collapsed to an expander bar carrying however much the
-// reviewer has revealed.
+// Full view: the source with adds marked from the hunks; Changed view: the hunks plus an expander bar per gap.
 export function buildRows(args: {
   mode: "changed" | "full";
   source: string[] | null;
@@ -43,8 +37,7 @@ export function buildRows(args: {
   }
 
   const out: Row[] = [];
-  // Only Changed view hides anything, and the reveal comes out of the already-fetched
-  // source — so with no source there is nothing to expand into and no gaps.
+  // A reveal reads the already-fetched source, so with no source there are no gaps.
   const gaps = mode === "changed" && source ? hunkGaps(hunks, source.length) : [];
   const gapByHunk = new Map(gaps.map((g) => [g.hunkIndex, g]));
 
@@ -54,8 +47,7 @@ export function buildRows(args: {
       out.push({
         key: `g${gap.hunkIndex}c${n}`,
         kind: "context",
-        // A gap contains no changes by definition, which is the only reason this
-        // constant offset can keep the old-side gutter honest in a revealed row.
+        // Holds only because a gap contains no changes.
         oldLine: n + gap.delta,
         newLine: n,
         content: source?.[n - 1] ?? "",
@@ -69,9 +61,7 @@ export function buildRows(args: {
 
   hunks.forEach((h, hi) => {
     const gap = gapByHunk.get(hi);
-    // A hidden region's bar carries the hunk's @@ header, so the two never stack.
-    // Once the region is fully revealed the lines run continuously into the hunk and
-    // the header would be noise, so neither row is emitted.
+    // The bar carries the hunk's @@ header so the two never stack; a fully revealed gap emits neither.
     if (gap) pushGap(gap, h.header);
     else out.push({ key: `h${hi}`, kind: "hunk", content: h.header });
     h.lines.forEach((l, li) => {
@@ -104,50 +94,34 @@ export interface LineRange {
   end: number;
 }
 
-// A row plus every decision about it that isn't rendering: how it's shaded, whether
-// its gutter takes a click, and what belongs underneath it.
 export interface PlannedRow {
   row: Row;
-  // Commenting anchors to the new side, so a row with no new-side line — a deletion,
-  // an @@ header — has nothing to anchor to and its gutter stays inert.
+  // Comments anchor to the new side; a deletion or @@ header has no new-side line, so its gutter stays inert.
   commentable: boolean;
   selected: boolean;
   commented: boolean;
   active: boolean;
-  // Threads anchored to this row's line, rendered under it.
   threads: Comment[];
-  // The new-comment composer goes under this row (the selection ends here).
   composer: boolean;
 }
 
 export interface RowPlan {
   rows: PlannedRow[];
-  // Line-0 comments: about the file, not any row, so they render in their own block
-  // below the table — the same place the media and rendered-markdown views put them.
+  // Line-0 comments are about the file, not a row; they render in their own block below the table.
   fileComments: Comment[];
-  // Comments whose anchored line isn't among the rows on screen (Changed view hiding
-  // it, or an outdated anchor). They'd otherwise vanish, so they collect at the end.
+  // Comments whose line isn't on screen (hidden by Changed view, or outdated), collected so they don't vanish.
   leftover: Comment[];
   // The selection's end row isn't rendered, so the composer can't sit under it.
   trailingComposer: boolean;
 }
 
-// planRows decides what the diff table shows: which rows are shaded how, which
-// threads hang under which row, and where the composer goes — including the two
-// fallbacks that keep a comment from disappearing when its line isn't on screen.
-//
-// It is separate from the rendering, and pure, because this is the part with the
-// non-obvious rules: a thread is placed by its *effective end* line (so a moved
-// comment follows its code), "leftover" is defined by what the walk actually
-// rendered rather than by any property of a comment, and the composer has an
-// inline position and a fallback that must be mutually exclusive. Rendered inline
-// with the JSX, none of that could be tested without a DOM.
+// Kept pure so the rules stay testable: a thread is placed by its *effective end* line, `leftover` is
+// whatever the walk didn't render, and the inline composer and its trailing fallback are mutually exclusive.
 export function planRows(args: {
   rows: Row[];
   comments: Comment[];
   selection: LineRange | null;
-  // A drag in progress: the composer waits for the mouse to come up, so the
-  // selection can grow without a composer flickering under each row it passes.
+  // While dragging the composer waits, or it would flicker under every row the selection passes.
   dragging: boolean;
   activeComment: number | null;
 }): RowPlan {
@@ -168,8 +142,7 @@ export function planRows(args: {
     for (let n = start; n <= end; n++) commented.add(n);
   }
 
-  // The range of the thread jumped to (n/p or the comments pane), if it's in this
-  // file — its rows stay lit until another is picked.
+  // The thread jumped to (n/p or the pane), if it's in this file; its rows stay lit until another is picked.
   const active = activeComment == null ? null : comments.find((c) => c.id === activeComment);
   const activeRange = active ? effectiveLines(active) : null;
 

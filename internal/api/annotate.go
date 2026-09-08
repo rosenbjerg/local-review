@@ -10,24 +10,17 @@ import (
 
 func (s *Server) annotateReview(review *store.Review) {
 	repo := git.New(review.RepoPath)
-	// Both halves below derive their answer from *reading the repo*, and both read
-	// absence as staleness: a comment whose side won't open is "outdated", a reviewed
-	// file whose content won't hash reverts to unread. That inference only holds when
-	// the repo itself is readable. Move the repo directory — an ordinary thing to do
-	// — and every per-file read fails at once, so the reviewer is shown a review where
-	// every comment is stale and nothing is reviewed, at HTTP 200, with nothing
-	// saying why. Probe once and decline to annotate instead, so the state on screen
-	// is the stored one and the banner explains that it isn't being checked.
+	// Both halves read absence as staleness, which holds only while the repo itself is
+	// readable — so probe once and, if it isn't, leave the stored state standing.
 	if err := annotationBlocker(repo, review); err != nil {
 		review.AnnotationError = err.Error()
 		return
 	}
-	// One cache for both halves, warmed per side before either runs: they want the
-	// same files from the same sides, and read per file they cost a git process each.
+	// One cache for both halves, warmed before either runs: they read the same files from the same sides.
 	cache := newContentCache(repo, review.HeadRef)
 	reviewed, err := s.Store.ListReviewedFilesFull(review.ID)
 	if err != nil {
-		reviewed = nil // best-effort, as before: leave the stored marks as-is
+		reviewed = nil // best-effort: leave the stored marks as-is
 	}
 	warmCache(cache, review.Comments, reviewed)
 
@@ -37,10 +30,8 @@ func (s *Server) annotateReview(review *store.Review) {
 	s.annotateReviewedFiles(review, reviewed, cache)
 }
 
-// warmCache prefetches, per object-database side, every path either half is about to
-// read. Comments tracked by diff never reach a content read, but they can fall back
-// to snippet matching, so their paths are included: over-fetching a path costs
-// nothing extra in a batch, while missing one costs a whole process.
+// warmCache prefetches, per side, every path either half may read — diff-tracked comments
+// included, since they can fall back to snippet matching.
 func warmCache(cache *contentCache, comments []store.Comment, reviewed []store.ReviewedFile) {
 	byside := map[store.Side][]string{}
 	add := func(path string, side store.Side) {
@@ -70,33 +61,21 @@ func annotationBlocker(repo *git.Repo, review *store.Review) error {
 	if !isGitRepo(review.RepoPath) {
 		return fmt.Errorf("%s can no longer be read — the repository may have been moved, renamed, or deleted", review.RepoPath)
 	}
-	// A head that won't resolve fails every head-side read identically, so it's the
-	// same defect wearing a different hat (a deleted branch, or a rebase in flight).
+	// A head that won't resolve fails every head-side read identically.
 	if _, err := repo.ResolveSHA(review.HeadRef); err != nil {
 		return fmt.Errorf("branch %s no longer resolves — it may have been deleted, renamed, or is mid-rebase", review.HeadRef)
 	}
 	return nil
 }
 
-// A comment's staleness is checked against the side it was anchored to: the index
-// (staged), the on-disk working tree, or else headRef — checking a snippet against
-// the wrong side would never match and read as outdated.
+// annotateComments checks each comment against the side it was anchored to; the wrong side never matches.
 func annotateComments(repo *git.Repo, headRef string, comments []store.Comment, cache *contentCache) {
 	headSHA, _ := repo.ResolveSHA(headRef)
 	caches := &diffCaches{scoped: map[string]*fileDiffResult{}, whole: map[string]*fileDiffResult{}}
-	// The path-scoped diff is one process per path, so a sha with several comments
-	// on different files pays it several times over — the same per-file spawn cost
-	// the content reads just stopped paying, and after any new commit *every* comment
-	// takes this path at once. One whole-tree diff answers all of them, and it's
-	// already cached per sha because the rename escalation needs it. Below the
-	// threshold the scoped diff is still cheaper (it reads one file's patch, not the
-	// branch's), which is the single-comment add-comment response.
+	// A sha with several comments reads one whole-tree diff instead of a scoped diff per path.
 	wholePreferred := shasWithSeveralComments(comments, headSHA)
 	for i := range comments {
 		c := &comments[i]
-		// Prefer diff-based tracking (commit_sha → head): snippet matching can't
-		// tell a genuine move from a coincidental reappearance of the same lines.
-		// Only for head-anchored comments — working-tree/index sides snippet-match.
 		if diffTrackable(c, headSHA) {
 			if annotateByDiff(repo, c, headRef, caches, wholePreferred[c.CommitSHA]) {
 				continue
@@ -109,16 +88,13 @@ func annotateComments(repo *git.Repo, headRef string, comments []store.Comment, 
 	}
 }
 
-// A head-anchored comment with a commit_sha behind head can be tracked precisely by
-// diffing that commit against head, which snippet matching can't do (it can't tell a
-// real move from the same lines reappearing elsewhere).
+// diffTrackable reports whether c can be tracked by diffing commit_sha against head, which
+// unlike snippet matching tells a real move from the same lines reappearing elsewhere.
 func diffTrackable(c *store.Comment, headSHA string) bool {
 	return c.Side.IsHead() && c.StartLine > 0 && c.CommitSHA != "" && c.CommitSHA != headSHA
 }
 
-// shasWithSeveralComments reports the commit shas that more than one diff-trackable
-// comment is anchored to — the ones where a single whole-tree diff beats one
-// path-scoped diff per file.
+// shasWithSeveralComments reports the shas more than one diff-trackable comment is anchored to.
 func shasWithSeveralComments(comments []store.Comment, headSHA string) map[string]bool {
 	n := map[string]int{}
 	for i := range comments {
@@ -136,21 +112,17 @@ func shasWithSeveralComments(comments []store.Comment, headSHA string) map[strin
 type fileDiffResult struct {
 	files []git.FileDiff
 	err   error
-	// Lazily built index of files by old-side path. The whole-tree diff can hold
-	// every file the branch touched, and it's consulted once per comment, so the
-	// linear scan findEntry does would be quadratic on a big review.
+	// Lazily built: the whole-tree diff is consulted once per comment, and a linear scan would be quadratic.
 	byOldPath map[string]*git.FileDiff
 }
 
-// entry locates the file by its OLD-side path — the side a head-anchored comment is
-// keyed to. A file that exists at commit_sha is always on the old side, so it can
-// never appear only as a NewPath; matching NewPath would just pick up an unrelated
-// file coincidentally renamed onto this path.
+// entry looks up by OLD-side path, the side a head-anchored comment is keyed to; matching
+// NewPath would pick up an unrelated file renamed onto this path.
 func (res *fileDiffResult) entry(path string) *git.FileDiff {
 	if res.byOldPath == nil {
 		res.byOldPath = make(map[string]*git.FileDiff, len(res.files))
 		for i := range res.files {
-			// First wins, matching findEntry's scan order.
+			// First wins.
 			if _, dup := res.byOldPath[res.files[i].OldPath]; !dup {
 				res.byOldPath[res.files[i].OldPath] = &res.files[i]
 			}
@@ -159,17 +131,13 @@ func (res *fileDiffResult) entry(path string) *git.FileDiff {
 	return res.byOldPath[path]
 }
 
-// diffCaches memoizes, per review read: the path-scoped diff per (commit_sha, path)
-// used for the common (unchanged/modified) case, and the whole-tree find-renames diff
-// per commit_sha used only to resolve a rename hiding behind a deletion.
+// diffCaches memoizes, per review read, the path-scoped diff per (sha, path) and the whole-tree diff per sha.
 type diffCaches struct {
 	scoped map[string]*fileDiffResult // key: commit_sha + "\x00" + path
 	whole  map[string]*fileDiffResult // key: commit_sha
 }
 
-// scopedEntry returns path's entry in `git diff <sha> head -- path` (nil if the file
-// is unchanged; ok=false on git error). Restricting to the path is cheap but reports
-// a rename as a bare deletion, so the caller escalates to wholeEntry on a deletion.
+// scopedEntry returns path's entry in `git diff <sha> head -- path`: nil if unchanged, ok=false on git error.
 func (dc *diffCaches) scopedEntry(repo *git.Repo, sha, head, path string) (fd *git.FileDiff, ok bool) {
 	key := sha + "\x00" + path
 	res := dc.scoped[key]
@@ -184,8 +152,7 @@ func (dc *diffCaches) scopedEntry(repo *git.Repo, sha, head, path string) (fd *g
 	return res.entry(path), true
 }
 
-// wholeEntry returns path's entry in the whole-tree `git diff <sha> head` (with rename
-// detection), so a rename is paired to its new path.
+// wholeEntry returns path's entry in the whole-tree `git diff <sha> head`, which pairs renames.
 func (dc *diffCaches) wholeEntry(repo *git.Repo, sha, head, path string) (fd *git.FileDiff, ok bool) {
 	res := dc.whole[sha]
 	if res == nil {
@@ -199,8 +166,7 @@ func (dc *diffCaches) wholeEntry(repo *git.Repo, sha, head, path string) (fd *gi
 	return res.entry(path), true
 }
 
-// Route every anchor decision through these so AnchorStatus and the Current* fields
-// are always assigned together (and CurrentFilePath cleared unless a rename set it).
+// Every anchor decision goes through these, so AnchorStatus and the Current* fields are always set together.
 func markCurrent(c *store.Comment) {
 	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine, c.CurrentFilePath = store.AnchorCurrent, 0, 0, ""
 }
@@ -208,21 +174,14 @@ func markOutdated(c *store.Comment) {
 	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine, c.CurrentFilePath = store.AnchorOutdated, 0, 0, ""
 }
 
-// markMoved records a shift; path is the new file when the move followed a rename,
-// "" for a same-file move.
+// markMoved records a shift; path is the new file when the move followed a rename, "" otherwise.
 func markMoved(c *store.Comment, path string, start, end int) {
 	c.AnchorStatus, c.CurrentStartLine, c.CurrentEndLine, c.CurrentFilePath = store.AnchorMoved, start, end, path
 }
 
-// annotateByDiff tracks a head-anchored comment's range from commit_sha to head via
-// git, two-tier: a cheap path-scoped diff for the common (unchanged/modified) case,
-// escalating to a whole-tree find-renames diff only when the file is gone (a possible
-// rename). Returns false to fall back to snippet matching (git error, binary file, or
-// a modification with no textual hunks).
+// annotateByDiff tracks a head-anchored comment from commit_sha to head: a path-scoped diff,
+// escalating to the whole-tree diff when the file reads as deleted. False → snippet matching.
 func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, caches *diffCaches, preferWhole bool) bool {
-	// preferWhole: several comments share this sha, so the whole-tree diff (one
-	// process, cached per sha) is read directly instead of a scoped diff per path.
-	// It also pairs renames, so the deletion escalation below is already resolved.
 	if preferWhole {
 		fd, ok := caches.wholeEntry(repo, c.CommitSHA, headRef, c.FilePath)
 		if !ok {
@@ -235,12 +194,11 @@ func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, caches *di
 		return false
 	}
 	if fd == nil {
-		markCurrent(c) // untouched between commit_sha and head → still where it was
+		markCurrent(c) // untouched between commit_sha and head
 		return true
 	}
 	if fd.Status == git.FileDeleted {
-		// The pathspec reports a rename as a bare deletion; the whole-tree diff pairs
-		// it, so escalate to tell a real deletion (outdated) from a rename (follow it).
+		// The pathspec reports a rename as a bare deletion; escalate to tell the two apart.
 		return annotateDeletedOrRenamed(repo, c, headRef, caches)
 	}
 	if fd.Binary || len(fd.Hunks) == 0 {
@@ -249,9 +207,8 @@ func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, caches *di
 	return mapContiguous(c, fd.Hunks, "") // same-file modification
 }
 
-// annotateFromEntry decides a comment's anchor from its file's entry in the
-// whole-tree diff, which has rename detection — so a deletion here is a real one and
-// needs no escalation. Returns false to fall back to snippet matching.
+// annotateFromEntry decides from a whole-tree entry, where a deletion is real and needs
+// no escalation; false falls back to snippet matching.
 func annotateFromEntry(c *store.Comment, fd *git.FileDiff) bool {
 	if fd == nil {
 		markCurrent(c) // untouched between commit_sha and head
@@ -289,20 +246,16 @@ func annotateDeletedOrRenamed(repo *git.Repo, c *store.Comment, headRef string, 
 	return mapContiguous(c, fd.Hunks, fd.NewPath) // follow the rename (R100 has no hunks → 1:1)
 }
 
-// mapContiguous maps c's range through hunks: every line must survive and stay
-// contiguous, else the block was edited (outdated) rather than merely shifted. A
-// non-empty newPath relocates a move that followed a rename.
+// mapContiguous maps c's range through hunks: every line must survive and stay contiguous,
+// else the block was edited (outdated) rather than shifted; newPath relocates a rename.
 func mapContiguous(c *store.Comment, hunks []git.Hunk, newPath string) bool {
 	ns, alive := git.MapOldLine(hunks, c.StartLine)
 	if !alive {
 		markOutdated(c)
 		return true
 	}
-	// Only lines within the hunks' old-side extent can break contiguity; every line
-	// beyond it maps 1:1 by a constant offset, so the tail is contiguous by
-	// construction and we stop there. Without this bound an unbounded EndLine (an API
-	// client can send any value) would spin MapOldLine billions of times on every
-	// review read.
+	// Stop at the hunks' old extent: beyond it lines map by a constant offset, and an API
+	// client can send any EndLine.
 	limit := c.EndLine
 	if ext := git.HunksOldExtent(hunks); ext < limit {
 		limit = ext
@@ -316,8 +269,7 @@ func mapContiguous(c *store.Comment, hunks []git.Hunk, newPath string) bool {
 		}
 		prev = nl
 	}
-	// Contiguous throughout, so the end tracks the start by the range's own span
-	// (== prev when the loop ran to EndLine).
+	// Contiguous throughout, so the end tracks the start by the range's span.
 	end := ns + (c.EndLine - c.StartLine)
 	if newPath == "" && ns == c.StartLine {
 		markCurrent(c)
@@ -327,18 +279,8 @@ func mapContiguous(c *store.Comment, hunks []git.Hunk, newPath string) bool {
 	return true
 }
 
-// contentCache reads a review's file content once per (side, path), and warms the
-// two git-backed sides in one command each.
-//
-// Both halves of a review read — comment staleness and reviewed-file fingerprints —
-// need the same files' content from the same sides, and each used to spawn its own
-// `git show` per path from its own private cache, so a file that was both commented
-// and reviewed was read twice. That is one process per file, on every review read,
-// and a review read happens on every comment/reply/reviewed mutation plus every tick
-// of the ~1.5s filesystem poller — i.e. continuously while an agent works. Measured
-// at 60 comments + 60 reviewed files it cost 0.95s per read. Process spawn is the
-// whole of it, so batching the reads is the fix, and sharing the cache removes the
-// double read.
+// contentCache reads file content once per (side, path), warming the two git-backed sides
+// in one command each: a review read runs continuously while an agent works, and spawn is the cost.
 type contentCache struct {
 	repo    *git.Repo
 	headRef string
@@ -348,8 +290,7 @@ type contentCache struct {
 type contentEntry struct {
 	content string
 	ok      bool
-	// Snippet matching wants the file as lines, and a file with N comments on it
-	// would otherwise re-split N times.
+	// split lazily, once, however many comments the file carries
 	lines []string
 	split bool
 }
@@ -365,9 +306,7 @@ func (c *contentCache) side(s store.Side) map[string]*contentEntry {
 	return c.sides[s]
 }
 
-// spec is the `<ref>:<path>` form cat-file and `git show` share. The working tree has
-// no such form — it isn't in the object database — so it reads per file, which costs
-// no process anyway.
+// spec is the `<ref>:<path>` form cat-file and `git show` share; the working tree has none and reads per file.
 func (c *contentCache) spec(path string, s store.Side) string {
 	if s == store.SideIndex {
 		return ":" + path
@@ -375,9 +314,8 @@ func (c *contentCache) spec(path string, s store.Side) string {
 	return c.headRef + ":" + path
 }
 
-// warm prefetches paths for one object-database side in a single command. A batch
-// that fails leaves the cache cold rather than poisoned: read() then falls back to
-// the per-file call, so correctness never depends on the batch parser.
+// warm prefetches one object-database side in a single command; a failed batch leaves the
+// cache cold, not poisoned, so entry() falls back to the per-file read.
 func (c *contentCache) warm(paths []string, s store.Side) {
 	if s == store.SideWorktree || len(paths) == 0 {
 		return
@@ -395,10 +333,8 @@ func (c *contentCache) warm(paths []string, s store.Side) {
 		if _, seeded := side[p]; seeded {
 			continue
 		}
-		// The batch ran, so a spec it didn't answer for is genuinely absent — record
-		// that too, or every missing file would still cost a process to rediscover.
-		// Except a non-blob, which BatchObjects deliberately omits; those are rare
-		// enough to let fall through to the single-object path.
+		// The batch ran, so an unanswered spec is genuinely absent; record that too, or every
+		// missing file still costs a process to rediscover.
 		if content, found := objs[c.spec(p, s)]; found {
 			side[p] = &contentEntry{content: content, ok: true}
 		} else {
@@ -426,8 +362,7 @@ func (c *contentCache) read(path string, s store.Side) (string, bool) {
 	return e.content, e.ok
 }
 
-// lines is read() split for snippet matching, memoised on the entry so a file
-// carrying several comments is split once.
+// lines is read() split for snippet matching, memoised on the entry.
 func (c *contentCache) lines(path string, s store.Side) ([]string, bool) {
 	e := c.entry(path, s)
 	if !e.ok {
@@ -439,8 +374,7 @@ func (c *contentCache) lines(path string, s store.Side) ([]string, bool) {
 	return e.lines, true
 }
 
-// A comment with no captured snippet stays "current" — nothing to verify drift
-// against (e.g. a line-0 media comment).
+// annotateComment snippet-matches; a comment with no snippet (a line-0 file comment) stays current.
 func annotateComment(c *store.Comment, read func(string) ([]string, bool)) {
 	markCurrent(c)
 
@@ -457,8 +391,7 @@ func annotateComment(c *store.Comment, read func(string) ([]string, bool)) {
 	if matchAt(lines, c.StartLine-1, snip) {
 		return
 	}
-	// Relocate only on an unambiguous hit; multiple matches read as outdated
-	// rather than guessing.
+	// Relocate only on an unambiguous hit; several matches read as outdated.
 	starts := findMatches(lines, snip)
 	if len(starts) == 1 {
 		markMoved(c, "", starts[0]+1, starts[0]+len(snip)) // same-file relocation
@@ -489,16 +422,13 @@ func findMatches(lines, snip []string) []int {
 	return out
 }
 
-// Drops one trailing newline so numbering lines up with the diff (and the
-// frontend) — an off-by-one here misaligns every snippet capture and match.
+// Drops one trailing newline so numbering lines up with the diff; an off-by-one here misaligns every snippet.
 func splitLines(content string) []string {
 	return strings.Split(strings.TrimSuffix(content, "\n"), "\n")
 }
 
-// Reads the range from the same side annotateComment later compares against — the
-// index for a staged anchor, the working tree for an uncommitted anchor, else
-// headRef — so the stored snippet matches. Best-effort: an unreadable file or
-// out-of-range start yields "".
+// captureSnippet reads the range from the side annotateComment will later compare against;
+// best-effort, "" when the file or start is out of reach.
 func captureSnippet(repo *git.Repo, headRef, path string, start, end int, side store.Side) string {
 	if repo == nil || start <= 0 {
 		return ""

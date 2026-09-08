@@ -8,9 +8,8 @@ interface Props {
   children: ReactNode;
 }
 
-// Mounts once scrolled near, then stays mounted (`shown` never resets) —
-// unmounting on scroll-away would re-fetch and re-tokenize each pass. The
-// placeholder's estimated height keeps scroll and jump-to-file stable pre-mount.
+// Mounts once scrolled near and stays mounted: unmounting would re-fetch and re-tokenize each pass.
+// The placeholder's estimated height keeps scroll and jump-to-file stable pre-mount.
 export function LazyFile({ anchorId, label, estHeight, rootRef, children }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);

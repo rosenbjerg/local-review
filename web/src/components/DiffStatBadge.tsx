@@ -1,9 +1,7 @@
 import type { DiffStat } from "../diffStats";
 import { isEmptyStat } from "../diffStats";
 
-// The `+N -M` line counts, shown on a file card, an explorer row and the review
-// total. Renders nothing when there's nothing to count — a binary file or a file
-// opened just to comment on would otherwise read as "+0 -0", i.e. unchanged.
+// The `+N -M` line counts; renders nothing when there's nothing to count, or a binary file would read "+0 -0".
 export function DiffStatBadge({ stat, title }: { stat: DiffStat; title?: string }) {
   if (isEmptyStat(stat)) return null;
   return (

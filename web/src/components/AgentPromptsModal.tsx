@@ -8,10 +8,7 @@ import { ViewToggle } from "./ViewToggle";
 
 type ByKind<T> = Record<PromptKind, T>;
 
-// `saved` is what this repo has stored (null = still the built-in template); `drafts`
-// is what the textarea edits. Both are held per kind rather than for the shown prompt
-// alone, so switching prompts mid-edit doesn't discard another one's work — every
-// prompt is edited, saved and reset independently.
+// Held per kind, not for the shown prompt alone, so switching prompts mid-edit keeps the other's work.
 interface EditorState {
   saved: ByKind<string | null>;
   drafts: ByKind<string>;
@@ -31,9 +28,7 @@ function firstKindOf(group: PromptGroup): PromptKind {
   return (AGENT_PROMPTS.find((p) => p.group === group) ?? AGENT_PROMPTS[0]).kind;
 }
 
-// Which kind each group is showing, remembered per group: leaving "Do a review" for
-// the reply prompt and coming back should return to the focus you were reading, not
-// to the group's first one.
+// Remembered per group, so coming back to "Do a review" returns to the focus you were reading.
 function initialKinds(): Record<PromptGroup, PromptKind> {
   const out = {} as Record<PromptGroup, PromptKind>;
   for (const g of PROMPT_GROUPS) out[g.group] = firstKindOf(g.group);
@@ -51,20 +46,17 @@ export function AgentPromptsModal({
 }) {
   const [group, setGroup] = useState<PromptGroup>(PROMPT_GROUPS[0].group);
   const [kinds, setKinds] = useState<Record<PromptGroup, PromptKind>>(initialKinds);
-  // Read once at mount. App keys this modal on `repo`, so a repo switch remounts it
-  // instead of leaving one repo's drafts on screen to be saved under another's key.
+  // Read once at mount; App keys this modal on `repo`, so a switch remounts it.
   const [state, setState] = useState<EditorState>(() => loadEditorState(repo));
 
   const active = kinds[group];
   const current = AGENT_PROMPTS.find((p) => p.kind === active) ?? AGENT_PROMPTS[0];
-  // The prompt's own author completes the review's values (see prompts.ts): it's a
-  // property of the kind on screen, so it's merged here rather than passed in.
+  // The author belongs to the kind on screen, so it's merged here rather than passed in.
   const promptVars: PromptVars = { ...vars, author: current.author };
   const focuses = AGENT_PROMPTS.filter((p) => p.group === group);
   const draft = state.drafts[current.kind];
   const saved = state.saved[current.kind];
-  // Dirty against what Save would replace, not against the built-in one: a saved
-  // prompt reopened unedited has nothing to save.
+  // Dirty against what Save would replace: a saved prompt reopened unedited has nothing to save.
   const dirty = draft !== (saved ?? current.template);
   const customised = saved !== null || draft !== current.template;
 
@@ -98,8 +90,6 @@ export function AgentPromptsModal({
           options={PROMPT_GROUPS.map((g) => ({ value: g.group, label: g.label }))}
         />
       }
-      // Copies the draft on screen, placeholders filled in — including edits not
-      // saved yet, since the box is what you're looking at.
       actions={
         <CopyButton
           className="btn copy-btn"
@@ -109,9 +99,7 @@ export function AgentPromptsModal({
         />
       }
     >
-      {/* Only for a group that has several prompts to choose between — one review
-          focus per run, deliberately (see prompts.ts). The author is shown because
-          it's how the pane and the export tell this pass's findings from another's. */}
+      {/* One review focus per run, deliberately (see prompts.ts). */}
       {focuses.length > 1 && (
         <div className="modal-subhead">
           <ViewToggle

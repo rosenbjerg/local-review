@@ -55,8 +55,7 @@ func main() {
 	}
 	defer st.Close()
 
-	// Non-positive retention would put the cutoff at/after now and wipe every
-	// draft, so treat it as "keep drafts forever".
+	// A non-positive retention would put the cutoff at/after now and wipe every draft.
 	if *retention <= 0 {
 		log.Print("retention-days <= 0: draft pruning disabled")
 	} else if n, err := st.PruneDrafts(time.Duration(*retention) * 24 * time.Hour); err != nil {
@@ -72,8 +71,7 @@ func main() {
 	addr := fmt.Sprintf("127.0.0.1:%d", *port)
 	url := "http://" + addr
 
-	// Bind explicitly so a port-in-use failure aborts before we open a browser
-	// tab at a server that isn't listening.
+	// Bind before opening the browser, so a port-in-use failure aborts first.
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("listen on %s: %v", addr, err)
@@ -83,20 +81,14 @@ func main() {
 	log.Printf("db: %s", dbPath)
 	log.Printf("listening on %s", url)
 
-	// Every request context derives from baseCtx, so cancelling it on shutdown
-	// unblocks the long-lived SSE streams (handleEvents waits on r.Context()).
-	// Without this, Shutdown waits on those open streams until the deadline.
 	baseCtx, cancelBase := context.WithCancel(context.Background())
 	defer cancelBase()
 
 	srv := &http.Server{
-		// WithSameOrigin inside the logger, so a refused cross-site write is logged
-		// like any other 4xx.
+		// WithSameOrigin sits inside the logger so a refused write is logged like any other 4xx.
 		Handler:     api.WithErrorLogging(api.WithSameOrigin(mux)),
 		BaseContext: func(net.Listener) context.Context { return baseCtx },
-		// Bound the header read so a stalled client can't hold a connection open
-		// indefinitely. No ReadTimeout/WriteTimeout: those would abort the long-lived
-		// SSE streams, which legitimately read nothing and write for minutes.
+		// No ReadTimeout/WriteTimeout: those would abort the long-lived SSE streams.
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	serveErr := make(chan error, 1)
@@ -106,8 +98,6 @@ func main() {
 		go openBrowser(url)
 	}
 
-	// On signal, drain in-flight requests so the deferred st.Close() checkpoints
-	// the WAL cleanly.
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	select {
@@ -117,9 +107,8 @@ func main() {
 		}
 	case s := <-sig:
 		log.Printf("received %s, shutting down", s)
-		// Cancel in-flight request contexts first so SSE streams return at once;
-		// DB writes use context.Background (not the request ctx), so this doesn't
-		// abort a mutation mid-flight — it just stops the endless event streams.
+		// Cancel request contexts first so SSE streams return at once; DB writes use
+		// context.Background, so no mutation is cut short.
 		cancelBase()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -166,16 +155,14 @@ func mountStatic(mux *http.ServeMux) {
 	}
 	fileServer := http.FileServer(http.FS(sub))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// An unknown /api/* path must 404, not fall through to index.html, so an
-		// API client hitting a bad endpoint gets a JSON error rather than 200 HTML.
+		// An unknown /api/* path must 404 as JSON, not fall through to index.html.
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"error":"not found"}`))
 			return
 		}
-		// path.Clean, not filepath.Clean: filepath.Clean emits backslashes on
-		// Windows, so the io/fs (slash-separated) lookup would miss.
+		// path.Clean, not filepath.Clean: the io/fs lookup is slash-separated even on Windows.
 		if _, err := fs.Stat(sub, path.Clean(r.URL.Path[1:])); err == nil || r.URL.Path == "/" {
 			fileServer.ServeHTTP(w, r)
 			return
@@ -186,8 +173,6 @@ func mountStatic(mux *http.ServeMux) {
 }
 
 func openBrowser(url string) {
-	// The listener is already bound, so a connection queues until Serve accepts
-	// it — no wait needed.
 	var cmd string
 	var args []string
 	switch runtime.GOOS {

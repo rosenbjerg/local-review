@@ -1,10 +1,4 @@
 // Package api wires the HTTP handlers over the git service and store.
-//
-// The handlers are grouped by resource, one file each — handlers_git.go (the
-// read-only git endpoints), handlers_reviews.go, handlers_comments.go (comments
-// and their replies) — over the shared pieces here: the Server, the repo
-// resolution every git-reading endpoint goes through, and the route table.
-// respond.go holds the request/response plumbing, validate.go the input rules.
 package api
 
 import (
@@ -35,10 +29,8 @@ func isGitRepo(path string) bool {
 	return err == nil
 }
 
-// repoInfo is one entry in the repo picker. LastActivity is a local calendar date
-// (YYYY-MM-DD), deliberately *not* a timestamp: it is the value the ordering rests
-// on, and a picker that re-ordered itself through the working day would be worse
-// than an alphabetical one. Empty when the repo's activity can't be dated.
+// repoInfo is one repo-picker entry. LastActivity is a local YYYY-MM-DD date, not a
+// timestamp, so the order can't reshuffle through the working day; empty if undatable.
 type repoInfo struct {
 	Name         string `json:"name"`
 	LastActivity string `json:"lastActivity"`
@@ -46,14 +38,8 @@ type repoInfo struct {
 
 const activityDateLayout = "2006-01-02"
 
-// repoActivityDate dates a repo by its reflog: `.git/logs/HEAD` is appended on every
-// commit, checkout, merge and pull, so its mtime is when the reviewer last worked in
-// this repo — which is what the picker wants, and what a stat can answer. Reading the
-// newest committer date across the refs instead would be one git process per repo on
-// an endpoint that lists them all, and would still miss checkouts and branch
-// switches. Two fallbacks, both cheap: `.git` itself (also the case where it's a
-// gitlink *file*, for a worktree or submodule, and so has no logs/ under it), then
-// nothing — an undated repo sorts last rather than jumping around.
+// repoActivityDate dates a repo by its reflog's mtime — one stat, where reading the refs
+// would spawn git per repo; a gitlink .git file has no logs/, hence the fallback.
 func repoActivityDate(path string) string {
 	dotGit := filepath.Join(path, ".git")
 	for _, p := range []string{filepath.Join(dotGit, "logs", "HEAD"), dotGit} {
@@ -79,10 +65,8 @@ func (s *Server) listRepos() ([]repoInfo, error) {
 			repos = append(repos, repoInfo{Name: e.Name(), LastActivity: repoActivityDate(path)})
 		}
 	}
-	// Most recently worked in first, by *date* only, then alphabetically: the two
-	// repos you're switching between all day share a date, so they hold a stable
-	// order instead of trading places on every commit. A YYYY-MM-DD compare is a
-	// date compare, and an undated repo ("") sorts last.
+	// By date (not timestamp) then name, so repos worked in on the same day hold a
+	// stable order; an undated repo ("") sorts last.
 	sort.SliceStable(repos, func(i, j int) bool {
 		if repos[i].LastActivity != repos[j].LastActivity {
 			return repos[i].LastActivity > repos[j].LastActivity
@@ -92,8 +76,7 @@ func (s *Server) listRepos() ([]repoInfo, error) {
 	return repos, nil
 }
 
-// Rejects anything that isn't a single path segment under the root — a
-// path-traversal guard, so keep the segment check if you touch this.
+// repoFor resolves a repo name under the root; the single-segment check is the path-traversal guard.
 func (s *Server) repoFor(name string) (*git.Repo, error) {
 	if name == "" {
 		return nil, errString("repo is required")
@@ -105,9 +88,8 @@ func (s *Server) repoFor(name string) (*git.Repo, error) {
 	if !isGitRepo(abs) {
 		return nil, errString("not a git repository: " + name)
 	}
-	// Confine to the root even when `name` is a symlink: resolve both sides and
-	// confirm the target stays under root, so a symlink placed in the root can't
-	// point the tool at a repo outside it (isGitRepo's os.Stat follows symlinks).
+	// Resolve both sides' symlinks: isGitRepo's Stat follows links, so a symlink in
+	// the root could otherwise point the tool at a repo outside it.
 	root, rootErr := filepath.EvalSymlinks(s.Root)
 	resolved, resErr := filepath.EvalSymlinks(abs)
 	if rootErr != nil || resErr != nil {

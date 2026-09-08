@@ -3,11 +3,8 @@ import { api } from "../api";
 import { sideLabel, type Comment, type CommentType, type FileDiff, type Side } from "../types";
 import { FileComments } from "./FileComments";
 
-// One side of the before/after pair. The blob can 404 — the path may not exist on
-// that side, e.g. a comment outliving a renamed image — which the browser would
-// otherwise render as a broken-image icon. Callers mount it keyed on src and the
-// file's status, so switching view axis or the file reappearing retries the load
-// rather than leaving it stuck on the note.
+// One side of the pair. The blob can 404 (a comment outliving a renamed image); callers key it
+// on src + file status, so a view-axis toggle or the file reappearing retries the load.
 function ImageSide({
   label,
   src,
@@ -44,8 +41,7 @@ interface Props {
   onSubmitFileComment: (body: string, type: CommentType) => Promise<boolean>;
 }
 
-// The media (raster image / non-image binary) view of a file: a before/after
-// image pair when previewable, plus file-level (line-0) comments and composer.
+// The media view of a file: a before/after image pair when previewable, plus file-level comments.
 export function MediaView({
   file,
   repo,

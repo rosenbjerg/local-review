@@ -1,14 +1,9 @@
 import type MarkdownIt from "markdown-it";
 
-// Matches a comment reference like "#42". Only linkified when the id is a real
-// comment in the review (passed via render env), so stray "#3" text stays plain.
 const REF_RE = /#(\d+)/g;
 
-// A markdown-it core rule that rewrites `#<id>` inside text into a link
-// (<a class="comment-ref" data-comment-id=… href="#comment-…">). It runs on text
-// tokens only, so `#42` inside inline code or a fenced block is left untouched.
-// Gated on `env.commentIds` (a Set<number>) — absent env ⇒ no-op, which is how
-// non-comment renders (markdown files, export preview) stay inert.
+// Core rule linking `#<id>` in text tokens only, so inline code and fences stay plain. Gated on
+// `env.commentIds`: an unknown id, or a render without env (markdown files, export preview), stays inert.
 export function commentRefPlugin(md: MarkdownIt) {
   md.core.ruler.push("comment_ref", (state) => {
     const ids = state.env?.commentIds as Set<number> | undefined;
@@ -20,9 +15,7 @@ export function commentRefPlugin(md: MarkdownIt) {
       for (const tok of block.children) {
         if (tok.type === "link_open") linkDepth++;
         else if (tok.type === "link_close") linkDepth--;
-        // Skip non-text tokens, and any text already inside a link: linkifying `#42`
-        // there would nest <a> inside <a> (invalid HTML). This also leaves a
-        // linkified URL whose text contains "#<digits>" (e.g. .../pr#42) intact.
+        // Text already inside a link is skipped: nested <a> is invalid, and a linkified .../pr#42 must stay intact.
         if (tok.type !== "text" || linkDepth > 0) {
           out.push(tok);
           continue;

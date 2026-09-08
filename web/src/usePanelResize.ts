@@ -8,22 +8,15 @@ import {
 import { LS, getBool, getNumber, setBool, setNumber } from "./storage";
 import { clamp } from "./util";
 
-// The width a collapsed pane keeps: enough for the vertical reopen button (see
-// PaneRail), and never zero — a pane with no edge left on screen is a pane the
-// reviewer can't find their way back to.
+// What a collapsed pane keeps, never zero — a pane with no edge left on screen has no way back.
 export const RAIL_WIDTH = 28;
 
-// The grid the layout is: two panes, each behind a 6px resizer track.
 function columns(left: number, right: number): string {
   return `${left}px 6px 1fr 6px ${right}px`;
 }
 
-// Owns the two resizable panel widths, whether each pane is open, and the
-// drag/keyboard resize handlers. During a drag it writes grid-template-columns
-// straight to the DOM (via mainRef) — a per-mousemove setState would re-render
-// every mounted diff — and only commits the width to state on release. A
-// collapsed pane keeps its stored width, so reopening restores it rather than
-// snapping to the default.
+// A drag writes grid-template-columns straight to the DOM (a per-mousemove setState would re-render every mounted
+// diff) and commits the width on release. A collapsed pane keeps its stored width, so reopening restores it.
 export function usePanelResize() {
   const [leftW, setLeftW] = useState(() => getNumber(LS.leftWidth, 260));
   const [rightW, setRightW] = useState(() => getNumber(LS.rightWidth, 380));
@@ -58,8 +51,7 @@ export function usePanelResize() {
       if (side === "left") finalLeft = clamp(startLeft + dx, 160, 560);
       else finalRight = clamp(startRight - dx, 220, 640);
       if (mainRef.current) {
-        // A collapsed pane holds the rail width whatever its stored width is —
-        // the other side's resizer is still draggable while it's shut.
+        // A collapsed pane holds the rail width whatever its stored width is; the other resizer stays draggable.
         mainRef.current.style.gridTemplateColumns = columns(
           leftOpen ? finalLeft : RAIL_WIDTH,
           rightOpen ? finalRight : RAIL_WIDTH

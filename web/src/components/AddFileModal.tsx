@@ -7,8 +7,7 @@ import { SearchInput } from "./SearchInput";
 interface Props {
   repo: string;
   headRef: string;
-  // Paths already shown in the review (diff files + previously opened) — marked
-  // so the reviewer sees selecting one just jumps to the existing card.
+  // Paths already shown in the review, marked so selecting one reads as a jump to the existing card.
   present: Set<string>;
   onSelect: (path: string) => void;
   onClose: () => void;
@@ -16,8 +15,7 @@ interface Props {
 
 const MAX_RESULTS = 200;
 
-// A typeahead over the repo's tracked files (at head) for commenting on a file
-// the branch didn't change.
+// A typeahead over the repo's tracked files, for commenting on a file the branch didn't change.
 export function AddFileModal({ repo, headRef, present, onSelect, onClose }: Props) {
   const [files, setFiles] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);

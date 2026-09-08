@@ -3,16 +3,14 @@ import { Chevron } from "./Chevron";
 
 function origLabel(c: Comment): string {
   const lines = c.endLine > c.startLine ? `L${c.startLine}–${c.endLine}` : `L${c.startLine}`;
-  // A move that followed a rename shows the original path too, since the comment
-  // now lives under a different file.
+  // A rename-followed move shows the original path too.
   return c.currentFilePath ? `${c.filePath}:${lines}` : lines;
 }
 
 interface Props {
   comment: Comment;
   compact?: boolean;
-  // When provided, the "outdated" badge becomes a toggle for the original-code
-  // snippet; `expanded` reflects whether it's currently shown.
+  // When provided, the "outdated" badge becomes a toggle for the original-code snippet.
   onToggle?: () => void;
   expanded?: boolean;
 }
