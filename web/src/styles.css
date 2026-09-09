@@ -90,6 +90,7 @@
 
 /* Color themes: one full token block per theme, keyed by <html data-theme>. Bare :root gets github-dark. */
 :root,
+.theme-option[data-theme="github-dark"],
 :root[data-theme="github-dark"] {
   --bg: #0d1117;
   --bg-elev: #161b22;
@@ -128,6 +129,7 @@
 }
 
 /* GitHub light (Primer). */
+.theme-option[data-theme="github-light"],
 :root[data-theme="github-light"] {
   --bg: #ffffff;
   --bg-elev: #f6f8fa;
@@ -165,6 +167,7 @@
 }
 
 /* JetBrains Darcula. Deletions are grey, as in the IDE; --text and --muted sit a step lighter for contrast. */
+.theme-option[data-theme="darcula"],
 :root[data-theme="darcula"] {
   --bg: #2b2b2b;
   --bg-elev: #3c3f41;
@@ -203,6 +206,7 @@
 
 /* Rider Dark (JetBrains rider-theme-pack). Deleted rows are grey with a red edge, as the IDE draws them;
    --bg-elev and --muted sit a step above the IDE's, for a visible raised fill and 3:1 text. */
+.theme-option[data-theme="rider-night"],
 :root[data-theme="rider-night"] {
   --bg: #262626;
   --bg-elev: #303030;
@@ -240,6 +244,7 @@
 }
 
 /* Rider Light. --bg-hover is the IDE's blue hover tint, leaving the grey ramp free for deletions. */
+.theme-option[data-theme="rider-day"],
 :root[data-theme="rider-day"] {
   --bg: #ffffff;
   --bg-elev: #f7f7f7;
@@ -278,6 +283,7 @@
 
 /* WebStorm: the platform's own New UI Dark (WebStorm ships no scheme; IDEA/PyCharm/GoLand show the same).
    Deleted rows are grey (the IDE's look); --muted sits a step above the IDE's for 3:1 on a panel. */
+.theme-option[data-theme="webstorm-dark"],
 :root[data-theme="webstorm-dark"] {
   --bg: #1e1f22;
   --bg-elev: #2b2d30;
@@ -315,6 +321,7 @@
 }
 
 /* WebStorm Light. --bg-hover is the IDE's blue hover tint, leaving the grey ramp free for deletions. */
+.theme-option[data-theme="webstorm-light"],
 :root[data-theme="webstorm-light"] {
   --bg: #ffffff;
   --bg-elev: #f7f8fa;
@@ -353,6 +360,7 @@
 
 /* Material Theme, Oceanic (Shiki bundles its syntax theme, so no themes/ module). Diff rows come from the
    gutter markers, not the cyan/pink diffEditor colors; --accent is Teal 500, dark enough to carry --on-accent. */
+.theme-option[data-theme="material-oceanic"],
 :root[data-theme="material-oceanic"] {
   --bg: #263238;
   --bg-elev: #303c41;
@@ -392,6 +400,7 @@
 
 /* Catppuccin Mocha (Shiki bundles the syntax theme). Surfaces climb the palette's own base → surface0 →
    surface1, wider steps than GitHub's; the accent is mauve with crust text, as the port draws its buttons. */
+.theme-option[data-theme="catppuccin-mocha"],
 :root[data-theme="catppuccin-mocha"] {
   --bg: #1e1e2e;
   --bg-elev: #313244;
@@ -430,6 +439,7 @@
 
 /* Catppuccin Latte. Raised fills step down base → mantle → crust; --warn is the peach darkened past 4:1
    (the palette's own sits at 2.6:1 on base), and --on-accent is white: crust drops to 3:1 on the hover mauve. */
+.theme-option[data-theme="catppuccin-latte"],
 :root[data-theme="catppuccin-latte"] {
   --bg: #eff1f5;
   --bg-elev: #e6e9ef;
@@ -711,6 +721,35 @@ select {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* A row painted in the theme it names: it carries data-theme, and the token blocks answer to that on
+   any element, so the colours are the theme's own rather than a palette copied into TypeScript. Only
+   base tokens work here — the derived ones (--accent-soft and friends) resolve against :root, where
+   they are declared, so they would not follow the row. */
+.theme-option {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.theme-option + .theme-option {
+  margin-top: 4px;
+}
+.theme-option::after {
+  content: "";
+  flex: none;
+  margin-left: auto;
+  width: 36px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    90deg,
+    var(--accent) 0 34%,
+    var(--add-border) 34% 67%,
+    var(--del-border) 67% 100%
+  );
+}
+.settings-form .combobox {
+  width: 100%;
 }
 .combobox-hint {
   margin-left: auto;

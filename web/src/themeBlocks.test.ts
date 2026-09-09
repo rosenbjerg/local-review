@@ -7,8 +7,9 @@ import { THEMES } from "./theme";
 // Read off disk: vitest replaces .css imports with empty modules (query or not).
 const css = readFileSync(join(__dirname, "styles.css"), "utf8");
 
+// The attribute can appear anywhere in the selector list, since a block answers to a swatch row too.
 function blockFor(id: string): string | null {
-  const m = css.match(new RegExp(`:root\\[data-theme="${id}"\\]\\s*\\{([^}]*)\\}`));
+  const m = css.match(new RegExp(`\\[data-theme="${id}"\\][^{}]*\\{([^}]*)\\}`));
   return m ? m[1] : null;
 }
 
@@ -43,5 +44,15 @@ test("every theme's declared mono face is the one its block starts with", () => 
     const face = block?.match(/--font-mono:\s*"([^"]+)"/);
     expect(face, `${t.id} has no quoted --font-mono face`).not.toBeNull();
     expect(face![1], `${t.id} names a different face in THEMES`).toBe(t.mono);
+  }
+});
+
+// The picker paints each row by handing it the theme's id, which only works while the token blocks
+// answer to something other than :root. Losing that selector would silently flatten every row.
+test("every theme block answers to a swatch row, not only to :root", () => {
+  for (const t of THEMES) {
+    expect(css.includes(`.theme-option[data-theme="${t.id}"]`), `${t.id} has no swatch selector`).toBe(
+      true
+    );
   }
 });

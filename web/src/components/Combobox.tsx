@@ -1,4 +1,5 @@
-import { Fragment, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useId, useMemo, useRef, useState } from "react";
+import { useAnchoredList } from "../useAnchoredList";
 import { useListNavigation } from "../useListNavigation";
 import { Chevron } from "./Chevron";
 
@@ -8,6 +9,9 @@ export interface ComboOption {
   hint?: string; // trailing muted annotation, e.g. "current" / "main"
   group?: string; // options sharing a group get a heading before the first of them
   rail?: boolean; // a point on the list's timeline, for `rangePreview` (the from picker's commits)
+  // A theme id. The row carries it as `data-theme`, which paints the row in that theme's own tokens
+  // rather than a palette copied into TypeScript — see the theme blocks in styles.css.
+  swatch?: string;
 }
 
 interface Props {
@@ -20,6 +24,9 @@ interface Props {
   // Draws the list as a timeline: the active row is the origin, every `rail` row above it is
   // included, and an off-rail row (All) includes them all.
   rangePreview?: boolean;
+  // Position against the viewport instead of the input. Needed inside a scrolling container, which
+  // would otherwise clip the list; the topbar's pickers have no scroller over them and don't set it.
+  floating?: boolean;
 }
 
 // A searchable single-select; a native <select> can't filter, which gets unwieldy with many branches.
@@ -31,6 +38,7 @@ export function Combobox({
   disabled,
   emptyText,
   rangePreview,
+  floating,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -45,6 +53,9 @@ export function Combobox({
     if (q === "") return options;
     return options.filter((o) => o.label.toLowerCase().includes(q));
   }, [options, query]);
+
+  const close = useCallback(() => setOpen(false), []);
+  const pos = useAnchoredList(floating === true && open, inputRef, listRef, close);
 
   const nav = useListNavigation({
     length: filtered.length,
@@ -73,6 +84,7 @@ export function Combobox({
     const included = rail !== null && o.rail === true && i >= rail.first && i <= rail.end;
     return [
       "combobox-option",
+      o.swatch && "theme-option",
       i === active && "active",
       rail !== null && o.rail && "rail",
       rail !== null && i === rail.first && "rail-first",
@@ -153,10 +165,12 @@ export function Combobox({
       <Chevron open={open} className="combobox-caret" />
       {open && (
         <ul
-          className={`combobox-list${rangePreview ? " range-list" : ""}`}
+          className={`combobox-list${rangePreview ? " range-list" : ""}${floating ? " floating" : ""}`}
           role="listbox"
           id={listId}
           ref={listRef}
+          // Hidden until measured, so the first frame can't flash at the top-left corner.
+          style={floating ? { ...pos, visibility: pos ? "visible" : "hidden" } : undefined}
         >
           {filtered.length === 0 && (
             <li className="combobox-empty">{emptyText ?? "No matches"}</li>
@@ -175,6 +189,7 @@ export function Combobox({
                   id={`${listId}-${i}`}
                   aria-selected={o.value === value}
                   data-idx={i}
+                  data-theme={o.swatch}
                   className={rowClass(o, i)}
                   // Mousedown, not click: preventDefault keeps focus, so this can't blur-close mid-pick.
                   onMouseDown={(e) => {

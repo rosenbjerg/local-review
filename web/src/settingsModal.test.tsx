@@ -12,13 +12,25 @@ afterEach(() => setThemePref(DEFAULT_PREF));
 // following the OS stays visibly selected rather than showing as the theme it landed on.
 test("the theme picker shows the stored preference and switches it", () => {
   render(<SettingsModal onClose={() => {}} />);
-  const picker = screen.getByLabelText("Theme") as HTMLSelectElement;
-  expect(picker.value).toBe("system");
+  const picker = screen.getByLabelText("Theme") as HTMLInputElement;
+  expect(picker.value).toBe("System");
   expect(document.documentElement.dataset.theme).toBe("github-dark");
 
-  fireEvent.change(picker, { target: { value: "github-light" } });
-  expect(picker.value).toBe("github-light");
+  fireEvent.click(picker);
+  fireEvent.mouseDown(screen.getByText("GitHub Light"));
+  expect(picker.value).toBe("GitHub Light");
   expect(document.documentElement.dataset.theme).toBe("github-light");
+});
+
+// A row is painted by the theme's own token block answering to data-theme, so the id on the row is
+// the whole mechanism — there is no palette in TypeScript to fall back on.
+test("each theme row carries the id that paints it", () => {
+  render(<SettingsModal onClose={() => {}} />);
+  fireEvent.click(screen.getByLabelText("Theme"));
+
+  const row = screen.getByText("JetBrains Darcula").closest("li")!;
+  expect(row.getAttribute("data-theme")).toBe("darcula");
+  expect(row.className).toContain("theme-option");
 });
 
 // The `?` overlay's whole content lives here now, so the dialog has to still be the

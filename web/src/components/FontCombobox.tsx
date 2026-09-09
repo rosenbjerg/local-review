@@ -1,6 +1,7 @@
-import { Fragment, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useId, useMemo, useRef, useState } from "react";
 
 import { normalizeName, quoteFamily } from "../fonts";
+import { useAnchoredList } from "../useAnchoredList";
 import { useListNavigation } from "../useListNavigation";
 import { Chevron } from "./Chevron";
 
@@ -27,17 +28,6 @@ interface Row {
   group: string;
 }
 
-interface Pos {
-  top?: number;
-  bottom?: number;
-  left: number;
-  minWidth: number;
-  maxHeight: number;
-}
-
-const MARGIN = 12;
-const FLIP_BELOW = 160;
-
 export function FontCombobox({
   label,
   value,
@@ -53,7 +43,6 @@ export function FontCombobox({
   // Filtering follows what has been typed since opening, not the value: the value is a face name, so
   // reopening after a pick would otherwise filter the list down to the face already chosen.
   const [typed, setTyped] = useState(false);
-  const [pos, setPos] = useState<Pos | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const listId = useId();
@@ -84,37 +73,8 @@ export function FontCombobox({
     open,
   });
 
-  // Anchored to the viewport: the settings modal's scrolling body would clip an absolute list, and
-  // the modal's entrance animation leaves no transform behind to make `fixed` mean something else.
-  // Sized to the room actually there, so the list never needs scrolling to before it can be read.
-  useLayoutEffect(() => {
-    if (!open) return;
-    const el = inputRef.current;
-    if (el) {
-      const r = el.getBoundingClientRect();
-      const below = window.innerHeight - r.bottom - MARGIN;
-      const above = r.top - MARGIN;
-      // minWidth, not width: a face name plus its sample can outgrow the input, and the base rule's
-      // max-width still keeps the list from running away.
-      setPos(
-        below < FLIP_BELOW && above > below
-          ? { bottom: window.innerHeight - r.top + 2, left: r.left, minWidth: r.width, maxHeight: above }
-          : { top: r.bottom + 2, left: r.left, minWidth: r.width, maxHeight: below }
-      );
-    }
-    // Dismissed rather than followed: the anchor moves under any scroller between here and the page.
-    // The list's own scrolling is exempt, or following the keyboard selection would close it.
-    const close = (e: Event) => {
-      if (e.target instanceof Node && listRef.current?.contains(e.target)) return;
-      setOpen(false);
-    };
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    return () => {
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
-    };
-  }, [open]);
+  const close = useCallback(() => setOpen(false), []);
+  const pos = useAnchoredList(open, inputRef, listRef, close);
 
   function openList() {
     setTyped(false);

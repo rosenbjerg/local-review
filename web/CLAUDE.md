@@ -215,7 +215,10 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
 - `Combobox` is a searchable select — its value is always one of its options; `rangePreview` draws
   the from picker as a timeline. `FontCombobox` is the free-text sibling, not a flag on it: a font
   name is whatever you type, so the two disagree about what the input holds and what blur means.
-  They share `useListNavigation`, which is the half that generalises.
+  They share `useListNavigation` and `useAnchoredList`, which are the halves that generalise.
+- `useAnchoredList` positions a dropdown against the **viewport**, which is what a list inside a
+  scrolling container needs — an absolute one is clipped by the scroller. `Combobox` takes it behind
+  `floating`; the topbar's pickers have no scroller over them and leave it off.
   `ViewToggle` is data-driven; a per-option `disabled` carries a `title` saying why.
   `SearchInput`'s Escape clears a non-empty field, blurs or bubbles (`emptyEscape`) an empty one.
 - `TopBar`: three tracks with equal-width ends (`flex: 1 1 0`) so the selection centres on the bar;
@@ -245,6 +248,11 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   the first paint is right, and `setThemeRepo("")` is a no-op.
 - Rendered colors are keyed on the theme: `DiffView`'s tokenize effects and `Markdown`'s highlight +
   mermaid passes list it in deps. Word marks and `--sel-bg` are hand-picked per theme.
+- **A theme block answers to any element carrying `data-theme`, not only `:root`**, which is how the
+  picker paints each row in the theme it names — the colours are the theme's own rather than a palette
+  copied into TypeScript. Only base tokens follow a row: the derived ones (`--accent-soft` and
+  friends) resolve where they are declared, on `:root`. `themeBlocks.test.ts` fails if a block loses
+  its `.theme-option` selector, which would silently flatten every row.
 - A Shiki theme is either one Shiki bundles (`@shikijs/themes`) or hand-written under `themes/` from the
   editor's own scheme file; a dark/light pair can share **one** scope map. Check a hand-written one by
   tokenizing samples in node. `--font-mono` is a per-theme token: a theme borrowing an editor's colors
