@@ -34,3 +34,14 @@ test("every theme has a token block, and every block defines every token", () =>
     expect(block, `${t.id} sets no color-scheme`).toMatch(/color-scheme:\s*(dark|light)\s*;/);
   }
 });
+
+// Theme.mono names the face the block's --font-mono starts with, so the font picker can say what an
+// empty override falls back to. Nothing else holds the two together.
+test("every theme's declared mono face is the one its block starts with", () => {
+  for (const t of THEMES) {
+    const block = blockFor(t.id);
+    const face = block?.match(/--font-mono:\s*"([^"]+)"/);
+    expect(face, `${t.id} has no quoted --font-mono face`).not.toBeNull();
+    expect(face![1], `${t.id} names a different face in THEMES`).toBe(t.mono);
+  }
+});

@@ -30,6 +30,7 @@ import { useOccurrenceHighlight } from "./useOccurrenceHighlight";
 import { usePanelResize } from "./usePanelResize";
 import { useReview } from "./useReview";
 import { useUnseenActivity } from "./useUnseenActivity";
+import { setFontsRepo } from "./fonts";
 import { setThemeRepo } from "./theme";
 import type { CommentFilter } from "./commentFilter";
 import { NO_FILTER, authorsOf, filterComments } from "./commentFilter";
@@ -145,8 +146,11 @@ export default function App() {
     setCommentFilter(NO_FILTER);
   }, [review?.id]);
 
-  // The theme store ignores the empty repo the first render carries, having seeded from the remembered one.
-  useEffect(() => setThemeRepo(repo), [repo]);
+  // Both stores ignore the empty repo the first render carries, having seeded from the remembered one.
+  useEffect(() => {
+    setThemeRepo(repo);
+    setFontsRepo(repo);
+  }, [repo]);
 
   // Keyed on repo alone, deliberately (resetJump isn't a dep); useReview resets its own data.
   useEffect(() => {

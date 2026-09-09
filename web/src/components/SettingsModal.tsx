@@ -1,3 +1,4 @@
+import { FontPicker } from "./FontPicker";
 import { Modal } from "./Modal";
 import { ThemePicker } from "./ThemePicker";
 
@@ -10,6 +11,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           <span className="settings-label">Theme for this repo</span>
           <ThemePicker />
         </div>
+        <h3 className="settings-subhead">Fonts for this repo</h3>
+        <FontPicker />
         <h3 className="settings-subhead">Keyboard shortcuts</h3>
         <table className="shortcuts">
           <tbody>

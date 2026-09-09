@@ -14,6 +14,8 @@ export const LS = {
   agentPromptsByRepo: "lr.agentPromptsByRepo",
   theme: "lr.theme",
   themeByRepo: "lr.themeByRepo",
+  fonts: "lr.fonts",
+  fontsByRepo: "lr.fontsByRepo",
 } as const;
 
 export function getString(key: string, def = ""): string {
@@ -145,4 +147,54 @@ export function writeThemePref(repo: string, pref: string): void {
   const map = getJSON<Record<string, string>>(LS.themeByRepo, {});
   map[repo] = pref;
   setJSON(LS.themeByRepo, map);
+}
+
+// Font overrides, layered field by field: a repo's own pick (lr.fontsByRepo) over the default
+// across repos (lr.fonts) over the theme's own face. A field is absent, never empty — clearing one
+// deletes the key so it falls back, rather than pinning the token to nothing.
+export interface FontPrefs {
+  monoFamily?: string;
+  sansFamily?: string;
+}
+
+const FAMILY_KEYS = ["monoFamily", "sansFamily"] as const;
+
+function pruneFonts(v: unknown): FontPrefs {
+  const o = (v ?? {}) as Partial<Record<(typeof FAMILY_KEYS)[number], unknown>>;
+  const out: FontPrefs = {};
+  for (const k of FAMILY_KEYS) {
+    const raw = o[k];
+    if (typeof raw === "string" && raw.trim() !== "") out[k] = raw.trim();
+  }
+  return out;
+}
+
+export function readFontDefaults(): FontPrefs {
+  return pruneFonts(getJSON<unknown>(LS.fonts, {}));
+}
+
+export function writeFontDefaults(prefs: FontPrefs): void {
+  setJSON(LS.fonts, pruneFonts(prefs));
+}
+
+// No repo selected yet is the first run, not a repo without a pick: the choice becomes the default.
+export function readFontOverrides(repo: string): FontPrefs {
+  if (repo === "") return readFontDefaults();
+  return pruneFonts(getJSON<Record<string, unknown>>(LS.fontsByRepo, {})[repo]);
+}
+
+export function writeFontOverrides(repo: string, prefs: FontPrefs): void {
+  const next = pruneFonts(prefs);
+  if (repo === "") {
+    writeFontDefaults(next);
+    return;
+  }
+  const map = getJSON<Record<string, FontPrefs>>(LS.fontsByRepo, {});
+  if (Object.keys(next).length === 0) delete map[repo];
+  else map[repo] = next;
+  setJSON(LS.fontsByRepo, map);
+}
+
+export function clearFontOverrides(): void {
+  setJSON(LS.fontsByRepo, {});
 }

@@ -41,6 +41,7 @@ src/
   wordDiff.ts            intra-line diff        hunkGaps.ts  expandable hidden regions
   diffRows.ts            the diff table as data: buildRows + planRows       diffStats.ts  occurrences.ts
   theme.ts               theme registry + store (owns <html data-theme>)   themes/  hand-written Shiki themes
+  fonts.ts               font-family override store (owns the inline --font-mono/--font-sans on <html>)
   fonts/                 bundled woff2 + licences (Inter, Monaspace Neon, JetBrains Mono)
   styles.css             all CSS; the per-theme token blocks at the top
   components/
@@ -50,7 +51,8 @@ src/
     FileHeader  MediaView  MarkdownView  LazyFile  FindBar
     CommentThread  CommentsPanel  CommentPreview  CommentRefPopover  ReviewSummary  CommentComposer  FileComments
     Modal + ExportModal  AgentPromptsModal  AddFileModal  SettingsModal  ResetConfirmModal
-    SearchInput  Combobox  PaneRail  ViewToggle  CopyButton  ThemePicker  ErrorBoundary  EmptyState  icons
+    SearchInput  Combobox  PaneRail  ViewToggle  CopyButton  ThemePicker  FontPicker  ErrorBoundary
+    EmptyState  icons
     small primitives: Chevron, CommentCount, DiffStatBadge, AnchorBadge, MetaTimestamps, HighlightMatch, Markdown
 ```
 
@@ -239,13 +241,34 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
 - A Shiki theme is either one Shiki bundles (`@shikijs/themes`) or hand-written under `themes/` from the
   editor's own scheme file; a dark/light pair can share **one** scope map. Check a hand-written one by
   tokenizing samples in node. `--font-mono` is a per-theme token: a theme borrowing an editor's colors
-  borrows its code face, and one with no face of its own borrows JetBrains Mono.
+  borrows its code face, and one with no face of its own borrows JetBrains Mono. `Theme.mono` restates
+  that face for the font picker's placeholder, and `themeBlocks.test.ts` fails if the two drift.
+
+## Fonts
+
+- A theme's face is the first entry of its `--font-mono`; the tail every theme shares lives once as
+  `--mono-fallback` (`--sans-fallback` for `--font-sans`), so an override names a face and appends the
+  var rather than restating the stack.
+- `fonts.ts` is a module store like `theme.ts`, but it paints **inline custom properties on `<html>`** —
+  an inline style is what outranks a `:root[data-theme=…]` block. Clearing one must `removeProperty`,
+  never write the theme's current face back inline, or the next theme switch keeps the old face.
+- The cascade is per field: this repo's pick (`lr.fontsByRepo`) over the default across repos
+  (`lr.fonts`) over the theme's face. A field holds the repo's **own** pick and its placeholder names
+  what an empty one falls back to, so inheriting and picking the same value stay distinguishable.
+  **Set as default for all repos** writes `lr.fonts` and empties `lr.fontsByRepo` — every repo's saved
+  pick goes, this one's included, so they all follow the new default instead of a stale duplicate.
+- A custom property takes almost any token sequence, so an invalid family isn't refused on the way in:
+  it makes every `font-family: var(--font-mono)` invalid at computed-value time and drops the whole app
+  to the browser's default serif. `normalizeFamily` gates the paint (`CSS.supports` where it exists)
+  while the store keeps what was typed, so an unfinished quote doesn't clear the field mid-edit.
+  `fonts.test.ts`, `settingsModal.test.tsx`.
 
 ## CSS conventions (`styles.css`)
 
 - Colors only via tokens; a new token needs a value in every theme block. Derived tokens (`-soft`
   tints, `--elev-1`/`--elev-2`, `--accent-hover`, `--accent-ring`, `--control-border`, `--on-accent`,
-  `--backdrop`, `--checker-*`, `--font-sans`) live once in the shared `:root`. Radii from
+  `--backdrop`, `--checker-*`, `--font-sans`, `--mono-fallback`, `--sans-fallback`) live once in the
+  shared `:root`. Radii from
   `--radius-xs|sm|md|lg|pill`.
 - Status/type marks are tinted `-soft` fills with transparent borders, not outlines. A thread is a
   raised card drawn by fills alone (`--bg-elev` / `--bg-hover` meta / `--bg` replies), no borders.
@@ -264,7 +287,7 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
 - Fonts: vendored woff2 under `src/fonts`, `url()`'d from the `@font-face` block; woff2 only, never
   subsetted, `font-display: swap`.
 - Persisted prefs go under `lr.*` via `storage.ts`; validate on read (`isCommentSort`, `isThemePref`,
-  `normalizeDiffView`) so a stale value falls back.
+  `normalizeDiffView`, `normalizeFamily`) so a stale value falls back.
 
 ## Gotchas
 

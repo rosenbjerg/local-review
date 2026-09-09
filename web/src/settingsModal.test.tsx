@@ -32,3 +32,20 @@ test("it holds the shortcut list and the repo link", () => {
     "https://github.com/rosenbjerg/local-review"
   );
 });
+
+// The fonts are not review state either: the fields carry this repo's own picks straight to <html>,
+// where an inline custom property is what outranks the theme block's --font-mono. An empty field
+// shows what it would fall back to instead.
+test("a font field overrides the theme's face, and Reset hands it back", () => {
+  render(<SettingsModal onClose={() => {}} />);
+  const code = screen.getByLabelText("Code font") as HTMLInputElement;
+  expect(code.placeholder).toBe("Monaspace Neon");
+
+  fireEvent.change(code, { target: { value: "Berkeley Mono" } });
+  expect(document.documentElement.style.getPropertyValue("--font-mono")).toBe(
+    "Berkeley Mono, var(--mono-fallback)"
+  );
+
+  fireEvent.click(screen.getByText("Reset"));
+  expect(document.documentElement.style.getPropertyValue("--font-mono")).toBe("");
+});

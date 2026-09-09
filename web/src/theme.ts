@@ -30,38 +30,86 @@ export type ShikiTheme =
   | "catppuccin-latte";
 export type MermaidTheme = NonNullable<MermaidConfig["theme"]>;
 
+// `mono` names the face the theme's --font-mono block starts with, so a font override can show what
+// it would fall back to; themeBlocks.test.ts fails if the two drift apart.
 export interface Theme {
   id: ThemeId;
   label: string;
   shiki: ShikiTheme;
   mermaid: MermaidTheme;
+  mono: string;
 }
 
 export const THEMES: readonly Theme[] = [
-  { id: "github-dark", label: "GitHub Dark", shiki: "github-dark", mermaid: "dark" },
-  { id: "github-light", label: "GitHub Light", shiki: "github-light", mermaid: "default" },
-  { id: "darcula", label: "JetBrains Darcula", shiki: "darcula", mermaid: "dark" },
-  { id: "rider-night", label: "JetBrains Rider Night", shiki: "rider-night", mermaid: "dark" },
-  { id: "rider-day", label: "JetBrains Rider Day", shiki: "rider-day", mermaid: "default" },
+  {
+    id: "github-dark",
+    label: "GitHub Dark",
+    shiki: "github-dark",
+    mermaid: "dark",
+    mono: "Monaspace Neon",
+  },
+  {
+    id: "github-light",
+    label: "GitHub Light",
+    shiki: "github-light",
+    mermaid: "default",
+    mono: "Monaspace Neon",
+  },
+  {
+    id: "darcula",
+    label: "JetBrains Darcula",
+    shiki: "darcula",
+    mermaid: "dark",
+    mono: "JetBrains Mono",
+  },
+  {
+    id: "rider-night",
+    label: "JetBrains Rider Night",
+    shiki: "rider-night",
+    mermaid: "dark",
+    mono: "JetBrains Mono",
+  },
+  {
+    id: "rider-day",
+    label: "JetBrains Rider Day",
+    shiki: "rider-day",
+    mermaid: "default",
+    mono: "JetBrains Mono",
+  },
   {
     id: "webstorm-dark",
     label: "JetBrains WebStorm Dark",
     shiki: "webstorm-dark",
     mermaid: "dark",
+    mono: "JetBrains Mono",
   },
   {
     id: "webstorm-light",
     label: "JetBrains WebStorm Light",
     shiki: "webstorm-light",
     mermaid: "default",
+    mono: "JetBrains Mono",
   },
-  { id: "material-oceanic", label: "Material Oceanic", shiki: "material-theme", mermaid: "dark" },
-  { id: "catppuccin-mocha", label: "Catppuccin Mocha", shiki: "catppuccin-mocha", mermaid: "dark" },
+  {
+    id: "material-oceanic",
+    label: "Material Oceanic",
+    shiki: "material-theme",
+    mermaid: "dark",
+    mono: "JetBrains Mono",
+  },
+  {
+    id: "catppuccin-mocha",
+    label: "Catppuccin Mocha",
+    shiki: "catppuccin-mocha",
+    mermaid: "dark",
+    mono: "JetBrains Mono",
+  },
   {
     id: "catppuccin-latte",
     label: "Catppuccin Latte",
     shiki: "catppuccin-latte",
     mermaid: "default",
+    mono: "JetBrains Mono",
   },
 ];
 
