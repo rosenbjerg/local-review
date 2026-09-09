@@ -155,16 +155,29 @@ export function writeThemePref(repo: string, pref: string): void {
 export interface FontPrefs {
   monoFamily?: string;
   sansFamily?: string;
+  monoOffset?: number;
+  sansOffset?: number;
 }
 
 const FAMILY_KEYS = ["monoFamily", "sansFamily"] as const;
+const OFFSET_KEYS = ["monoOffset", "sansOffset"] as const;
+
+// Sizes are an offset from the app's own, so 0 is a real pick ("this repo stays put even though the
+// default across repos moved"); Reset, not a zero, is how a field goes back to inheriting.
+export const MIN_FONT_OFFSET = -4;
+export const MAX_FONT_OFFSET = 8;
 
 function pruneFonts(v: unknown): FontPrefs {
-  const o = (v ?? {}) as Partial<Record<(typeof FAMILY_KEYS)[number], unknown>>;
+  const o = (v ?? {}) as Record<string, unknown>;
   const out: FontPrefs = {};
   for (const k of FAMILY_KEYS) {
     const raw = o[k];
     if (typeof raw === "string" && raw.trim() !== "") out[k] = raw.trim();
+  }
+  for (const k of OFFSET_KEYS) {
+    const raw = o[k];
+    if (typeof raw !== "number" || !Number.isFinite(raw)) continue;
+    out[k] = Math.min(MAX_FONT_OFFSET, Math.max(MIN_FONT_OFFSET, Math.round(raw)));
   }
   return out;
 }

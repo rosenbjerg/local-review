@@ -257,6 +257,20 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   what an empty one falls back to, so inheriting and picking the same value stay distinguishable.
   **Set as default for all repos** writes `lr.fonts` and empties `lr.fontsByRepo` — every repo's saved
   pick goes, this one's included, so they all follow the new default instead of a stale duplicate.
+- Sizes are an **offset** from the app's own, not an absolute: `--mono-offset` feeds
+  `--font-size-mono`, `--sans-offset` feeds the whole `--text-*` scale, and the zero must carry its
+  unit — a bare `0` makes the calc invalid and takes every size using it down at once. Clamped to
+  `MIN_FONT_OFFSET`…`MAX_FONT_OFFSET` on read, not just on input, so a hand-edited store can't
+  produce a 200px UI. The range is deliberately wider than most people will want in either direction:
+  at the floor the scale's smallest step is down to 6px, which is the reader's call to make.
+- **The two axes split by surface, not by face.** The family override follows the token, so a mono
+  face lands everywhere monospaced. The mono *size* reaches code only — the diff (its hunk headers
+  included, at `--font-size-mono - 1px`), the export textarea and preview, `.markdown-body pre code`.
+  Mono-faced chrome like file paths and `kbd` sizes off the interface scale: wanting a bigger diff
+  isn't wanting a bigger file tree.
+- An offset of 0 is a **pick**, not an absence: it means "this repo stays put though the default across
+  repos moved". Reset, not a zero, is how a field goes back to inheriting — which is why the family
+  fields show the repo's own pick and the size fields show the effective one.
 - A custom property takes almost any token sequence, so an invalid family isn't refused on the way in:
   it makes every `font-family: var(--font-mono)` invalid at computed-value time and drops the whole app
   to the browser's default serif. `normalizeFamily` gates the paint (`CSS.supports` where it exists)
@@ -270,11 +284,16 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   `--backdrop`, `--checker-*`, `--font-sans`, `--mono-fallback`, `--sans-fallback`) live once in the
   shared `:root`. Radii from
   `--radius-xs|sm|md|lg|pill`.
+- **Type sizes only via the scale** — `--text-2xs|xs|sm|md|base|lg|xl` for the interface,
+  `--font-size-mono` inside code surfaces — never a raw px, which wouldn't move with the reader's size
+  offset and would drift out of step with everything around it. `em` inside `.markdown-body` is fine:
+  it inherits from a scale step.
 - Status/type marks are tinted `-soft` fills with transparent borders, not outlines. A thread is a
   raised card drawn by fills alone (`--bg-elev` / `--bg-hover` meta / `--bg` replies), no borders.
 - A changed row is marked by recoloring the 1px gutter hairline (`--add-border`/`--del-border`) on
   the gutter's **right** edge (`.row-commented` owns the left). The `+`/`-` sign stays muted grey;
-  `.sign` is `content-box`. Table `line-height` is a fixed 19px.
+  `.sign` is `content-box`. Table `line-height` is one value for the whole table, never per row
+  (`--font-size-mono` x 1.52 — the 19px it always was, at the default size).
 - **Nothing may reset padding on a bare `.diff td`** — (0,1,1) beats every cell rule, silently.
   The same trap is live one level down: `.thread-row > td { padding: 0 }` voids `.thread-cell`'s
   padding, left alone because removing it would indent every inline thread.

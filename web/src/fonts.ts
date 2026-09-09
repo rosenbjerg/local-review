@@ -3,6 +3,8 @@ import { useSyncExternalStore } from "react";
 import type { FontPrefs } from "./storage";
 import {
   LS,
+  MAX_FONT_OFFSET,
+  MIN_FONT_OFFSET,
   clearFontOverrides,
   getString,
   readFontDefaults,
@@ -12,6 +14,7 @@ import {
 } from "./storage";
 
 export type FontFamilyKey = "monoFamily" | "sansFamily";
+export type FontOffsetKey = "monoOffset" | "sansOffset";
 
 // The face --font-sans starts with in every theme; the mono face is per theme (Theme.mono).
 export const SANS_FACE = "Inter";
@@ -43,9 +46,14 @@ export interface FontState {
   inherited: FontPrefs;
 }
 
-const TOKENS: Record<FontFamilyKey, { name: string; fallback: string }> = {
+const FAMILY_TOKENS: Record<FontFamilyKey, { name: string; fallback: string }> = {
   monoFamily: { name: "--font-mono", fallback: "--mono-fallback" },
   sansFamily: { name: "--font-sans", fallback: "--sans-fallback" },
+};
+
+const OFFSET_TOKENS: Record<FontOffsetKey, string> = {
+  monoOffset: "--mono-offset",
+  sansOffset: "--sans-offset",
 };
 
 // Seeded from lr.repo (the repo useReview restores) so the first paint already carries its fonts.
@@ -55,15 +63,25 @@ let inherited: FontPrefs = readFontDefaults();
 let state: FontState = { own, inherited };
 const listeners = new Set<() => void>();
 
+export function offsetOf(state: FontState, key: FontOffsetKey): number {
+  return state.own[key] ?? state.inherited[key] ?? 0;
+}
+
 function paint(): void {
   const style = document.documentElement.style;
-  for (const key of Object.keys(TOKENS) as FontFamilyKey[]) {
-    const { name, fallback } = TOKENS[key];
+  for (const key of Object.keys(FAMILY_TOKENS) as FontFamilyKey[]) {
+    const { name, fallback } = FAMILY_TOKENS[key];
     const family = normalizeFamily(own[key] ?? inherited[key] ?? "");
     // Clearing removes the property rather than writing the theme's current face back: an inline
     // copy would outlive the next theme switch and pin the old face.
     if (family === "") style.removeProperty(name);
     else style.setProperty(name, `${family}, var(${fallback})`);
+  }
+  for (const key of Object.keys(OFFSET_TOKENS) as FontOffsetKey[]) {
+    const offset = offsetOf({ own, inherited }, key);
+    // The unit is what makes the calc() valid; see the token's own note in styles.css.
+    if (offset === 0) style.removeProperty(OFFSET_TOKENS[key]);
+    else style.setProperty(OFFSET_TOKENS[key], `${offset}px`);
   }
 }
 
@@ -89,6 +107,13 @@ export function setFontFamily(key: FontFamilyKey, raw: string): void {
   if (raw.trim() === "") delete next[key];
   else next[key] = raw;
   own = next;
+  writeFontOverrides(repo, own);
+  if (repo === "") inherited = readFontDefaults();
+  commit();
+}
+
+export function setFontOffset(key: FontOffsetKey, px: number): void {
+  own = { ...own, [key]: Math.min(MAX_FONT_OFFSET, Math.max(MIN_FONT_OFFSET, Math.round(px))) };
   writeFontOverrides(repo, own);
   if (repo === "") inherited = readFontDefaults();
   commit();

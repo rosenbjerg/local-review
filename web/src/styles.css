@@ -65,6 +65,23 @@
   --sans-fallback: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   --mono-fallback: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --font-sans: "Inter", var(--sans-fallback);
+
+  /* A size override is an offset, so it survives the app's own sizes changing. The unit on the zero
+     is load-bearing: `calc(12.5px + 0)` mixes a length with a number and is invalid, which would
+     take down every size derived from it at once. */
+  --mono-offset: 0px;
+  --font-size-mono: calc(12.5px + var(--mono-offset));
+
+  /* The interface type scale. Every size the UI uses is one of these, so one offset moves them
+     together and the steps keep their relative order. */
+  --sans-offset: 0px;
+  --text-2xs: calc(10px + var(--sans-offset));
+  --text-xs: calc(11px + var(--sans-offset));
+  --text-sm: calc(12px + var(--sans-offset));
+  --text-md: calc(13px + var(--sans-offset));
+  --text-base: calc(14px + var(--sans-offset));
+  --text-lg: calc(15px + var(--sans-offset));
+  --text-xl: calc(16px + var(--sans-offset));
 }
 
 /* Color themes: one full token block per theme, keyed by <html data-theme>. Bare :root gets github-dark. */
@@ -534,7 +551,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 
 .app {
@@ -578,7 +595,7 @@ body {
 }
 .range-word {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
   user-select: none;
 }
 .topbar-group {
@@ -596,7 +613,7 @@ body {
 .range .combobox-input {
   background: transparent;
   border-color: transparent;
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 500;
 }
 .crumbs .combobox-input:hover:not(:disabled),
@@ -617,7 +634,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--muted);
 }
 select {
@@ -626,7 +643,7 @@ select {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 4px 8px;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 
 /* Searchable combobox (repo/head/base pickers) */
@@ -641,7 +658,7 @@ select {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 4px 24px 4px 8px;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .combobox-input:disabled {
   opacity: 0.6;
@@ -680,7 +697,7 @@ select {
   padding: 4px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--text-md);
   white-space: nowrap;
 }
 .combobox-option.active {
@@ -694,11 +711,11 @@ select {
 .combobox-hint {
   margin-left: auto;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 .combobox-group {
   padding: 6px 8px 2px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -706,7 +723,7 @@ select {
 .combobox-empty {
   padding: 6px 8px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 /* Range preview: the dot states box-sizing (the * reset misses pseudo-elements); .included must follow .active. */
 .range-list .combobox-option {
@@ -768,7 +785,7 @@ select {
   border-radius: var(--radius-md);
   padding: 5px 12px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .btn:hover {
   background: var(--bg-hover);
@@ -873,7 +890,7 @@ textarea:focus-visible {
   border: none;
   color: var(--accent);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-sm);
   padding: 0 4px;
 }
 .link.danger {
@@ -981,7 +998,7 @@ textarea:focus-visible {
   border: none;
   color: var(--muted);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 .pane-rail:hover {
   background: var(--bg-hover);
@@ -1039,14 +1056,14 @@ textarea:focus-visible {
 }
 .empty-title {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text);
 }
 .empty-hint {
   margin: 0;
   max-width: 52ch;
-  font-size: 13px;
+  font-size: var(--text-md);
   line-height: 1.5;
 }
 .spinner {
@@ -1115,11 +1132,11 @@ textarea:focus-visible {
   border: none;
   color: var(--muted);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .file-path {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--text-md);
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -1133,14 +1150,14 @@ textarea:focus-visible {
   align-items: center;
   gap: 3px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .viewed-check {
   margin-left: auto;
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--muted);
   cursor: pointer;
   user-select: none;
@@ -1163,7 +1180,7 @@ textarea:focus-visible {
   border: none;
   padding: 3px 10px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .view-toggle button.active {
   background: var(--accent);
@@ -1178,7 +1195,7 @@ textarea:focus-visible {
 
 /* Tinted fills, not outlines: a dozen show at rest. The transparent border only holds the metrics. */
 .status {
-  font-size: 11px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.02em;
   padding: 1px 6px;
@@ -1225,7 +1242,7 @@ textarea:focus-visible {
   align-items: center;
   padding: 8px 12px;
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 /* No border-bottom: the progress bar below is the head's edge. */
 .explorer-progress {
@@ -1239,11 +1256,11 @@ textarea:focus-visible {
 }
 .explorer-head .muted {
   font-weight: 400;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 .explorer-add {
   padding: 0 6px;
-  font-size: 16px;
+  font-size: var(--text-xl);
   line-height: 1.4;
 }
 .explorer-search-row {
@@ -1262,7 +1279,7 @@ textarea:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 4px 24px 4px 8px; /* right room for the clear button */
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .search-clear {
   position: absolute;
@@ -1285,7 +1302,7 @@ textarea:focus-visible {
 }
 .explorer-empty {
   padding: 10px 12px;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .search-hl {
   background: var(--sel-bg);
@@ -1330,7 +1347,7 @@ textarea:focus-visible {
   width: 14px;
   text-align: center;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 700;
 }
 .fstat-added {
@@ -1350,7 +1367,7 @@ textarea:focus-visible {
 }
 /* No font-family: the tree is names, not code; mono stays where columns must line up. */
 .fname {
-  font-size: 12px;
+  font-size: var(--text-sm);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1360,7 +1377,7 @@ textarea:focus-visible {
   display: inline-flex;
   gap: 5px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-xs);
   white-space: nowrap;
 }
 .stat-add {
@@ -1371,7 +1388,7 @@ textarea:focus-visible {
 }
 .explorer-count {
   flex: none;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--muted);
   background: var(--muted-soft);
   border-radius: var(--radius-pill);
@@ -1428,7 +1445,7 @@ textarea:focus-visible {
 .tree-folder {
   flex: 1;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -1439,7 +1456,7 @@ textarea:focus-visible {
 }
 .tree-progress {
   flex: none;
-  font-size: 10px;
+  font-size: var(--text-2xs);
 }
 
 /* Diff table */
@@ -1461,7 +1478,7 @@ textarea:focus-visible {
 }
 .image-side figcaption {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -1487,7 +1504,7 @@ textarea:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg-elev);
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .file-comments {
   margin-top: 12px;
@@ -1503,9 +1520,10 @@ textarea:focus-visible {
   width: 100%;
   border-collapse: collapse;
   font-family: var(--font-mono);
-  font-size: 12.5px;
-  /* Fixed, not a ratio: gutter, code and the smaller-type hunk headers share one baseline grid. */
-  line-height: 19px;
+  font-size: var(--font-size-mono);
+  /* One value for the whole table, never per row: gutter, code and the smaller-type hunk headers
+     share one baseline grid. 12.5 x 1.52 is the 19px this was before the size became adjustable. */
+  line-height: calc(var(--font-size-mono) * 1.52);
 }
 /* No padding reset: .diff td is (0,1,1) and would beat every (0,1,0) cell rule. Cells wanting none don't ask. */
 .diff td {
@@ -1576,7 +1594,9 @@ textarea:focus-visible {
   color: var(--muted);
 }
 .row-hunk .line-content {
-  font-size: 11.5px;
+  /* Inside the table, so it tracks the code size rather than the interface one; the row keeps the
+     table's line-height either way, which is what holds the baseline grid together. */
+  font-size: calc(var(--font-size-mono) - 1px);
 }
 .gap-gutter {
   text-align: center;
@@ -1670,7 +1690,7 @@ textarea:focus-visible {
   cursor: pointer;
 }
 .thread-reply-count {
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 .thread-collapsed {
   /* Clamp, not nowrap: a nowrap cell forces the auto-layout table past width:100%. */
@@ -1683,7 +1703,7 @@ textarea:focus-visible {
   border: none;
   color: var(--muted);
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--text-md);
   text-align: left;
   overflow: hidden;
   overflow-wrap: anywhere;
@@ -1693,7 +1713,7 @@ textarea:focus-visible {
   color: var(--text);
 }
 .thread-body {
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .thread-replies {
   margin-top: 8px;
@@ -1718,7 +1738,7 @@ textarea:focus-visible {
   border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 .reply-body {
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .meta-id {
   opacity: 0.7;
@@ -1801,7 +1821,7 @@ textarea:focus-visible {
   margin: 0.4em 0;
 }
 .md-body pre code {
-  font-size: 12px;
+  font-size: var(--text-sm);
   background: none;
   border: none;
   padding: 0;
@@ -1902,7 +1922,7 @@ textarea:focus-visible {
   opacity: 1;
 }
 .comment-preview {
-  font-size: 13px;
+  font-size: var(--text-md);
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -1919,7 +1939,7 @@ textarea:focus-visible {
   border-radius: var(--radius-md);
   padding: 8px;
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--text-md);
   resize: vertical;
 }
 .composer-row {
@@ -1938,7 +1958,7 @@ textarea:focus-visible {
 .composer-hint {
   margin-right: auto;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 /* Review summary */
@@ -1953,15 +1973,15 @@ textarea:focus-visible {
   margin-bottom: 8px;
 }
 .review-summary-head h2 {
-  font-size: 14px;
+  font-size: var(--text-base);
   margin: 0;
 }
 .review-summary-add {
   padding: 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .review-summary-body {
-  font-size: 13px;
+  font-size: var(--text-md);
   color: var(--muted);
 }
 .review-summary .composer textarea {
@@ -1980,11 +2000,11 @@ textarea:focus-visible {
   margin-bottom: 12px;
 }
 .comments-panel-header select {
-  font-size: 12px;
+  font-size: var(--text-sm);
   padding: 2px 4px;
 }
 .comments-panel h2 {
-  font-size: 14px;
+  font-size: var(--text-base);
   margin: 0;
 }
 .comments-title {
@@ -1998,7 +2018,7 @@ textarea:focus-visible {
   border: 1px solid var(--info-border);
   border-radius: var(--radius-pill);
   padding: 1px 8px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--info);
   cursor: pointer;
   white-space: nowrap;
@@ -2021,14 +2041,14 @@ textarea:focus-visible {
   margin-bottom: 12px;
 }
 .comments-filter select {
-  font-size: 12px;
+  font-size: var(--text-sm);
   padding: 2px 4px;
 }
 .filter-clear {
   background: none;
   border: none;
   padding: 2px 4px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--accent);
   cursor: pointer;
 }
@@ -2040,7 +2060,7 @@ textarea:focus-visible {
 }
 .comment-file-name {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--muted);
   margin-bottom: 6px;
   overflow-wrap: anywhere;
@@ -2054,7 +2074,7 @@ textarea:focus-visible {
 }
 .comment-nav-time {
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 /* An inline svg sits on the baseline and hangs too low; .badge is here for the resolved check. */
 .badge,
@@ -2065,7 +2085,7 @@ textarea:focus-visible {
   gap: 3px;
 }
 .badge {
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 1px 7px;
   border-radius: var(--radius-pill);
   text-transform: lowercase;
@@ -2178,7 +2198,7 @@ textarea:focus-visible {
   margin-bottom: 8px;
 }
 .thread-snippet-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -2293,7 +2313,7 @@ textarea:focus-visible {
 }
 .settings-subhead {
   margin: 14px 0 4px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--muted);
 }
@@ -2304,7 +2324,7 @@ textarea:focus-visible {
   padding: 4px 12px;
 }
 .settings-label {
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .settings-link {
   display: inline-flex;
@@ -2312,7 +2332,7 @@ textarea:focus-visible {
   gap: 6px;
   margin: 16px 0 4px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
   text-decoration: none;
 }
 .settings-link:hover {
@@ -2335,19 +2355,36 @@ textarea:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 4px 8px;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .font-input[aria-invalid="true"] {
   border-color: var(--danger-border);
 }
 .font-invalid {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--danger);
+}
+.font-stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.font-stepper .btn {
+  width: 28px;
+  padding: 4px 0;
+  text-align: center;
+}
+.font-offset {
+  min-width: 58px;
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 .settings-note {
   margin: 8px 12px 0;
   max-width: 320px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   line-height: 1.4;
   color: var(--muted);
 }
@@ -2366,10 +2403,10 @@ textarea:focus-visible {
 }
 .addfile-body .search-input {
   padding: 6px 24px 6px 10px;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .addfile-empty {
-  font-size: 13px;
+  font-size: var(--text-md);
   padding: 2px;
 }
 .addfile-list {
@@ -2401,13 +2438,13 @@ textarea:focus-visible {
 }
 .addfile-present {
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--text-xs);
   flex: none;
 }
 
 .confirm-body {
   padding: 16px;
-  font-size: 14px;
+  font-size: var(--text-base);
   line-height: 1.5;
 }
 .confirm-body p {
@@ -2423,7 +2460,7 @@ textarea:focus-visible {
 }
 .shortcuts td {
   padding: 6px 12px;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .shortcuts td:first-child {
   white-space: nowrap;
@@ -2434,7 +2471,7 @@ textarea:focus-visible {
 kbd {
   display: inline-block;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 1.4;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -2445,14 +2482,14 @@ kbd {
 }
 .modal-head h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--text-lg);
 }
 .modal-head label.checkbox {
   display: flex;
   align-items: center;
   gap: 6px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 .modal-head label.checkbox input {
@@ -2468,7 +2505,7 @@ kbd {
 }
 .prompt-author {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .prompt-editor {
@@ -2481,7 +2518,7 @@ kbd {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: var(--font-size-mono);
   line-height: 1.5;
   resize: none;
   overflow: auto;
@@ -2496,11 +2533,11 @@ kbd {
 .prompt-hint {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .prompt-dirty {
   color: var(--warn);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .markdown-preview {
   margin: 0;
@@ -2509,7 +2546,7 @@ kbd {
   min-height: 0;
   overflow: auto;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: var(--font-size-mono);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -2520,7 +2557,7 @@ kbd {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  font-size: 14px;
+  font-size: var(--text-base);
   line-height: 1.5;
 }
 .md-file {
@@ -2562,7 +2599,7 @@ kbd {
 }
 .markdown-body pre code {
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: var(--font-size-mono);
   background: none;
   border: none;
   padding: 0;
