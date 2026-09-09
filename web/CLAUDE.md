@@ -279,6 +279,18 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   theme isn't using may not be loaded yet and would read as missing. One context for every probe
   there will be, and a verdict cached per family. A typed face that isn't installed gets a warning
   under the field rather than being refused.
+- **Ligatures are one switch, and it knows the face.** `calt` is where JetBrains Mono keeps its
+  ligatures (it has no `liga` table at all), as do Fira Code and the rest — but in Monaspace `calt` is
+  texture healing, and its ligatures are opt-in stylistic sets. So off omits `"calt" 0` for a
+  Monaspace face, and on adds `ss01`–`ss05`, `ss07`–`ss10`, without which Monaspace shows eight
+  ligatures where JetBrains Mono shows its whole set — the same code rendering differently per theme.
+  `font-feature-settings` is the only property used for it: its precedence against `font-variant-*` is
+  defined but easily misremembered, so the two are never mixed, and nothing on the code surfaces uses
+  the latter. Ligatures break at element boundaries anyway, so a `=>` split by a word-diff range or a
+  Shiki token renders unligated whatever the switch says.
+- **`fonts.ts` subscribes to `theme.ts`** (`subscribeTheme`) — the one edge between the two stores.
+  With no family override the code face is the theme's, so a theme switch changes which features
+  apply. It repaints without `commit`: no `FontState` moves, so the React consumers stay put.
 - A custom property takes almost any token sequence, so an invalid family isn't refused on the way in:
   it makes every `font-family: var(--font-mono)` invalid at computed-value time and drops the whole app
   to the browser's default serif. `normalizeFamily` gates the paint (`CSS.supports` where it exists)
@@ -289,8 +301,8 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
 
 - Colors only via tokens; a new token needs a value in every theme block. Derived tokens (`-soft`
   tints, `--elev-1`/`--elev-2`, `--accent-hover`, `--accent-ring`, `--control-border`, `--on-accent`,
-  `--backdrop`, `--checker-*`, `--font-sans`, `--mono-fallback`, `--sans-fallback`) live once in the
-  shared `:root`. Radii from
+  `--backdrop`, `--checker-*`, `--font-sans`, `--mono-fallback`, `--sans-fallback`,
+  `--code-features`) live once in the shared `:root`. Radii from
   `--radius-xs|sm|md|lg|pill`.
 - **Type sizes only via the scale** — `--text-2xs|xs|sm|md|base|lg|xl` for the interface,
   `--font-size-mono` inside code surfaces — never a raw px, which wouldn't move with the reader's size

@@ -193,17 +193,19 @@ export function setThemePref(next: ThemePref): void {
   paint(resolveTheme(next));
 }
 
-function subscribe(l: () => void): () => void {
+// Exported for fonts.ts: with no family override the code face comes from the theme, and which
+// OpenType features that face understands depends on which one it is.
+export function subscribeTheme(l: () => void): () => void {
   listeners.add(l);
   return () => listeners.delete(l);
 }
 
 // The resolved theme — what the tokens, Shiki and mermaid render.
 export function useTheme(): ThemeId {
-  return useSyncExternalStore(subscribe, getTheme);
+  return useSyncExternalStore(subscribeTheme, getTheme);
 }
 
 // The stored choice — what the picker shows.
 export function useThemePref(): ThemePref {
-  return useSyncExternalStore(subscribe, getThemePref);
+  return useSyncExternalStore(subscribeTheme, getThemePref);
 }

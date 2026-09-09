@@ -3,12 +3,14 @@ import { useId } from "react";
 import type { FontOffsetKey, FontState, FontFamilyKey } from "../fonts";
 import {
   SANS_FACE,
+  codeLigaturesOn,
   firstFamilyOf,
   isFamilyAvailable,
   normalizeFamily,
   offsetOf,
   resetFonts,
   saveFontsAsDefault,
+  setCodeLigatures,
   setFontFamily,
   setFontOffset,
   useFonts,
@@ -193,6 +195,16 @@ export function FontPicker() {
         label="Interface font size"
         value={offsetOf(state, "sansOffset")}
       />
+      <div className="settings-row font-row">
+        <span className="settings-label">Code ligatures</span>
+        <input
+          type="checkbox"
+          aria-label="Code ligatures"
+          title="Arrows and comparisons drawn as one glyph. Off shows the literal characters."
+          checked={codeLigaturesOn(state)}
+          onChange={(e) => setCodeLigatures(e.target.checked)}
+        />
+      </div>
       <p className="settings-note">
         Inter, Monaspace Neon and JetBrains Mono ship with local-review; the rest of each list is what
         this machine turned out to have. Any other installed face can be typed in.

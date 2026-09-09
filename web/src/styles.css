@@ -72,6 +72,10 @@
   --mono-offset: 0px;
   --font-size-mono: calc(12.5px + var(--mono-offset));
 
+  /* OpenType features for code surfaces only; fonts.ts composes the value, which depends on the
+     face — `calt` carries the ligatures in JetBrains Mono but texture healing in Monaspace. */
+  --code-features: normal;
+
   /* The interface type scale. Every size the UI uses is one of these, so one offset moves them
      together and the steps keep their relative order. */
   --sans-offset: 0px;
@@ -1521,6 +1525,7 @@ textarea:focus-visible {
   border-collapse: collapse;
   font-family: var(--font-mono);
   font-size: var(--font-size-mono);
+  font-feature-settings: var(--code-features);
   /* One value for the whole table, never per row: gutter, code and the smaller-type hunk headers
      share one baseline grid. 12.5 x 1.52 is the 19px this was before the size became adjustable. */
   line-height: calc(var(--font-size-mono) * 1.52);
@@ -2523,6 +2528,7 @@ kbd {
   color: var(--text);
   font-family: var(--font-mono);
   font-size: var(--font-size-mono);
+  font-feature-settings: var(--code-features);
   line-height: 1.5;
   resize: none;
   overflow: auto;
@@ -2551,6 +2557,7 @@ kbd {
   overflow: auto;
   font-family: var(--font-mono);
   font-size: var(--font-size-mono);
+  font-feature-settings: var(--code-features);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -2604,6 +2611,7 @@ kbd {
 .markdown-body pre code {
   font-family: var(--font-mono);
   font-size: var(--font-size-mono);
+  font-feature-settings: var(--code-features);
   background: none;
   border: none;
   padding: 0;

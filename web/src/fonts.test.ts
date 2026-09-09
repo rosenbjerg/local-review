@@ -1,6 +1,7 @@
 import { expect, test, vi } from "vitest";
 
 import {
+  codeLigaturesOn,
   firstFamilyOf,
   isFamilyAvailable,
   normalizeFamily,
@@ -8,9 +9,11 @@ import {
   resetFonts,
   saveFontsAsDefault,
   setFontFamily,
+  setCodeLigatures,
   setFontOffset,
   setFontsRepo,
 } from "./fonts";
+import { DEFAULT_PREF, setThemePref } from "./theme";
 import { LS, MAX_FONT_OFFSET, MIN_FONT_OFFSET } from "./storage";
 
 const token = (name: string) => document.documentElement.style.getPropertyValue(name);
@@ -25,6 +28,20 @@ test("a family is taken only when CSS would accept it", () => {
   expect(normalizeFamily('Bad"')).toBe("");
   expect(normalizeFamily("Inter; color: red")).toBe("");
   expect(normalizeFamily("")).toBe("");
+});
+
+// With no family override the code face is the theme's, so the features have to follow a theme
+// switch — the one edge between the two stores. Runs before anything promotes a face to the default
+// across repos, which is what "nothing overrides it" needs.
+test("the code face follows the theme when nothing overrides it", () => {
+  setFontsRepo("/repo-theme");
+  setCodeLigatures(true);
+  setThemePref("github-dark");
+  expect(token("--code-features")).toContain('"ss03" 1');
+
+  setThemePref("darcula");
+  expect(token("--code-features")).toBe("");
+  setThemePref(DEFAULT_PREF);
 });
 
 test("an override paints the token over the theme's, and clearing removes it again", () => {
@@ -130,4 +147,30 @@ test("a face counts as available only when it changes the measured text", () => 
   expect(isFamilyAvailable("Consolas")).toBe(false);
   expect(isFamilyAvailable("ui-monospace")).toBe(true);
   expect(isFamilyAvailable("")).toBe(false);
+});
+
+// `calt` carries the ligatures in JetBrains Mono and Fira Code, but texture healing in Monaspace, so
+// one switch can only mean the same thing for both if it knows which face it is turning off.
+test("turning ligatures off spares Monaspace's texture healing", () => {
+  setFontsRepo("/repo-i");
+  setFontFamily("monoFamily", "JetBrains Mono");
+  setCodeLigatures(false);
+  expect(token("--code-features")).toContain('"calt" 0');
+  expect(token("--code-features")).toContain('"liga" 0');
+
+  setFontFamily("monoFamily", "Monaspace Neon");
+  expect(token("--code-features")).toContain('"liga" 0');
+  expect(token("--code-features")).not.toContain("calt");
+});
+
+// Monaspace keeps its ligatures in opt-in stylistic sets, so left alone it shows eight where
+// JetBrains Mono shows its whole set — the same code rendering differently per theme.
+test("turning them on levels Monaspace up and leaves other faces to their defaults", () => {
+  setFontsRepo("/repo-j");
+  setFontFamily("monoFamily", "Monaspace Neon");
+  setCodeLigatures(true);
+  expect(token("--code-features")).toContain('"ss09" 1');
+
+  setFontFamily("monoFamily", "JetBrains Mono");
+  expect(token("--code-features")).toBe("");
 });

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import type { FontPrefs } from "./storage";
+import { getTheme, subscribeTheme, themeOf } from "./theme";
 import {
   LS,
   MAX_FONT_OFFSET,
@@ -114,6 +115,24 @@ const FAMILY_TOKENS: Record<FontFamilyKey, { name: string; fallback: string }> =
   sansFamily: { name: "--font-sans", fallback: "--sans-fallback" },
 };
 
+// Monaspace ships its ligatures as opt-in stylistic sets, so without these it shows eight where
+// JetBrains Mono shows its whole set — the same code rendering differently per theme. ss06 (joining
+// forms for runs longer than a fixed ligature) is left out: the named sets cover what people mean.
+const MONASPACE_LIGATURE_SETS = ["ss01", "ss02", "ss03", "ss04", "ss05", "ss07", "ss08", "ss09"]
+  .concat("ss10")
+  .map((t) => `"${t}" 1`)
+  .join(", ");
+
+const LIGATURES_OFF = ['"liga" 0', '"clig" 0', '"dlig" 0'];
+
+// `calt` is where JetBrains Mono, Fira Code and the rest keep their ligatures — but in Monaspace it
+// is texture healing, which a ligature switch has no business turning off.
+function featuresFor(face: string, ligatures: boolean): string {
+  const monaspace = /^monaspace\b/i.test(face);
+  if (ligatures) return monaspace ? MONASPACE_LIGATURE_SETS : "";
+  return (monaspace ? LIGATURES_OFF : [...LIGATURES_OFF, '"calt" 0']).join(", ");
+}
+
 const OFFSET_TOKENS: Record<FontOffsetKey, string> = {
   monoOffset: "--mono-offset",
   sansOffset: "--sans-offset",
@@ -128,6 +147,17 @@ const listeners = new Set<() => void>();
 
 export function offsetOf(state: FontState, key: FontOffsetKey): number {
   return state.own[key] ?? state.inherited[key] ?? 0;
+}
+
+// The default lives here alone: paint and the checkbox both read it, and a second copy would drift.
+export function codeLigaturesOn(state: FontState): boolean {
+  return state.own.codeLigatures ?? state.inherited.codeLigatures ?? true;
+}
+
+// The face code is actually rendered in: an override when it holds up, else the theme's own.
+function monoFace(): string {
+  const picked = firstFamilyOf(normalizeFamily(own.monoFamily ?? inherited.monoFamily ?? ""));
+  return picked === "" ? themeOf(getTheme()).mono : picked;
 }
 
 function paint(): void {
@@ -146,7 +176,15 @@ function paint(): void {
     if (offset === 0) style.removeProperty(OFFSET_TOKENS[key]);
     else style.setProperty(OFFSET_TOKENS[key], `${offset}px`);
   }
+
+  const features = featuresFor(monoFace(), codeLigaturesOn({ own, inherited }));
+  if (features === "") style.removeProperty("--code-features");
+  else style.setProperty("--code-features", features);
 }
+
+// With no family override the code face is the theme's, so a theme switch can change which features
+// apply. Nothing in FontState moves, so this repaints without waking the React consumers.
+subscribeTheme(paint);
 
 function commit(): void {
   state = { own, inherited };
@@ -177,6 +215,13 @@ export function setFontFamily(key: FontFamilyKey, raw: string): void {
 
 export function setFontOffset(key: FontOffsetKey, px: number): void {
   own = { ...own, [key]: Math.min(MAX_FONT_OFFSET, Math.max(MIN_FONT_OFFSET, Math.round(px))) };
+  writeFontOverrides(repo, own);
+  if (repo === "") inherited = readFontDefaults();
+  commit();
+}
+
+export function setCodeLigatures(on: boolean): void {
+  own = { ...own, codeLigatures: on };
   writeFontOverrides(repo, own);
   if (repo === "") inherited = readFontDefaults();
   commit();

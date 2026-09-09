@@ -157,10 +157,12 @@ export interface FontPrefs {
   sansFamily?: string;
   monoOffset?: number;
   sansOffset?: number;
+  codeLigatures?: boolean;
 }
 
 const FAMILY_KEYS = ["monoFamily", "sansFamily"] as const;
 const OFFSET_KEYS = ["monoOffset", "sansOffset"] as const;
+const FLAG_KEYS = ["codeLigatures"] as const;
 
 // Sizes are an offset from the app's own, so 0 is a real pick ("this repo stays put even though the
 // default across repos moved"); Reset, not a zero, is how a field goes back to inheriting.
@@ -178,6 +180,9 @@ function pruneFonts(v: unknown): FontPrefs {
     const raw = o[k];
     if (typeof raw !== "number" || !Number.isFinite(raw)) continue;
     out[k] = Math.min(MAX_FONT_OFFSET, Math.max(MIN_FONT_OFFSET, Math.round(raw)));
+  }
+  for (const k of FLAG_KEYS) {
+    if (typeof o[k] === "boolean") out[k] = o[k] as boolean;
   }
   return out;
 }

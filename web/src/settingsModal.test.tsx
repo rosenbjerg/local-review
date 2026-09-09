@@ -49,3 +49,17 @@ test("a font field overrides the theme's face, and Reset hands it back", () => {
   fireEvent.click(screen.getByText("Reset"));
   expect(document.documentElement.style.getPropertyValue("--font-mono")).toBe("");
 });
+
+// The switch has to mean the same thing whichever face is in play, which is why it knows about the
+// one it is turning off: calt is the ligatures in JetBrains Mono but texture healing in Monaspace.
+test("the ligature switch composes features for the face in use", () => {
+  render(<SettingsModal onClose={() => {}} />);
+  const box = screen.getByLabelText("Code ligatures") as HTMLInputElement;
+  expect(box.checked).toBe(true);
+  expect(document.documentElement.style.getPropertyValue("--code-features")).toContain('"ss09" 1');
+
+  fireEvent.click(box);
+  const off = document.documentElement.style.getPropertyValue("--code-features");
+  expect(off).toContain('"liga" 0');
+  expect(off).not.toContain("calt");
+});
