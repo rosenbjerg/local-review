@@ -39,6 +39,69 @@ export function normalizeFamily(raw: string): string {
   return v;
 }
 
+// The CSS generic keywords: always available, and they have to stay unquoted to mean anything.
+const KEYWORDS = new Set([
+  "monospace",
+  "sans-serif",
+  "serif",
+  "system-ui",
+  "ui-monospace",
+  "ui-sans-serif",
+  "ui-serif",
+  "ui-rounded",
+  "cursive",
+  "fantasy",
+  "math",
+]);
+
+// Quoting is what keeps `ctx.font` assignable: a bare name with a space is invalid, the assignment
+// is dropped, and the probe below then compares the previous font with itself and calls it a match.
+export function quoteFamily(name: string): string {
+  return KEYWORDS.has(name) ? name : `"${name.replace(/["\\]/g, "")}"`;
+}
+
+// The face that actually gets used out of a stack, which is what a warning should name.
+export function firstFamilyOf(value: string): string {
+  return (value.split(",")[0] ?? "").trim().replace(/^["']|["']$/g, "").trim();
+}
+
+const PROBE_TEXT = "mmmmmmmmmmlliWWWWWW0O";
+const PROBE_GENERICS = ["monospace", "serif", "sans-serif"] as const;
+const availability = new Map<string, boolean>();
+
+// One canvas for every probe there will ever be: asking per candidate means a whole list of
+// not-implemented errors wherever canvas is missing, and a whole list of elements where it isn't.
+let ctxOnce: CanvasRenderingContext2D | null | undefined;
+function probeContext(): CanvasRenderingContext2D | null {
+  if (ctxOnce === undefined) ctxOnce = document.createElement("canvas").getContext("2d");
+  return ctxOnce;
+}
+
+// Availability, not syntax. `CSS.supports` only parses, so it says yes to Consolas on a Mac; the way
+// to learn whether a face resolves is to render with it and see whether the metrics move off the
+// generic behind it. One generic can coincide, so a face counts as present if any of the three does.
+export function isFamilyAvailable(name: string): boolean {
+  const family = name.trim();
+  if (family === "") return false;
+  if (KEYWORDS.has(family)) return true;
+  const cached = availability.get(family);
+  if (cached !== undefined) return cached;
+
+  const ctx = probeContext();
+  // No canvas (jsdom, a hardened browser): offer the face rather than hide one that would work.
+  if (!ctx) return true;
+
+  const quoted = quoteFamily(family);
+  const found = PROBE_GENERICS.some((generic) => {
+    ctx.font = `72px ${generic}`;
+    const base = ctx.measureText(PROBE_TEXT).width;
+    ctx.font = `72px ${quoted}, ${generic}`;
+    return ctx.measureText(PROBE_TEXT).width !== base;
+  });
+  availability.set(family, found);
+  return found;
+}
+
 export interface FontState {
   // This repo's own picks — what the inputs hold. Absent means "follow `inherited`".
   own: FontPrefs;

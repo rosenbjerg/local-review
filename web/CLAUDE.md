@@ -271,6 +271,14 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
 - An offset of 0 is a **pick**, not an absence: it means "this repo stays put though the default across
   repos moved". Reset, not a zero, is how a field goes back to inheriting — which is why the family
   fields show the repo's own pick and the size fields show the effective one.
+- **`CSS.supports` answers syntax, never availability** — it says yes to Consolas on a Mac, and its
+  one-argument form wants a whole declaration (`"font-family: Consolas"`), not a bare name. The
+  suggestion list is probed instead (`isFamilyAvailable`): measure the probe string on a canvas in
+  `"<face>", <generic>` against that generic alone, across all three generics because one can
+  coincide by chance. Bundled faces and generic keywords skip the probe — a bundled face the current
+  theme isn't using may not be loaded yet and would read as missing. One context for every probe
+  there will be, and a verdict cached per family. A typed face that isn't installed gets a warning
+  under the field rather than being refused.
 - A custom property takes almost any token sequence, so an invalid family isn't refused on the way in:
   it makes every `font-family: var(--font-mono)` invalid at computed-value time and drops the whole app
   to the browser's default serif. `normalizeFamily` gates the paint (`CSS.supports` where it exists)

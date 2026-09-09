@@ -3,6 +3,8 @@ import { useId } from "react";
 import type { FontOffsetKey, FontState, FontFamilyKey } from "../fonts";
 import {
   SANS_FACE,
+  firstFamilyOf,
+  isFamilyAvailable,
   normalizeFamily,
   offsetOf,
   resetFonts,
@@ -14,31 +16,68 @@ import {
 import { MAX_FONT_OFFSET, MIN_FONT_OFFSET } from "../storage";
 import { themeOf, useTheme } from "../theme";
 
-// Only Inter, Monaspace Neon and JetBrains Mono ship with the app; the rest are offered because
-// they're common, and fall through to the theme's face when the machine hasn't got them.
-const SUGGESTIONS: Record<FontFamilyKey, readonly string[]> = {
+// Shipped with the app, so they're offered whatever the machine has — and a face the current theme
+// isn't using may not be loaded yet, which would make the probe below call it missing.
+const BUNDLED: Record<FontFamilyKey, readonly string[]> = {
+  monoFamily: ["Monaspace Neon", "JetBrains Mono", "ui-monospace"],
+  sansFamily: ["Inter", "system-ui"],
+};
+
+// Probed against this machine before being offered: half of these are platform-specific, and a list
+// that offers a Mac Consolas or a Windows SF Mono is worse than a shorter one.
+const CANDIDATES: Record<FontFamilyKey, readonly string[]> = {
   monoFamily: [
-    "Monaspace Neon",
-    "JetBrains Mono",
-    "ui-monospace",
     "SF Mono",
     "Menlo",
+    "Monaco",
+    "Andale Mono",
+    "Courier New",
     "Consolas",
-    "Fira Code",
-    "IBM Plex Mono",
     "Cascadia Code",
+    "Cascadia Mono",
+    "Fira Code",
+    "Fira Mono",
+    "Source Code Pro",
+    "IBM Plex Mono",
+    "Roboto Mono",
+    "Ubuntu Mono",
+    "DejaVu Sans Mono",
+    "Liberation Mono",
+    "Inconsolata",
+    "Hack",
+    "Iosevka",
+    "Victor Mono",
     "Berkeley Mono",
+    "Comic Code",
+    "Operator Mono",
+    "Monaspace Argon",
+    "Monaspace Xenon",
+    "Monaspace Radon",
+    "Monaspace Krypton",
   ],
   sansFamily: [
-    "Inter",
-    "system-ui",
-    "Segoe UI",
+    "SF Pro Text",
     "Helvetica Neue",
-    "IBM Plex Sans",
-    "Source Sans 3",
+    "Helvetica",
+    "Avenir Next",
+    "Segoe UI",
+    "Arial",
     "Roboto",
+    "Open Sans",
+    "Lato",
+    "Noto Sans",
+    "Source Sans 3",
+    "IBM Plex Sans",
+    "Public Sans",
+    "Ubuntu",
+    "Cantarell",
+    "DejaVu Sans",
   ],
 };
+
+function suggestionsFor(fontKey: FontFamilyKey): string[] {
+  return [...BUNDLED[fontKey], ...CANDIDATES[fontKey].filter(isFamilyAvailable)];
+}
 
 function FontField({
   fontKey,
@@ -53,6 +92,8 @@ function FontField({
 }) {
   const listId = useId();
   const invalid = value.trim() !== "" && normalizeFamily(value) === "";
+  const head = invalid ? "" : firstFamilyOf(value);
+  const missing = head !== "" && !isFamilyAvailable(head);
   return (
     <div className="settings-row font-row">
       <span className="settings-label">{label}</span>
@@ -68,11 +109,12 @@ function FontField({
           onChange={(e) => setFontFamily(fontKey, e.target.value)}
         />
         <datalist id={listId}>
-          {SUGGESTIONS[fontKey].map((f) => (
+          {suggestionsFor(fontKey).map((f) => (
             <option key={f} value={f} />
           ))}
         </datalist>
         {invalid && <span className="font-invalid">Not a font family CSS understands</span>}
+        {missing && <span className="font-missing">{head} isn't installed on this machine</span>}
       </div>
     </div>
   );
@@ -152,8 +194,8 @@ export function FontPicker() {
         value={offsetOf(state, "sansOffset")}
       />
       <p className="settings-note">
-        Inter, Monaspace Neon and JetBrains Mono ship with local-review. Anything else has to be
-        installed on this machine, and falls back to the theme's face when it isn't.
+        Inter, Monaspace Neon and JetBrains Mono ship with local-review; the rest of each list is what
+        this machine turned out to have. Any other installed face can be typed in.
       </p>
       <div className="settings-actions">
         <button className="btn" onClick={resetFonts} disabled={!customised}>

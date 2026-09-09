@@ -1,7 +1,10 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 
 import {
+  firstFamilyOf,
+  isFamilyAvailable,
   normalizeFamily,
+  quoteFamily,
   resetFonts,
   saveFontsAsDefault,
   setFontFamily,
@@ -103,4 +106,28 @@ test("the interface offset is a separate axis from the code one", () => {
   setFontOffset("monoOffset", 3);
   expect(token("--sans-offset")).toBe("1px");
   expect(token("--mono-offset")).toBe("3px");
+});
+
+test("a family list is split into head and quoted for the probe", () => {
+  expect(firstFamilyOf('"Fira Code", monospace')).toBe("Fira Code");
+  expect(firstFamilyOf("Menlo")).toBe("Menlo");
+  expect(quoteFamily("SF Mono")).toBe('"SF Mono"');
+  expect(quoteFamily("ui-monospace")).toBe("ui-monospace");
+});
+
+// CSS.supports only parses, so it says yes to Consolas on a Mac. Availability is whether the metrics
+// move off the generic behind the face — which is why the probe asks the canvas, not the parser.
+test("a face counts as available only when it changes the measured text", () => {
+  const ctx = {
+    font: "",
+    measureText: () => ({ width: ctx.font.includes('"Fira Code"') ? 200 : 100 }),
+  };
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+    ctx as unknown as CanvasRenderingContext2D
+  );
+
+  expect(isFamilyAvailable("Fira Code")).toBe(true);
+  expect(isFamilyAvailable("Consolas")).toBe(false);
+  expect(isFamilyAvailable("ui-monospace")).toBe(true);
+  expect(isFamilyAvailable("")).toBe(false);
 });

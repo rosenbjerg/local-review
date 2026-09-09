@@ -2364,6 +2364,10 @@ textarea:focus-visible {
   font-size: var(--text-xs);
   color: var(--danger);
 }
+.font-missing {
+  font-size: var(--text-xs);
+  color: var(--warn);
+}
 .font-stepper {
   display: flex;
   align-items: center;

@@ -22,6 +22,10 @@ class MockEventSource {
 // opens the list from dying in that effect.
 Element.prototype.scrollIntoView = () => {};
 
+// jsdom has no canvas either, and asking for a context logs a not-implemented error rather than
+// returning null quietly. The font probe already treats a missing context as "can't tell, offer it".
+HTMLCanvasElement.prototype.getContext = () => null;
+
 afterEach(() => {
   cleanup();
   MockEventSource.instances = [];
