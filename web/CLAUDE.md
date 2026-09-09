@@ -201,6 +201,10 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   matches, `Escape` clears the highlight. Bails on inputs, modifiers, open modals (except `?`), and
   the whole `.composer` subtree — which is why `CommentComposer` binds ⌘/Ctrl+Enter and Escape on its
   **root**. `useKeyboardShortcuts.test.ts`, `commentComposer.test.tsx`.
+- `SettingsModal` is one grid for every label/control pair (`.settings-form`, rows set to
+  `display: contents` so the components keep their wrapper while the grid gets their children) — each
+  row laying itself out was what left the labels and fields ragged. The two shortcut tables sit side
+  by side (`.settings-cols`); stacked they were most of the dialog's height.
 - Modals use the `Modal` shell: backdrop, `useFocusTrap`, Escape, `title` (names the dialog via a
   `useId`'d h2), `controls`, `actions`, `close` (`button` | `autofocus` | `none`). A backdrop click is
   a mousedown **and** mouseup on the backdrop (`modal.test.tsx`). Global shortcuts bail while any

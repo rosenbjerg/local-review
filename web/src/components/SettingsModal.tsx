@@ -2,105 +2,118 @@ import { FontPicker } from "./FontPicker";
 import { Modal } from "./Modal";
 import { ThemePicker } from "./ThemePicker";
 
-// The toolbar's non-review controls — theme, shortcut list, repo link — behind the gear, or `?`.
+// The toolbar's non-review controls — appearance, shortcut list, repo link — behind the gear, or `?`.
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   return (
-    <Modal onClose={onClose} title="Settings" close="autofocus" className="modal-sm">
+    <Modal onClose={onClose} title="Settings" close="autofocus" className="modal-settings">
       <div className="settings-body">
-        <div className="settings-row">
-          <span className="settings-label">Theme for this repo</span>
-          <ThemePicker />
+        <h3 className="settings-subhead">Appearance for this repo</h3>
+        {/* One grid, so every label meets its control on the same edge. The rows are
+            `display: contents` — see the note in styles.css. */}
+        <div className="settings-form">
+          <div className="settings-row">
+            <span className="settings-label">Theme</span>
+            <ThemePicker />
+          </div>
+          <FontPicker />
         </div>
-        <h3 className="settings-subhead">Fonts for this repo</h3>
-        <FontPicker />
-        <h3 className="settings-subhead">Keyboard shortcuts</h3>
-        <table className="shortcuts">
-          <tbody>
-            <tr>
-              <td>
-                <kbd>j</kbd> / <kbd>k</kbd>
-              </td>
-              <td>Next / previous file</td>
-            </tr>
-            <tr>
-              <td>
-                <kbd>n</kbd> / <kbd>p</kbd>
-              </td>
-              <td>Next / previous comment</td>
-            </tr>
-            <tr>
-              <td>
-                <kbd>v</kbd>
-              </td>
-              <td>Mark the current file reviewed and jump to the next unreviewed one</td>
-            </tr>
-            <tr>
-              <td>
-                <kbd>e</kbd>
-              </td>
-              <td>Export review</td>
-            </tr>
-            <tr>
-              <td>
-                <kbd>r</kbd>
-              </td>
-              <td>Reload review</td>
-            </tr>
-            <tr>
-              <td>
-                <kbd>/</kbd>
-              </td>
-              <td>Search files</td>
-            </tr>
-            <tr>
-              <td>
-                <kbd>[</kbd> / <kbd>]</kbd>
-              </td>
-              <td>Show or hide the files / comments panel</td>
-            </tr>
-            <tr>
-              <td>
-                <kbd>?</kbd>
-              </td>
-              <td>Toggle these settings</td>
-            </tr>
-            <tr>
-              <td>
-                <kbd>Esc</kbd>
-              </td>
-              <td>Close a dialog, cancel a comment, clear the highlight</td>
-            </tr>
-          </tbody>
-        </table>
-        <h3 className="settings-subhead">Reviewing</h3>
-        <table className="shortcuts">
-          <tbody>
-            <tr>
-              <td>Click a line №</td>
-              <td>Start a comment on that line</td>
-            </tr>
-            <tr>
-              <td>Drag / Shift-click</td>
-              <td>Comment on a line range</td>
-            </tr>
-            <tr>
-              <td>
-                <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>Enter</kbd>
-              </td>
-              <td>Submit the comment</td>
-            </tr>
-            <tr>
-              <td>Select a word</td>
-              <td>Highlight its other occurrences in the file</td>
-            </tr>
-            <tr>
-              <td>
-                <kbd>Enter</kbd> / <kbd>Shift</kbd>+<kbd>Enter</kbd>
-              </td>
-              <td>Next / previous occurrence</td>
-            </tr>
-          </tbody>
-        </table>
+
+        <div className="settings-cols">
+          <section className="settings-col">
+            <h3 className="settings-subhead">Keyboard shortcuts</h3>
+            <table className="shortcuts">
+              <tbody>
+                <tr>
+                  <td>
+                    <kbd>j</kbd> / <kbd>k</kbd>
+                  </td>
+                  <td>Next / previous file</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>n</kbd> / <kbd>p</kbd>
+                  </td>
+                  <td>Next / previous comment</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>v</kbd>
+                  </td>
+                  <td>Mark the current file reviewed and jump to the next unreviewed one</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>e</kbd>
+                  </td>
+                  <td>Export review</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>r</kbd>
+                  </td>
+                  <td>Reload review</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>/</kbd>
+                  </td>
+                  <td>Search files</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>[</kbd> / <kbd>]</kbd>
+                  </td>
+                  <td>Show or hide the files / comments panel</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>?</kbd>
+                  </td>
+                  <td>Toggle these settings</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>Esc</kbd>
+                  </td>
+                  <td>Close a dialog, cancel a comment, clear the highlight</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section className="settings-col">
+            <h3 className="settings-subhead">Reviewing</h3>
+            <table className="shortcuts">
+              <tbody>
+                <tr>
+                  <td>Click a line №</td>
+                  <td>Start a comment on that line</td>
+                </tr>
+                <tr>
+                  <td>Drag / Shift-click</td>
+                  <td>Comment on a line range</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>Enter</kbd>
+                  </td>
+                  <td>Submit the comment</td>
+                </tr>
+                <tr>
+                  <td>Select a word</td>
+                  <td>Highlight its other occurrences in the file</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>Enter</kbd> / <kbd>Shift</kbd>+<kbd>Enter</kbd>
+                  </td>
+                  <td>Next / previous occurrence</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+        </div>
+
         <a
           className="settings-link"
           href="https://github.com/rosenbjerg/local-review"

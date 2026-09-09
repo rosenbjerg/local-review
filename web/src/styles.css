@@ -2309,6 +2309,11 @@ textarea:focus-visible {
 .modal-md {
   width: min(880px, 94vw);
 }
+.modal-settings {
+  width: min(700px, 94vw);
+  height: auto;
+  max-height: 88vh;
+}
 .settings-body {
   display: flex;
   flex-direction: column;
@@ -2317,19 +2322,42 @@ textarea:focus-visible {
   overflow: auto;
 }
 .settings-subhead {
-  margin: 14px 0 4px;
+  margin: 14px 0 6px;
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--muted);
 }
-.settings-row {
-  display: flex;
+/* The body centres the top-level subhead by shrinking it to content; a column subhead is a block the
+   full width of its table, so it takes its centring from the text. */
+.settings-col .settings-subhead {
+  text-align: center;
+}
+.shortcuts {
+  width: 100%;
+}
+.shortcuts td:last-child {
+  width: 100%;
+}
+/* One grid for every label/control pair, so they share a single edge rather than each row centring
+   itself. The rows stay as elements for the components' sake and hand their children to the grid. */
+.settings-form {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 320px);
   align-items: center;
-  gap: 10px;
+  gap: 8px 14px;
   padding: 4px 12px;
+}
+.settings-form .settings-row {
+  display: contents;
 }
 .settings-label {
   font-size: var(--text-md);
+  text-align: right;
+}
+/* The prose and the buttons belong to the controls, not to the labels. */
+.settings-form .settings-note,
+.settings-form .settings-actions {
+  grid-column: 2;
 }
 .settings-link {
   display: inline-flex;
@@ -2344,10 +2372,6 @@ textarea:focus-visible {
   color: var(--text);
 }
 
-/* Font overrides: the label column is fixed so the two fields line up under each other. */
-.font-row .settings-label {
-  min-width: 100px;
-}
 .font-field {
   display: flex;
   flex-direction: column;
@@ -2359,7 +2383,9 @@ textarea:focus-visible {
   align-items: center;
 }
 .font-input {
-  width: 200px;
+  /* Fills the wrap, which the grid stretches to the control column — the caret is positioned against
+     the wrap, so a narrower input would leave it stranded past the input's own edge. */
+  width: 100%;
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
@@ -2424,8 +2450,7 @@ textarea:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 .settings-note {
-  margin: 8px 12px 0;
-  max-width: 320px;
+  margin: 2px 0 0;
   font-size: var(--text-xs);
   line-height: 1.4;
   color: var(--muted);
@@ -2433,7 +2458,21 @@ textarea:focus-visible {
 .settings-actions {
   display: flex;
   gap: 8px;
-  padding: 10px 12px 0;
+  padding: 4px 0 0;
+}
+/* The two reference tables side by side; stacked they were most of the dialog's height. Centred on
+   the same axis as the form above rather than stretched, so the blocks read as one column of content. */
+.settings-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  gap: 0 24px;
+  width: 100%;
+  max-width: 640px;
+  padding: 0 12px;
+}
+.settings-col {
+  min-width: 0;
 }
 /* Add-file picker */
 .addfile-body {
