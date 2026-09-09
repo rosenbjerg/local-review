@@ -2353,14 +2353,47 @@ textarea:focus-visible {
   flex-direction: column;
   gap: 3px;
 }
+.font-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
 .font-input {
   width: 200px;
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 4px 8px;
+  /* Right padding is the caret's room. */
+  padding: 4px 24px 4px 8px;
   font-size: var(--text-md);
+}
+/* Anchored to the viewport by FontCombobox, since the settings body scrolls and would clip it. */
+.combobox-list.floating {
+  position: fixed;
+}
+.font-suggest {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.combobox-foot {
+  padding: 6px 8px 2px;
+  margin-top: 2px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+.font-sample {
+  margin-left: auto;
+  padding-left: 12px;
+  color: var(--muted);
+  font-size: var(--text-xs);
 }
 .font-input[aria-invalid="true"] {
   border-color: var(--danger-border);

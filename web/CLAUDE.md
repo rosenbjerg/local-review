@@ -33,7 +33,7 @@ src/
   useOccurrenceHighlight.ts  select a word → light up its occurrences (CSS Custom Highlight API)
   useUnseenActivity.ts   agent comments/replies that arrived while the tab was hidden
   useCommentRefs.ts      delegated click/hover/focus for #<id> links
-  useFocusTrap.ts  useListNavigation.ts (shared by Combobox and AddFileModal)
+  useFocusTrap.ts  useListNavigation.ts (shared by Combobox, FontCombobox and AddFileModal)
   api.ts  types.ts  util.ts  storage.ts (typed localStorage, the lr.* keys)  time.ts
   highlight.ts           Shiki, JS regex engine, all languages lazy      mermaid.ts  ```mermaid → SVG
   prompts.ts             agent prompt templates ({{placeholder}}) + renderPrompt
@@ -51,8 +51,8 @@ src/
     FileHeader  MediaView  MarkdownView  LazyFile  FindBar
     CommentThread  CommentsPanel  CommentPreview  CommentRefPopover  ReviewSummary  CommentComposer  FileComments
     Modal + ExportModal  AgentPromptsModal  AddFileModal  SettingsModal  ResetConfirmModal
-    SearchInput  Combobox  PaneRail  ViewToggle  CopyButton  ThemePicker  FontPicker  ErrorBoundary
-    EmptyState  icons
+    SearchInput  Combobox  PaneRail  ViewToggle  CopyButton  ThemePicker  FontPicker  FontCombobox
+    ErrorBoundary  EmptyState  icons
     small primitives: Chevron, CommentCount, DiffStatBadge, AnchorBadge, MetaTimestamps, HighlightMatch, Markdown
 ```
 
@@ -208,7 +208,10 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
 - Either side pane collapses to a 28px `PaneRail`, never to zero. `usePanelResize` owns the open
   flags with the widths; a collapsed pane keeps its stored width and its resizer goes inert
   (`resizer-inert`, `tabIndex -1`). Both persist (`lr.leftOpen`/`lr.rightOpen`).
-- `Combobox` is a searchable select; `rangePreview` draws the from picker as a timeline.
+- `Combobox` is a searchable select — its value is always one of its options; `rangePreview` draws
+  the from picker as a timeline. `FontCombobox` is the free-text sibling, not a flag on it: a font
+  name is whatever you type, so the two disagree about what the input holds and what blur means.
+  They share `useListNavigation`, which is the half that generalises.
   `ViewToggle` is data-driven; a per-option `disabled` carries a `title` saying why.
   `SearchInput`'s Escape clears a non-empty field, blurs or bubbles (`emptyEscape`) an empty one.
 - `TopBar`: three tracks with equal-width ends (`flex: 1 1 0`) so the selection centres on the bar;
@@ -291,6 +294,22 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
 - **`fonts.ts` subscribes to `theme.ts`** (`subscribeTheme`) — the one edge between the two stores.
   With no family override the code face is the theme's, so a theme switch changes which features
   apply. It repaints without `commit`: no `FontState` moves, so the React consumers stay put.
+- The face pickers are `FontCombobox`, each row drawn in the face it names (a sample of `0O1lI` for
+  code, where telling those apart is the job). Three things it has to get right: the list is
+  `position: fixed` from the input's rect, because the settings body scrolls and would clip an
+  absolute one — the modal's entrance animation sets no lasting transform, so `fixed` still means the
+  viewport; filtering follows what has been **typed since opening**, not the value, or reopening
+  after a pick filters the list down to the face already chosen; and the close-on-scroll listener
+  exempts scrolls originating inside the list, or following the keyboard selection closes it.
+  Clearing is a row naming the fallback, not an empty field — empty reads as "nothing" when it means
+  "whatever the theme brings". Rows are grouped into what ships with the app and what this machine
+  turned out to have, and the list closes with a line saying anything else installed can be typed:
+  the list is a probe of a few dozen guessed names, not the set of choices. `fontCombobox.test.tsx`.
+- **Font names go wrong at the spacing**, not the spelling — the family really is
+  `JetBrainsMono Nerd Font`, and CSS resolves neither a near miss nor a hint about one. So the filter
+  matches on `normalizeName` (lowercased, non-alphanumerics dropped), which finds the face from the
+  spacing anyone would type, and `nearestFamily` offers the closest installed name under a face the
+  probe says isn't there — prefix either way, else an edit distance inside a third of the length.
 - A custom property takes almost any token sequence, so an invalid family isn't refused on the way in:
   it makes every `font-family: var(--font-mono)` invalid at computed-value time and drops the whole app
   to the browser's default serif. `normalizeFamily` gates the paint (`CSS.supports` where it exists)

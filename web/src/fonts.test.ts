@@ -4,7 +4,9 @@ import {
   codeLigaturesOn,
   firstFamilyOf,
   isFamilyAvailable,
+  nearestFamily,
   normalizeFamily,
+  normalizeName,
   quoteFamily,
   resetFonts,
   saveFontsAsDefault,
@@ -173,4 +175,15 @@ test("turning them on levels Monaspace up and leaves other faces to their defaul
 
   setFontFamily("monoFamily", "JetBrains Mono");
   expect(token("--code-features")).toBe("");
+});
+
+// The family really is "JetBrainsMono Nerd Font" — the spacing anyone would type doesn't resolve,
+// and CSS gives no hint about it, so the picker has to.
+test("a name that is only mis-spaced still finds the face it meant", () => {
+  const choices = ["JetBrainsMono Nerd Font", "Monaspace Neon", "Menlo"];
+  expect(normalizeName("JetBrains Mono Nerd Font")).toBe(normalizeName("JetBrainsMono Nerd Font"));
+  expect(nearestFamily("JetBrains Mono Nerd Font", choices)).toBe("JetBrainsMono Nerd Font");
+  expect(nearestFamily("Menlp", choices)).toBe("Menlo");
+  expect(nearestFamily("Comic Sans", choices)).toBe("");
+  expect(nearestFamily("SF", choices)).toBe("");
 });
