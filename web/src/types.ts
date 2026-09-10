@@ -32,9 +32,10 @@ export type DiffOpts = {
 // The version of a file a comment or reviewed mark is anchored to; one value, so the impossible "both" can't be expressed.
 export type Side = "head" | "worktree" | "index";
 
-// How a side reads in prose; the server's api.sideLabel names a side the same way for its 404s.
+// How a side reads in prose. The server's api.sideLabel must word each side identically — its 404
+// text lands on the same card as these notes — and types.test.ts is what holds the two together.
 export function sideLabel(side: Side, headRef: string): string {
-  if (side === "index") return "the index";
+  if (side === "index") return "the git index";
   if (side === "worktree") return "the working tree";
   return headRef;
 }

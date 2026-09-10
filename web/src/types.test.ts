@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "vitest";
-import type { Comment } from "./types";
-import { effectiveLines, effectivePath, lineLabel } from "./types";
+import type { Comment, Side } from "./types";
+import { effectiveLines, effectivePath, lineLabel, sideLabel } from "./types";
 
 // Minimal Comment factory (this file is excluded from the build tsconfig).
 const c = (o: Partial<Comment>): Comment =>
@@ -55,4 +57,19 @@ test("lineLabel renders a single line or a range off the effective lines", () =>
   expect(lineLabel(c({ startLine: 3, endLine: 3 }))).toBe("L3");
   expect(lineLabel(c({ startLine: 2, endLine: 4 }))).toBe("L2–4"); // en-dash
   expect(lineLabel(c({ anchorStatus: "moved", currentStartLine: 5, currentEndLine: 7 }))).toBe("L5–7");
+});
+
+// Both wordings reach the same file card: the missing/substituted notes come from this function,
+// while a failed load prints the server's 404 ("<path> does not exist in <side>") verbatim. Nothing
+// but this test stops the two files from naming the same side differently.
+test("sideLabel words every non-head side the way the server's api.sideLabel does", () => {
+  const go = readFileSync(join(__dirname, "..", "..", "internal", "api", "side.go"), "utf8");
+  const body = go.match(/func sideLabel\([^)]*\) string \{([\s\S]*?)\n\}/);
+  expect(body, "internal/api/side.go defines no sideLabel").not.toBeNull();
+  const cases = [...body![1].matchAll(/case store\.Side(\w+):\s*\n\s*return "([^"]+)"/g)];
+  // head is the odd one out: it answers with the ref, which the Go switch reaches via default.
+  expect(cases.length, "expected the index and worktree cases").toBe(2);
+  for (const [, name, wording] of cases) {
+    expect(sideLabel(name.toLowerCase() as Side, "HEAD"), name).toBe(wording);
+  }
 });
