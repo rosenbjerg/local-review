@@ -1,4 +1,4 @@
-package api
+package review
 
 import (
 	"reflect"
@@ -54,7 +54,7 @@ func TestFindMatches(t *testing.T) {
 	}
 }
 
-// --- captureSnippet: reads the range from the anchored side ---
+// --- CaptureSnippet: reads the range from the anchored side ---
 
 // The three anchor sides read distinct content for the same line, so the captured
 // snippet must come from the side the comment names (index / worktree / head_ref).
@@ -75,23 +75,23 @@ func TestCaptureSnippetPerSide(t *testing.T) {
 		{store.SideIndex, "STAGED"},
 	}
 	for _, c := range cases {
-		if got := captureSnippet(r.repo, "main", "f.txt", 2, 2, c.side); got != c.want {
-			t.Errorf("captureSnippet[%s] = %q, want %q", c.side, got, c.want)
+		if got := CaptureSnippet(r.repo, "main", "f.txt", 2, 2, c.side); got != c.want {
+			t.Errorf("CaptureSnippet[%s] = %q, want %q", c.side, got, c.want)
 		}
 	}
 
 	// Multi-line range, and the best-effort edge cases.
-	if got := captureSnippet(r.repo, "main", "f.txt", 1, 3, store.SideHead); got != "a\nb\nc" {
+	if got := CaptureSnippet(r.repo, "main", "f.txt", 1, 3, store.SideHead); got != "a\nb\nc" {
 		t.Errorf("multi-line head snippet = %q, want %q", got, "a\nb\nc")
 	}
-	if got := captureSnippet(r.repo, "main", "f.txt", 0, 0, store.SideHead); got != "" {
+	if got := CaptureSnippet(r.repo, "main", "f.txt", 0, 0, store.SideHead); got != "" {
 		t.Errorf("start<=0 should yield %q, got %q", "", got)
 	}
-	if got := captureSnippet(r.repo, "main", "f.txt", 99, 99, store.SideHead); got != "" {
+	if got := CaptureSnippet(r.repo, "main", "f.txt", 99, 99, store.SideHead); got != "" {
 		t.Errorf("out-of-range start should yield %q, got %q", "", got)
 	}
 	// End past EOF clamps to the last line rather than erroring.
-	if got := captureSnippet(r.repo, "main", "f.txt", 3, 99, store.SideHead); got != "c" {
+	if got := CaptureSnippet(r.repo, "main", "f.txt", 3, 99, store.SideHead); got != "c" {
 		t.Errorf("clamped-end snippet = %q, want %q", got, "c")
 	}
 }

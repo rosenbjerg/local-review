@@ -8,6 +8,7 @@ import (
 
 	"local-review/internal/export"
 	"local-review/internal/git"
+	"local-review/internal/review"
 	"local-review/internal/store"
 )
 
@@ -46,20 +47,20 @@ func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) erro
 	if _, err := repo.MergeBase(base, req.Head); err != nil {
 		return mergeBaseError(err, base, req.Head)
 	}
-	review, err := s.Store.CreateOrGetReview(repo.Path, base, req.Head, sha)
+	rev, err := s.Store.CreateOrGetReview(repo.Path, base, req.Head, sha)
 	if err != nil {
 		return err
 	}
-	s.annotateReview(review)
-	return writeJSON(w, review)
+	s.annotateReview(rev)
+	return writeJSON(w, rev)
 }
 
 func (s *Server) handleGetReview(w http.ResponseWriter, r *http.Request) error {
-	review, err := s.loadAnnotatedReview(r)
+	rev, err := s.loadAnnotatedReview(r)
 	if err != nil {
 		return err
 	}
-	return writeJSON(w, review)
+	return writeJSON(w, rev)
 }
 
 // loadAnnotatedReview is the read every review-shaped endpoint starts from.
@@ -68,12 +69,12 @@ func (s *Server) loadAnnotatedReview(r *http.Request) (*store.Review, error) {
 	if err != nil {
 		return nil, err
 	}
-	review, err := s.Store.GetReview(id)
+	rev, err := s.Store.GetReview(id)
 	if err != nil {
 		return nil, storeErr(err)
 	}
-	s.annotateReview(review)
-	return review, nil
+	s.annotateReview(rev)
+	return rev, nil
 }
 
 func (s *Server) handleResetReview(w http.ResponseWriter, r *http.Request) error {
@@ -107,15 +108,15 @@ func safeBaseURL(host string) string {
 
 // renderExport is the one render (and status transition) behind both export shapes.
 func (s *Server) renderExport(r *http.Request) (md, filename string, err error) {
-	review, err := s.loadAnnotatedReview(r)
+	rev, err := s.loadAnnotatedReview(r)
 	if err != nil {
 		return "", "", err
 	}
 	instructions := r.URL.Query().Get("instructions") == "true"
-	md = export.Render(review, instructions, safeBaseURL(r.Host))
-	_ = s.Store.SetStatus(review.ID, store.StatusExported)
+	md = export.Render(rev, instructions, safeBaseURL(r.Host))
+	_ = s.Store.SetStatus(rev.ID, store.StatusExported)
 
-	return md, "code-review-" + sanitize(review.HeadRef) + "-" + export.ShortSHA(review.HeadSHA) + ".md", nil
+	return md, "code-review-" + sanitize(rev.HeadRef) + "-" + export.ShortSHA(rev.HeadSHA) + ".md", nil
 }
 
 func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) error {
@@ -178,11 +179,10 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) error
 		return err
 	}
 	// Fingerprint the on-screen side (dropped later if the content changes), warmed as one batch.
-	var cache *contentCache
+	var hashes map[string]string
 	if req.Reviewed {
 		if repoPath, headRef, err := s.Store.ReviewRepoHead(id); err == nil {
-			cache = newContentCache(git.New(repoPath), headRef)
-			cache.warm(req.FilePaths, side)
+			hashes = review.FingerprintFiles(git.New(repoPath), headRef, req.FilePaths, side)
 		}
 	}
 	marks := make([]store.FileReviewMark, 0, len(req.FilePaths))
@@ -190,11 +190,7 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) error
 		if p == "" {
 			continue
 		}
-		hash := ""
-		if req.Reviewed && cache != nil {
-			hash = hashSide(cache, p, side)
-		}
-		marks = append(marks, store.FileReviewMark{Path: p, ContentHash: hash})
+		marks = append(marks, store.FileReviewMark{Path: p, ContentHash: hashes[p]})
 	}
 	if len(marks) == 0 {
 		return badRequest(errString("filePaths is required"))

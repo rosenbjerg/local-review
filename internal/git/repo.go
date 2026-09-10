@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -19,6 +20,13 @@ type Repo struct {
 }
 
 func New(path string) *Repo { return &Repo{Path: path} }
+
+// IsRepo reports whether path holds a git repository. Stat follows symlinks, so a caller
+// confining repos to a root must resolve them itself before trusting this.
+func IsRepo(path string) bool {
+	_, err := os.Stat(filepath.Join(path, ".git"))
+	return err == nil
+}
 
 func (r *Repo) run(args ...string) (string, error) {
 	return r.runEnv(nil, args...)

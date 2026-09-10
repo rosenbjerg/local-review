@@ -24,11 +24,6 @@ func New(root string, st *store.Store) *Server {
 	return &Server{Root: root, Store: st, hub: h, watch: newWatchRegistry(h)}
 }
 
-func isGitRepo(path string) bool {
-	_, err := os.Stat(filepath.Join(path, ".git"))
-	return err == nil
-}
-
 // repoInfo is one repo-picker entry. LastActivity is a local YYYY-MM-DD date, not a
 // timestamp, so the order can't reshuffle through the working day; empty if undatable.
 type repoInfo struct {
@@ -61,7 +56,7 @@ func (s *Server) listRepos() ([]repoInfo, error) {
 			continue
 		}
 		path := filepath.Join(s.Root, e.Name())
-		if isGitRepo(path) {
+		if git.IsRepo(path) {
 			repos = append(repos, repoInfo{Name: e.Name(), LastActivity: repoActivityDate(path)})
 		}
 	}
@@ -85,10 +80,10 @@ func (s *Server) repoFor(name string) (*git.Repo, error) {
 		return nil, errString("invalid repo name")
 	}
 	abs := filepath.Join(s.Root, name)
-	if !isGitRepo(abs) {
+	if !git.IsRepo(abs) {
 		return nil, errString("not a git repository: " + name)
 	}
-	// Resolve both sides' symlinks: isGitRepo's Stat follows links, so a symlink in
+	// Resolve both sides' symlinks: git.IsRepo's Stat follows links, so a symlink in
 	// the root could otherwise point the tool at a repo outside it.
 	root, rootErr := filepath.EvalSymlinks(s.Root)
 	resolved, resErr := filepath.EvalSymlinks(abs)

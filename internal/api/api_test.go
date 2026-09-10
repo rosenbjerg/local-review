@@ -107,7 +107,7 @@ func TestRepoForTraversal(t *testing.T) {
 }
 
 // A symlink placed in the root that resolves to a git repo *outside* the root must
-// be rejected — isGitRepo's os.Stat follows the symlink, so only the resolved-path
+// be rejected — git.IsRepo's os.Stat follows the symlink, so only the resolved-path
 // confinement stops it.
 func TestRepoForSymlinkEscape(t *testing.T) {
 	r := newRepo(t)

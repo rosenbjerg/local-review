@@ -55,6 +55,16 @@ func validBody(body string) error {
 	return nil
 }
 
+// sideOf parses a side off a request field; every endpoint that takes one goes through
+// here, so the check can't be present on one path and missing on another.
+func sideOf(v string) (store.Side, error) {
+	side, ok := store.ParseSide(v)
+	if !ok {
+		return side, badRequest(errString(`invalid side: want "head", "worktree" or "index"`))
+	}
+	return side, nil
+}
+
 func validCommentType(t store.CommentType) error {
 	switch t {
 	case store.CommentBug, store.CommentSuggestion, store.CommentQuestion, store.CommentNit:

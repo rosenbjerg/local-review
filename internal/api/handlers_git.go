@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"local-review/internal/git"
+	"local-review/internal/review"
 	"local-review/internal/store"
 )
 
@@ -157,7 +158,7 @@ func (s *Server) readFileContent(r *http.Request) (content, path string, fromWor
 			return "", "", false, err
 		}
 	}
-	content, err = readSide(repo, ref, path, side)
+	content, err = review.ReadSide(repo, ref, path, side)
 	fromWorktree = side == store.SideWorktree
 	if side.IsHead() && errors.Is(err, git.ErrNotFound) {
 		// Only absence falls back: a real git failure answered with the on-disk copy would
@@ -169,7 +170,7 @@ func (s *Server) readFileContent(r *http.Request) (content, path string, fromWor
 	if err != nil {
 		// A path can outlive its file (a comment anchored before a rename or delete), so absence is a 404, not a 500.
 		if errors.Is(err, git.ErrNotFound) {
-			return "", "", false, notFoundf("%s does not exist in %s", path, sideLabel(side, ref))
+			return "", "", false, notFoundf("%s does not exist in %s", path, review.SideLabel(side, ref))
 		}
 		return "", "", false, err
 	}

@@ -27,12 +27,17 @@ api/handlers_reviews.go create/resume, read, reset, summary, reviewed marks, exp
 api/handlers_comments.go comments + replies
 api/errors.go           statusError + the handle() adapter — the one place a failure becomes a status
 api/respond.go          decodeBody, pathID, writeJSON, noContent, notify
-api/validate.go         validRef/optionalRef, validPath, validBody, validCommentType, validStartLine
-api/side.go             readSide (the one side → git-read map), sideOf (the one wire validator)
-api/annotate.go         live anchor status (diff tracking / snippet match), snippet capture, content + diff caches
-api/reviewed.go         re-hashes reviewed files, drops marks whose content changed
+api/validate.go         validRef/optionalRef, validPath, validBody, validCommentType, validStartLine,
+                        sideOf (the one wire validator)
+api/annotate.go         reads the stored marks and hands them to review.Annotate — the whole of the
+                        API layer's involvement in staleness
 api/origin.go           WithSameOrigin browser-write guard        api/logging.go  WithErrorLogging (Flush passes through for SSE)
 api/events.go           in-memory SSE hub                          api/watch.go    per-review filesystem poller
+review/review.go        Annotate / AnnotateComment — the derived pass, plus the unreadable-repo probe
+review/anchor.go        diff tracking: commit_sha → head through the hunks, rename following, diff caches
+review/snippet.go       the text-matching fallback, and CaptureSnippet
+review/content.go       ReadSide / SideLabel (the one side → git-read map) + the per-read content cache
+review/reviewed.go      FingerprintFiles + the reviewed-mark re-hash
 export/export.go        review → canonical markdown
 ```
 
@@ -102,21 +107,25 @@ value must not read as "absent"; neither header present means no browser — cur
 
 ## Review model
 
+`internal/review` owns everything derived: it takes a `store.Review` plus its stored reviewed
+marks and fills in what the repository currently says. It reads no database — `api/annotate.go`
+fetches the marks and passes them in — so the derivation can be tested, and reused, without HTTP.
+
 - Reviews resume by `(repo_path, base_ref, head_ref)` regardless of status, so exporting never
   orphans one.
-- **The server captures the snippet** (`captureSnippet` in `annotate.go`, reading via `readSide`):
+- **The server captures the snippet** (`review.CaptureSnippet`, reading via `review.ReadSide`):
   clients send only the line range, so the stored text always matches the file. Line-0 file comments
   keep an empty snippet. Each comment records the `commit_sha` it was anchored at (best-effort).
   A `PATCH` is partial (every field a pointer): an omitted one keeps its stored value, and **sending
   a range is what asks for a re-anchor**. The browser edits bodies without one, so a body edit can't
   re-anchor a moved comment to whatever now occupies its old lines and erase its staleness.
-- `Side` rules (`side_test.go`): `api/side.go`'s `readSide` is the **only** side → git-read map, so
-  capture and the staleness check can't read different sides; `sideOf` is the **only** wire
+- `Side` rules (`side_test.go`): `review.ReadSide` is the **only** side → git-read map, so capture
+  and the staleness check can't read different sides; `api`'s `sideOf` is the **only** wire
   validator, so no endpoint can skip it; test `Side.IsHead()`, never `== SideHead` — the zero value
   is `""`, and an equality test demotes a Go-built `Comment` to snippet matching.
 - **Staleness is derived on every read** (`GetReview`, `CreateReview`, `Export`, add/update-comment):
   `anchorStatus` ∈ `current` | `moved` | `outdated`, plus `currentStartLine`/`currentEndLine`/
-  `currentFilePath`, all `omitempty` and computed only in the API layer. Head-anchored comments with a
+  `currentFilePath`, all `omitempty` and computed only in `internal/review`. Head-anchored comments with a
   `commit_sha` use `annotateByDiff`: diff that commit against head and map the range through the
   hunks (`git.MapOldLine`) — contiguous survival is `current`/`moved`, any deleted line is
   `outdated`; renames relocate to the new path. Worktree/index comments, no-sha comments and
@@ -136,9 +145,9 @@ value must not read as "absent"; neither header present means no browser — cur
   A cold or failed batch still reads per file, so correctness never rests on the batch parser.
   `annotate_test.go` asserts the scoped and whole-tree branches agree on renames, deletions, shifts
   and interior edits.
-- **An unreadable repo is not a stale review.** `annotationBlocker` probes `isGitRepo` and whether
-  `head_ref` resolves; on failure it sets `review.annotationError` and annotates nothing, so the
-  stored state stands instead of reading as universally stale at HTTP 200.
+- **An unreadable repo is not a stale review.** `review.blocker` probes `git.IsRepo` and whether
+  `head_ref` resolves; on failure it sets `annotationError` and annotates nothing, so the stored
+  state stands instead of reading as universally stale at HTTP 200.
 - `reviewed_files` stores a SHA-256 fingerprint of the new-side content plus the `Side`. Every read
   re-hashes and drops marks whose content changed. An unreadable side at mark time (a reviewed
   deletion) stores `absentContentHash`, which holds only while the file stays unreadable; an empty

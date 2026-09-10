@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"local-review/internal/git"
+	"local-review/internal/review"
 	"local-review/internal/store"
 )
 
@@ -64,7 +65,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) error 
 	// Captured server-side so the stored text always matches the file; line-0 file comments stay empty.
 	snippet := ""
 	if req.StartLine > 0 {
-		snippet = captureSnippet(repo, headRef, req.FilePath, req.StartLine, req.EndLine, side)
+		snippet = review.CaptureSnippet(repo, headRef, req.FilePath, req.StartLine, req.EndLine, side)
 	}
 	c, err := s.Store.AddComment(store.Comment{
 		ReviewID:  id,
@@ -81,29 +82,17 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) error 
 	if err != nil {
 		return err
 	}
-	c = annotatedComment(repo, headRef, c)
+	c = review.AnnotateComment(repo, headRef, c)
 	s.notify(id)
 	return writeJSON(w, c)
 }
 
-// annotatedComment recomputes one comment's anchor for a handler's response, so a client that
-// swaps the returned comment into its list sees the same staleness a review read reports.
-// One comment, so a cache warm-up would cost more than it saves.
-func annotatedComment(repo *git.Repo, headRef string, c *store.Comment) *store.Comment {
-	if repo == nil {
-		return c
-	}
-	cs := []store.Comment{*c}
-	annotateComments(repo, headRef, cs, newContentCache(repo, headRef))
-	return &cs[0]
-}
-
 func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) error {
-	review, err := s.loadAnnotatedReview(r)
+	rev, err := s.loadAnnotatedReview(r)
 	if err != nil {
 		return err
 	}
-	comments := review.Comments
+	comments := rev.Comments
 	if author := r.URL.Query().Get("author"); author != "" {
 		filtered := make([]store.Comment, 0, len(comments))
 		for _, c := range comments {
@@ -177,7 +166,7 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) err
 	if reanchor {
 		snippet = ""
 		if startLine > 0 && repo != nil {
-			snippet = captureSnippet(repo, headRef, existing.FilePath, startLine, endLine, existing.Side)
+			snippet = review.CaptureSnippet(repo, headRef, existing.FilePath, startLine, endLine, existing.Side)
 			if sha, err := repo.ResolveSHA(headRef); err == nil {
 				commitSHA = sha
 			}
@@ -188,7 +177,7 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) err
 		return storeErr(err)
 	}
 	reviewID := c.ReviewID
-	c = annotatedComment(repo, headRef, c)
+	c = review.AnnotateComment(repo, headRef, c)
 	s.notify(reviewID)
 	return writeJSON(w, c)
 }
