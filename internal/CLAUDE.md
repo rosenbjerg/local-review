@@ -107,6 +107,10 @@ value must not read as "absent"; neither header present means no browser — cur
   plus every poller tick. `git.BatchObjects` reads many `<ref>:<path>` through one `cat-file
   --batch`, taking payloads by the header's byte count and correlating records by **position**
   (a found record reports the oid, not the spec); trees and oddities fall through to single reads.
+  A terminator is told by the header's trailing `missing`/`ambiguous`, never by its field count —
+  git echoes the spec back first, so a path with a space reads like a found record's three fields.
+  A header the parser still can't read fails the **whole** batch: `warm` records an unanswered spec
+  as genuinely absent, so a partial map would report live files as deleted.
   One `contentCache` keyed by `(side, path)`, warmed per side by `warmCache`, serves both staleness
   and reviewed-file hashing. Diff tracking is two-tier: path-scoped `git diff <sha> head -- <path>`,
   escalating to whole-tree find-renames only when the file reads as deleted (a pathspec reports a
@@ -144,7 +148,7 @@ One rendering (`renderExport`) served two ways: `POST …/export` returns JSON (
 filename beside the markdown) and `…/export.md` returns the markdown as the body (an agent needs
 no `jq`). Same status transition; errors stay JSON on both. `export_test.go` pins the equivalence.
 The `.md` shape carries the filename in `Content-Disposition`, so `sanitize` also drops `"` and `\`.
-`?instructions=1` appends agent reply instructions (a curl against `/api/comments/{id}/replies`
+`?instructions=true` appends agent reply instructions (a curl against `/api/comments/{id}/replies`
 using the request's `Host`). Resolved threads are excluded; a rename-moved comment files under its
 new path.
 
