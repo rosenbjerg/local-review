@@ -1701,8 +1701,13 @@ textarea:focus-visible {
 .thread-gutter {
   background: var(--bg);
 }
+/* font-feature-settings inherits, so .diff's --code-features reaches every thread and composer
+   nested in the table — and ss01-ss10 are face-private names: the list composed for Monaspace's
+   ligatures is Inter's circled and squared characters, drawn around every capital in a comment. The
+   features go back with the face. */
 .thread-cell {
   padding: 8px 12px 8px 24px;
+  font-feature-settings: normal;
 }
 /* A raised card, not a bordered box: the fill step and --elev-1 draw the shape. */
 .thread {
@@ -1843,9 +1848,12 @@ textarea:focus-visible {
 .markdown-body a {
   color: var(--accent);
 }
+/* The features travel with the face, here and on the block rule below: inline code only ever got
+   them by inheriting from .diff, so the same span ligated in a thread and not in the panel. */
 .md-body code,
 .markdown-body code {
   font-family: var(--font-mono);
+  font-feature-settings: var(--code-features);
   font-size: 0.9em;
   background: var(--bg);
   border: 1px solid var(--border);

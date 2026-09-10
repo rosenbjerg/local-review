@@ -303,6 +303,13 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   defined but easily misremembered, so the two are never mixed, and nothing on the code surfaces uses
   the latter. Ligatures break at element boundaries anyway, so a `=>` split by a word-diff range or a
   Shiki token renders unligated whatever the switch says.
+- **`--code-features` goes wherever `--font-mono` goes, and nowhere else.** `font-feature-settings`
+  inherits, and `ss01`–`ss10` are private to a face: the list composed for Monaspace's ligatures is,
+  in Inter, `ss05` circled and `ss06` squared characters. `.diff` sets the token on the table, so it
+  reached the inline threads and composer nested in it and drew a ring around every capital and digit
+  in a comment. `.thread-cell` resets it to `normal`, and the two `code` rules set it beside the face
+  rather than only on `pre code` — inline code used to ligate in a thread and not in the panel. Any
+  new rule that puts a face back inside a code surface has to put the features back too.
 - **`fonts.ts` subscribes to `theme.ts`** (`subscribeTheme`) — the one edge between the two stores.
   With no family override the code face is the theme's, so a theme switch changes which features
   apply. It repaints without `commit`: no `FontState` moves, so the React consumers stay put.
