@@ -38,7 +38,9 @@ gofmt-checks `git ls-files '*.go'`.
 ```
 main.go                 server: embeds web/dist, DB path, draft pruning, error logging → same-origin guard,
                         graceful shutdown, opens the browser
-internal/               Go backend — git service, SQLite store, HTTP API, markdown export (see internal/CLAUDE.md)
+internal/               Go backend, six packages (see internal/CLAUDE.md): git (shells out), store (SQLite),
+                        workspace (the root boundary), review (derived anchor + reviewed state), api (HTTP),
+                        export (markdown)
 web/                    React frontend, built with bun + Vite into web/dist (see web/CLAUDE.md)
 scripts/screenshot.ts   fixture repo → seeded review → headless capture of docs/screenshot.png
 scripts/fontfeatures.ts WOFF2 → GSUB/name → web/src/fontFeatures.ts; CI runs it with --check
@@ -59,6 +61,12 @@ scripts/fontfeatures.ts WOFF2 → GSUB/name → web/src/fontFeatures.ts; CI runs
 - **Comment staleness and reviewed marks are derived, never persisted.** Every review read
   recomputes `anchorStatus` and re-hashes reviewed files; the stored values are the original anchor.
 - **Markdown output comes only from `internal/export`.** The frontend renders it, never generates it.
+- **`internal/api` is transport only.** Deriving what a review currently points at belongs to
+  `internal/review`, confining the served root to `internal/workspace`; neither takes a request.
+  Handlers return `error` and `handle()` writes it — see `internal/CLAUDE.md`.
+- **A cross-language contract is pinned by a test that reads the Go source.** `web/src/types.test.ts`
+  parses `review.SideLabel` so the two halves can't word a side differently; moving that function
+  means updating the test's path.
 - **Authors are open-ended strings**: `reviewer` (browser), `agent` (API default), one
   `<focus>-review-agent` per review focus. Identity tests are reviewer vs not-reviewer, never a list
   of agent names.
