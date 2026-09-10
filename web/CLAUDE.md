@@ -102,8 +102,10 @@ src/
   the same population (`changedFiles`).
 - **Diff/source consistency.** Hunks (`/api/diff`) and source (`/api/file`) must describe the same
   side. Nothing writes `files` for a selection the user left (`reqSeq`), and `DiffView`'s
-  `contentKey` names repo + head + `side` — not the hunks, which a synthetic card lacks. Cards are
-  keyed by path and `LazyFile` never unmounts them. A no-op refetch keeps the source.
+  `contentKey` names repo + head + `side` **and the hunks** — on the worktree side the hunks are the
+  only part that moves when a file changes on disk, so dropping them would leave `source` set and the
+  fetch effect skipping it. Cards are keyed by path and `LazyFile` never unmounts them. A no-op
+  refetch keeps the source.
   `diffView.test.tsx`.
 - `/api/file` returns the side content came from; `DiffView` notes a `worktree` substitution on
   the card, and turns a 404 into a "No longer in `<side>`" note. `MediaView`'s `<img>` sides fall

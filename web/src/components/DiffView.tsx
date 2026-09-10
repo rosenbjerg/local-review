@@ -150,7 +150,8 @@ export const DiffView = memo(function DiffView({
     if (showFullSignal && showFullSignal.path === path) void switchMode("full");
   }, [showFullSignal, path]);
 
-  // Names the side being read (repo/head/side), not the hunks: a synthetic unchanged card has none.
+  // The hunks are in here as the content-change signal: on the worktree side nothing else in the key
+  // moves when the file changes on disk, and a stale key leaves `source` set for the fetch effect to skip.
   const contentKey = useMemo(
     () =>
       `${repo} ${headRef} ${side} ${file.status} ${file.newPath} ${JSON.stringify(file.hunks)}`,
