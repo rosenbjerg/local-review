@@ -6,9 +6,20 @@ notes (commands, cross-cutting rules, gotchas) are in the repo's `CLAUDE.md`.
 ## Layout
 
 ```
-git/git.go              branches (ordered), merge-base, recent commits, diff parser (committed / working-tree /
-                        index), file content (ref / worktree / index), BatchObjects, worktree fingerprint
-store/store.go          SQLite (WAL): reviews, comments, replies, reviewed_files; migrate()
+git/repo.go             Repo + the one git invocation wrapper (timeout, no credential prompt, runEnv)
+git/branches.go         ListBranches, MainBranch, and the picker order (sortBranches/branchGroup/branchRank)
+git/refs.go             MergeBase (ErrNoMergeBase), ResolveSHA, ParentSHA, EmptyTreeSHA
+git/content.go          file content per side (ref / index / worktree), BatchObjects, ListFiles, ErrNotFound
+git/commits.go          RecentCommits
+git/diff.go             Diff / DiffFile / DiffWorktree / DiffStaged + the diff parser
+git/linemap.go          MapOldLine, HunksOldExtent — an old-side line through the hunks
+git/fingerprint.go      WorktreeFingerprint (content-free change signal for the poller)
+store/store.go          Store, Open (WAL, foreign_keys, single connection), time helpers
+store/schema.go         migrate() + ensureColumn
+store/reviews.go        Review, reviewCols/scanReview, review + draft-pruning queries
+store/comments.go       Comment, commentCols/scanComment, comment queries
+store/replies.go        Reply, replyCols/scanReply, reply queries
+store/reviewed.go       ReviewedFile, FileReviewMark, reviewed_files queries
 store/side.go           Side ↔ the two boolean columns — the only place that mapping exists
 api/api.go              Server, repoFor (root-confined, symlink/traversal-safe), listRepos, route table
 api/handlers_git.go     read-only: repos, branches, diff, files, commits, file, blob (+ mergeBase/resolveBase)
