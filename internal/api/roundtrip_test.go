@@ -225,6 +225,23 @@ func TestReplyRejectsEmptyBody(t *testing.T) {
 	}
 }
 
+// A comment POSTed under an unknown review id is the review being absent, not a server
+// fault: the repo lookup used to swallow its error and fall through to the insert, which
+// surfaced as a 500 carrying SQLite's foreign-key text.
+func TestAddCommentUnknownReviewIs404(t *testing.T) {
+	r := newRepo(t)
+	r.write("f.txt", "l1\n")
+	r.commitAll("c1")
+	s := r.server()
+
+	rec := postJSON(t, s.handleAddComment, 9999, map[string]any{
+		"filePath": "f.txt", "startLine": 1, "endLine": 1, "type": "bug", "body": "x",
+	})
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404 (%s)", rec.Code, rec.Body.String())
+	}
+}
+
 // Editing a comment's body must not re-anchor it. The browser resends the stored
 // startLine/endLine when saving an edit, so re-capturing unconditionally would rewrite
 // a moved comment's snippet to whatever now sits at its old lines and bump commit_sha

@@ -60,12 +60,13 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		// An omitted author is the coding agent; the browser sends "reviewer".
 		req.Author = "agent"
 	}
-	var repo *git.Repo
-	var headRef, sha string
-	if repoPath, hr, err := s.Store.ReviewRepoHead(id); err == nil {
-		repo, headRef = git.New(repoPath), hr
-		sha, _ = repo.ResolveSHA(hr)
+	repoPath, headRef, err := s.Store.ReviewRepoHead(id)
+	if err != nil {
+		storeError(w, err)
+		return
 	}
+	repo := git.New(repoPath)
+	sha, _ := repo.ResolveSHA(headRef)
 	// Captured server-side so the stored text always matches the file; line-0 file comments stay empty.
 	snippet := ""
 	if req.StartLine > 0 {
