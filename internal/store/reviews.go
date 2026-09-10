@@ -117,26 +117,10 @@ func (s *Store) ReviewRepoHead(id int64) (repoPath, headRef string, err error) {
 	return
 }
 
-func (s *Store) ListReviews() ([]Review, error) {
-	rows, err := s.db.Query(`SELECT ` + reviewCols + ` FROM reviews ORDER BY updated_at DESC`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Review
-	for rows.Next() {
-		r, err := scanReview(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, r)
-	}
-	return out, rows.Err()
-}
-
-func (s *Store) DeleteReview(id int64) error {
-	_, err := s.db.Exec(`DELETE FROM reviews WHERE id=?`, id)
-	return err
+func (s *Store) CountReviews() (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM reviews`).Scan(&n)
+	return n, err
 }
 
 // ResetReview clears comments, marks and summary but keeps the row, so reopening the branch resumes it empty.

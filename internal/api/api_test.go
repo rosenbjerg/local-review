@@ -625,12 +625,12 @@ func TestNoCommonHistoryIsAReadable400(t *testing.T) {
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status = %d, want 400 (%s)", rec.Code, rec.Body.String())
 		}
-		reviews, err := s.Store.ListReviews()
+		n, err := s.Store.CountReviews()
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(reviews) != 0 {
-			t.Errorf("a review row was created for an uncomparable selection: %+v", reviews)
+		if n != 0 {
+			t.Errorf("%d review row(s) created for an uncomparable selection", n)
 		}
 	})
 

@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 )
 
 func openTemp(t *testing.T) *Store {
@@ -43,9 +44,9 @@ func TestCreateOrGetReviewConcurrentSingleRow(t *testing.T) {
 	}
 }
 
-// Deleting a review must cascade to its comments — verifies foreign_keys is
+// Pruning a review must cascade to its comments — verifies foreign_keys is
 // enforced on whatever connection the delete runs on.
-func TestDeleteReviewCascadesComments(t *testing.T) {
+func TestPruneDraftsCascadesComments(t *testing.T) {
 	s := openTemp(t)
 
 	rev, err := s.CreateOrGetReview("/repo", "main", "feature", "abc123")
@@ -55,8 +56,12 @@ func TestDeleteReviewCascadesComments(t *testing.T) {
 	if _, err := s.AddComment(Comment{ReviewID: rev.ID, FilePath: "a.go", StartLine: 1, EndLine: 1, Type: "nit", Body: "x"}); err != nil {
 		t.Fatalf("AddComment: %v", err)
 	}
-	if err := s.DeleteReview(rev.ID); err != nil {
-		t.Fatalf("DeleteReview: %v", err)
+	// Backdate the row so the cutoff catches it; the cascade, not the cutoff, is the point.
+	if _, err := s.db.Exec(`UPDATE reviews SET updated_at='2000-01-01T00:00:00Z' WHERE id=?`, rev.ID); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+	if n, err := s.PruneDrafts(24 * time.Hour); err != nil || n != 1 {
+		t.Fatalf("PruneDrafts = %d, %v; want 1, nil", n, err)
 	}
 
 	var count int
