@@ -4,7 +4,6 @@ package api
 import (
 	"net/http"
 
-	"local-review/internal/git"
 	"local-review/internal/review"
 	"local-review/internal/store"
 )
@@ -56,11 +55,10 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) error 
 		// An omitted author is the coding agent; the browser sends "reviewer".
 		req.Author = "agent"
 	}
-	repoPath, headRef, err := s.Store.ReviewRepoHead(id)
+	repo, headRef, err := s.reviewRepo(id)
 	if err != nil {
-		return storeErr(err)
+		return err
 	}
-	repo := git.New(repoPath)
 	sha, _ := repo.ResolveSHA(headRef)
 	// Captured server-side so the stored text always matches the file; line-0 file comments stay empty.
 	snippet := ""
@@ -156,10 +154,10 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) err
 	if endLine < startLine {
 		endLine = startLine
 	}
-	var repo *git.Repo
-	var headRef string
-	if repoPath, hr, err := s.Store.ReviewRepoHead(existing.ReviewID); err == nil {
-		repo, headRef = git.New(repoPath), hr
+	// Best-effort: an unreadable review still gets its body edit, just without a re-anchor.
+	repo, headRef, err := s.reviewRepo(existing.ReviewID)
+	if err != nil {
+		repo, headRef = nil, ""
 	}
 	snippet := existing.Snippet
 	commitSHA := existing.CommitSHA

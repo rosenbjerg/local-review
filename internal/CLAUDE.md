@@ -21,7 +21,7 @@ store/comments.go       Comment, commentCols/scanComment, comment queries
 store/replies.go        Reply, replyCols/scanReply, reply queries
 store/reviewed.go       ReviewedFile, FileReviewMark, reviewed_files queries
 store/side.go           Side ↔ the two boolean columns — the only place that mapping exists
-api/api.go              Server, repoParam, route table
+api/api.go              Server, repoParam / reviewRepo (the two ways a request names a repo), route table
 workspace/workspace.go  the root boundary: List (repo picker) and Open (root-confined, symlink/traversal-safe)
 api/handlers_git.go     read-only: repos, branches, diff, files, commits, file, blob (+ mergeBase/resolveBase)
 api/handlers_reviews.go create/resume, read, reset, summary, reviewed marks, export

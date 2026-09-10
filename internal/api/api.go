@@ -31,6 +31,17 @@ func (s *Server) repoParam(r *http.Request) (*git.Repo, error) {
 	return repo, nil
 }
 
+// reviewRepo opens the repository a review's anchors are read against. Three mutation
+// paths and the watcher need it, and each used to open it its own way — including two
+// that quietly treated an unreadable review as "no repo".
+func (s *Server) reviewRepo(reviewID int64) (*git.Repo, string, error) {
+	repoPath, headRef, err := s.Store.ReviewRepoHead(reviewID)
+	if err != nil {
+		return nil, "", storeErr(err)
+	}
+	return git.New(repoPath), headRef, nil
+}
+
 // Routes wires every handler through handle(), so a failure is written in exactly one place.
 func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/repos", handle(s.handleRepos))

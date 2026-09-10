@@ -82,8 +82,8 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) error {
 	defer s.hub.unsubscribe(id, sub)
 
 	// Poll for out-of-band edits and commits while the stream is open; ref-counted across tabs, best-effort.
-	if repoPath, _, err := s.Store.ReviewRepoHead(id); err == nil && repoPath != "" {
-		s.watch.start(id, repoPath)
+	if repo, _, err := s.reviewRepo(id); err == nil && repo.Path != "" {
+		s.watch.start(id, repo.Path)
 		defer s.watch.stop(id)
 	}
 

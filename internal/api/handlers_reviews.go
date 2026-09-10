@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"local-review/internal/export"
-	"local-review/internal/git"
 	"local-review/internal/review"
 	"local-review/internal/store"
 )
@@ -181,8 +180,8 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) error
 	// Fingerprint the on-screen side (dropped later if the content changes), warmed as one batch.
 	var hashes map[string]string
 	if req.Reviewed {
-		if repoPath, headRef, err := s.Store.ReviewRepoHead(id); err == nil {
-			hashes = review.FingerprintFiles(git.New(repoPath), headRef, req.FilePaths, side)
+		if repo, headRef, err := s.reviewRepo(id); err == nil {
+			hashes = review.FingerprintFiles(repo, headRef, req.FilePaths, side)
 		}
 	}
 	marks := make([]store.FileReviewMark, 0, len(req.FilePaths))
