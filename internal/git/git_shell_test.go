@@ -247,8 +247,10 @@ func TestBatchObjects(t *testing.T) {
 	for i, p := range paths {
 		specs[i] = "HEAD:" + p
 	}
-	// A missing path in the middle must not desynchronize the ones after it.
-	specs = append(specs[:2], append([]string{"HEAD:absent.txt"}, specs[2:]...)...)
+	// A missing path in the middle must not desynchronize the ones after it. git echoes the
+	// spec back before "missing", so one with spaces reads like a found record's 3-field header.
+	absent := []string{"HEAD:absent.txt", "HEAD:gone file.txt"}
+	specs = append(specs[:2], append(append([]string{}, absent...), specs[2:]...)...)
 
 	got, err := r.BatchObjects(specs)
 	if err != nil {
@@ -264,8 +266,10 @@ func TestBatchObjects(t *testing.T) {
 			t.Errorf("BatchObjects[%q] = %q, want %q", p, got["HEAD:"+p], want)
 		}
 	}
-	if _, ok := got["HEAD:absent.txt"]; ok {
-		t.Error("a missing path must be absent from the result, not present as empty")
+	for _, spec := range absent {
+		if _, ok := got[spec]; ok {
+			t.Errorf("%s: a missing path must be absent from the result, not present as empty", spec)
+		}
 	}
 	// An empty file is present-and-empty, which is a different answer from missing.
 	if v, ok := got["HEAD:empty.txt"]; !ok || v != "" {

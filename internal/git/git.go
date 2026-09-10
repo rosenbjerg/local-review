@@ -323,30 +323,39 @@ func (r *Repo) BatchObjects(specs []string) (map[string]string, error) {
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("git cat-file --batch: %w: %s", err, errb.String())
 	}
-	parseBatch(buf.Bytes(), usable, out)
+	if err := parseBatch(buf.Bytes(), usable, out); err != nil {
+		return nil, fmt.Errorf("git cat-file --batch: %w", err)
+	}
 	return out, nil
 }
 
 // parseBatch correlates cat-file --batch records to specs by position (a found record
 // reports the oid, not the spec) and takes each payload by its declared size, never by delimiter.
-func parseBatch(data []byte, specs []string, out map[string]string) {
+// A record it cannot read fails the whole batch: callers read an unanswered spec as genuinely
+// absent, so handing back a partial map would report live files as deleted.
+func parseBatch(data []byte, specs []string, out map[string]string) error {
 	pos, i := 0, 0
 	for pos < len(data) && i < len(specs) {
 		nl := bytes.IndexByte(data[pos:], '\n')
 		if nl < 0 {
-			return
+			return fmt.Errorf("truncated record header for %q", specs[i])
 		}
 		header := string(data[pos : pos+nl])
 		pos += nl + 1
 
 		fields := strings.Fields(header)
-		if len(fields) != 3 {
-			i++ // "missing"/"ambiguous": no payload follows, so just advance
+		// A terminator echoes the spec back before the reason, so a path with spaces makes the
+		// field count meaningless; only the trailing word tells a terminator from a found record.
+		if n := len(fields); n >= 2 && (fields[n-1] == "missing" || fields[n-1] == "ambiguous") {
+			i++ // no payload follows, so just advance
 			continue
+		}
+		if len(fields) != 3 {
+			return fmt.Errorf("unparseable record header %q", header)
 		}
 		size, err := strconv.Atoi(fields[2])
 		if err != nil || size < 0 || pos+size > len(data) {
-			return // truncated or unparseable: keep what we have rather than guess
+			return fmt.Errorf("unparseable record header %q", header)
 		}
 		// Blobs only: a raw tree is binary where `git show <ref>:<dir>` prints a listing, so let it fall through.
 		if fields[1] == "blob" {
@@ -355,6 +364,7 @@ func parseBatch(data []byte, specs []string, out map[string]string) {
 		pos += size + 1 // payload plus git's trailing newline
 		i++
 	}
+	return nil
 }
 
 // ListFiles returns the tracked file paths at ref; quotePath=false keeps non-ASCII paths verbatim, like diffArgs.
