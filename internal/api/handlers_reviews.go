@@ -64,15 +64,6 @@ func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, review)
 }
 
-func (s *Server) handleListReviews(w http.ResponseWriter, r *http.Request) {
-	reviews, err := s.Store.ListReviews()
-	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, map[string]any{"reviews": reviews})
-}
-
 func (s *Server) handleGetReview(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
@@ -85,18 +76,6 @@ func (s *Server) handleGetReview(w http.ResponseWriter, r *http.Request) {
 	}
 	s.annotateReview(review)
 	writeJSON(w, review)
-}
-
-func (s *Server) handleDeleteReview(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
-	}
-	if err := s.Store.DeleteReview(id); err != nil {
-		httpError(w, http.StatusInternalServerError, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleResetReview(w http.ResponseWriter, r *http.Request) {

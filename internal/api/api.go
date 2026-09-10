@@ -121,10 +121,8 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/blob", s.handleBlob)
 
 	mux.HandleFunc("POST /api/reviews", s.handleCreateReview)
-	mux.HandleFunc("GET /api/reviews", s.handleListReviews)
 	mux.HandleFunc("GET /api/reviews/{id}", s.handleGetReview)
 	mux.HandleFunc("GET /api/reviews/{id}/events", s.handleEvents)
-	mux.HandleFunc("DELETE /api/reviews/{id}", s.handleDeleteReview)
 	mux.HandleFunc("POST /api/reviews/{id}/export", s.handleExport)
 	mux.HandleFunc("POST /api/reviews/{id}/export.md", s.handleExportMarkdown)
 	mux.HandleFunc("POST /api/reviews/{id}/reset", s.handleResetReview)

@@ -12,7 +12,7 @@ store/store.go          SQLite (WAL): reviews, comments, replies, reviewed_files
 store/side.go           Side ↔ the two boolean columns — the only place that mapping exists
 api/api.go              Server, repoFor (root-confined, symlink/traversal-safe), listRepos, route table
 api/handlers_git.go     read-only: repos, branches, diff, files, commits, file, blob (+ mergeBase/resolveBase)
-api/handlers_reviews.go create/resume, read, reset, delete, summary, reviewed marks, export
+api/handlers_reviews.go create/resume, read, reset, summary, reviewed marks, export
 api/handlers_comments.go comments + replies
 api/respond.go          decodeBody, pathID, writeJSON, httpError, storeError, notify
 api/validate.go         validRef, validPath, validBody, validCommentType
