@@ -4,12 +4,16 @@ import {
   codeLigaturesOn,
   firstFamilyOf,
   isFamilyAvailable,
+  ligatureSetsFor,
+  ligatureSetsOffOf,
+  monoFace,
   nearestFamily,
   normalizeFamily,
   offsetOf,
   resetFonts,
   saveFontsAsDefault,
   setCodeLigatures,
+  setLigatureSet,
   setFontFamily,
   setFontOffset,
   useFonts,
@@ -250,6 +254,43 @@ function OffsetField({
   );
 }
 
+// The groups a face divides its ligatures into, which only a face whose feature table we hold can
+// answer — see fontFeatures.ts. Shown under the switch and only while it is on: they are a
+// refinement of it, not a second way to reach the same off. A face that keeps every ligature in one
+// `calt` gets the sentence saying so instead, or the row would just look broken on half the themes.
+function LigatureGroups({ state }: { state: FontState }) {
+  // The theme brings the face when nothing overrides it, so this re-reads on a theme change too.
+  useTheme();
+  const face = monoFace();
+  const sets = ligatureSetsFor(face);
+  const off = ligatureSetsOffOf(state);
+  if (sets.length === 0) {
+    return (
+      <p className="settings-note">
+        {firstFamilyOf(face) || face} keeps every ligature in one feature, so they can only be
+        switched together. Monaspace names its groups and can be picked apart.
+      </p>
+    );
+  }
+  return (
+    <div className="settings-row font-row">
+      <span className="settings-label">Ligature groups</span>
+      <div className="ligature-sets">
+        {sets.map(({ tag, name }) => (
+          <label key={tag} className="ligature-set">
+            <input
+              type="checkbox"
+              checked={!off.includes(tag)}
+              onChange={(e) => setLigatureSet(tag, e.target.checked)}
+            />
+            {name}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // Reads and writes the font store directly, like ThemePicker: the fields hold this repo's own picks,
 // and the placeholder names what an empty one falls back to — the default across repos, or the face
 // the current theme brings.
@@ -295,6 +336,7 @@ export function FontPicker() {
           onChange={(e) => setCodeLigatures(e.target.checked)}
         />
       </div>
+      {codeLigaturesOn(state) && <LigatureGroups state={state} />}
       <p className="settings-note">
         Inter, Monaspace Neon and JetBrains Mono ship with local-review; the rest of each list is what
         this machine turned out to have. Any other installed face can be typed in.

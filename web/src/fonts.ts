@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 
+import { FACE_FEATURES } from "./fontFeatures";
 import type { FontPrefs } from "./storage";
 import { getTheme, subscribeTheme, themeOf } from "./theme";
 import {
@@ -153,22 +154,47 @@ const FAMILY_TOKENS: Record<FontFamilyKey, { name: string; fallback: string }> =
   sansFamily: { name: "--font-sans", fallback: "--sans-fallback" },
 };
 
-// Monaspace ships its ligatures as opt-in stylistic sets, so without these it shows eight where
-// JetBrains Mono shows its whole set — the same code rendering differently per theme. ss06 (joining
-// forms for runs longer than a fixed ligature) is left out: the named sets cover what people mean.
-const MONASPACE_LIGATURE_SETS = ["ss01", "ss02", "ss03", "ss04", "ss05", "ss07", "ss08", "ss09"]
-  .concat("ss10")
-  .map((t) => `"${t}" 1`)
-  .join(", ");
+// Neon is the Monaspace this bundles and the family shares one feature layout, so its table names
+// the sets for Argon, Xenon and the rest too — none of which we hold a file for.
+const MONASPACE_TABLE = "Monaspace Neon";
+
+// ss06 is Markdown Strings: joining forms for runs longer than a fixed ligature, which is not what
+// anyone means by ligatures being on. Every other set is one.
+const NOT_A_LIGATURE_SET = new Set(["ss06"]);
+
+export interface LigatureSet {
+  tag: string;
+  name: string;
+}
+
+// The sets a face keeps its ligatures in, named as the font itself names them — see fontFeatures.ts,
+// which is read out of the bundled files. Empty for a face that keeps them all in `calt`, which is
+// JetBrains Mono, Fira Code and every other one: there they cannot be addressed a group at a time.
+export function ligatureSetsFor(face: string): LigatureSet[] {
+  if (!/^monaspace\b/i.test(face)) return [];
+  return (FACE_FEATURES[MONASPACE_TABLE]?.named ?? [])
+    .filter((f) => f.tag.startsWith("ss") && !NOT_A_LIGATURE_SET.has(f.tag))
+    // The font prefixes its own tag onto the name ("SS03: Arrows"), which a label shouldn't repeat.
+    .map(({ tag, name }) => ({ tag, name: name.replace(/^SS\d\d:\s*/, "") }));
+}
 
 const LIGATURES_OFF = ['"liga" 0', '"clig" 0', '"dlig" 0'];
 
-// `calt` is where JetBrains Mono, Fira Code and the rest keep their ligatures — but in Monaspace it
-// is texture healing, which a ligature switch has no business turning off.
-function featuresFor(face: string, ligatures: boolean): string {
-  const monaspace = /^monaspace\b/i.test(face);
-  if (ligatures) return monaspace ? MONASPACE_LIGATURE_SETS : "";
-  return (monaspace ? LIGATURES_OFF : [...LIGATURES_OFF, '"calt" 0']).join(", ");
+// Without its sets Monaspace shows eight ligatures where JetBrains Mono shows its whole set — the
+// same code rendering differently per theme. And `calt` is where JetBrains Mono, Fira Code and the
+// rest keep their ligatures, but in Monaspace it is texture healing, which a ligature switch has no
+// business turning off — one fact, so both branches ask the same question.
+function featuresFor(face: string, ligatures: boolean, off: readonly string[]): string {
+  const sets = ligatureSetsFor(face);
+  if (!ligatures) return (sets.length > 0 ? LIGATURES_OFF : [...LIGATURES_OFF, '"calt" 0']).join(", ");
+  if (sets.length === 0) return "";
+  const on = sets.filter((s) => !off.includes(s.tag));
+  const tags = on.map((s) => `"${s.tag}" 1`);
+  // `liga` is a ninth source of ligatures in its own right — its lookups are disjoint from every
+  // stylistic set's, so it would go on drawing an arrow after Arrows was unchecked. It is left alone
+  // while every group is on, so a switch nobody has touched renders exactly as it always has, and
+  // silenced the moment one goes off, which is what makes that checkbox mean anything.
+  return (on.length < sets.length ? [...LIGATURES_OFF, ...tags] : tags).join(", ");
 }
 
 const OFFSET_TOKENS: Record<FontOffsetKey, string> = {
@@ -192,8 +218,15 @@ export function codeLigaturesOn(state: FontState): boolean {
   return state.own.codeLigatures ?? state.inherited.codeLigatures ?? true;
 }
 
-// The face code is actually rendered in: an override when it holds up, else the theme's own.
-function monoFace(): string {
+// Absent means every group is on: a face that grows a set shows it, rather than staying dark until
+// someone opts in. Empty is unreachable — the store drops the key rather than saving one.
+export function ligatureSetsOffOf(state: FontState): readonly string[] {
+  return state.own.ligatureSetsOff ?? state.inherited.ligatureSetsOff ?? [];
+}
+
+// The face code is actually rendered in: an override when it holds up, else the theme's own. Exported
+// for the picker, which needs the same answer paint does — a second copy of this would drift.
+export function monoFace(): string {
   const picked = firstFamilyOf(normalizeFamily(own.monoFamily ?? inherited.monoFamily ?? ""));
   return picked === "" ? themeOf(getTheme()).mono : picked;
 }
@@ -215,7 +248,8 @@ function paint(): void {
     else style.setProperty(OFFSET_TOKENS[key], `${offset}px`);
   }
 
-  const features = featuresFor(monoFace(), codeLigaturesOn({ own, inherited }));
+  const prefs = { own, inherited };
+  const features = featuresFor(monoFace(), codeLigaturesOn(prefs), ligatureSetsOffOf(prefs));
   if (features === "") style.removeProperty("--code-features");
   else style.setProperty("--code-features", features);
 }
@@ -260,6 +294,20 @@ export function setFontOffset(key: FontOffsetKey, px: number): void {
 
 export function setCodeLigatures(on: boolean): void {
   own = { ...own, codeLigatures: on };
+  writeFontOverrides(repo, own);
+  if (repo === "") inherited = readFontDefaults();
+  commit();
+}
+
+// Stores the groups that are off rather than the ones that are on, and drops the key once none are:
+// an absent field inherits, which is the rule every other font pref follows.
+export function setLigatureSet(tag: string, on: boolean): void {
+  const current = ligatureSetsOffOf({ own, inherited });
+  const next = on ? current.filter((t) => t !== tag) : [...new Set([...current, tag])].sort();
+  const prefs: FontPrefs = { ...own };
+  if (next.length === 0) delete prefs.ligatureSetsOff;
+  else prefs.ligatureSetsOff = next;
+  own = prefs;
   writeFontOverrides(repo, own);
   if (repo === "") inherited = readFontDefaults();
   commit();

@@ -36,6 +36,11 @@ jobs:
         working-directory: web
       - run: bun run build
         working-directory: web
+      # web/src/fontFeatures.ts is read out of the bundled woff2 files. A font
+      # upgrade that renumbers a stylistic set would otherwise leave the app
+      # applying a tag under the wrong name.
+      - name: generated font features are current
+        run: bun scripts/fontfeatures.ts --check
 
       - uses: actions/setup-go@v5
         with:

@@ -21,6 +21,7 @@ go build -o local-review .
 
 ./local-review -root <folder> -no-open && bun run --cwd web dev   # hot reload on :5173, /api proxied to :7777
 bun scripts/screenshot.ts             # regenerate docs/screenshot.png (--no-build, --keep)
+bun scripts/fontfeatures.ts           # regenerate web/src/fontFeatures.ts from the bundled woff2 (--check)
 ```
 
 Checks: `go build ./...`, `go vet ./...`, `go test ./...`, `bun run --cwd web build`
@@ -40,6 +41,7 @@ main.go                 server: embeds web/dist, DB path, draft pruning, error l
 internal/               Go backend — git service, SQLite store, HTTP API, markdown export (see internal/CLAUDE.md)
 web/                    React frontend, built with bun + Vite into web/dist (see web/CLAUDE.md)
 scripts/screenshot.ts   fixture repo → seeded review → headless capture of docs/screenshot.png
+scripts/fontfeatures.ts WOFF2 → GSUB/name → web/src/fontFeatures.ts; CI runs it with --check
 ```
 
 ## Cross-cutting rules

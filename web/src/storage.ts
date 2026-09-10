@@ -158,11 +158,19 @@ export interface FontPrefs {
   monoOffset?: number;
   sansOffset?: number;
   codeLigatures?: boolean;
+  // Ligature groups explicitly switched off, by OpenType tag. Absent means every group is on, so a
+  // face that grows a new set shows it rather than staying dark until someone opts in.
+  ligatureSetsOff?: string[];
 }
 
 const FAMILY_KEYS = ["monoFamily", "sansFamily"] as const;
 const OFFSET_KEYS = ["monoOffset", "sansOffset"] as const;
 const FLAG_KEYS = ["codeLigatures"] as const;
+
+// A tag is only ever applied to a face whose own table names it, so this stays a plain list: picks
+// made under Monaspace sit harmlessly in storage while a theme brings another face, and come back.
+const MAX_LIGATURE_SETS = 32;
+const TAG = /^(ss|cv)\d\d$/;
 
 // Sizes are an offset from the app's own, so 0 is a real pick ("this repo stays put even though the
 // default across repos moved"); Reset, not a zero, is how a field goes back to inheriting.
@@ -183,6 +191,11 @@ function pruneFonts(v: unknown): FontPrefs {
   }
   for (const k of FLAG_KEYS) {
     if (typeof o[k] === "boolean") out[k] = o[k] as boolean;
+  }
+  const off = o.ligatureSetsOff;
+  if (Array.isArray(off)) {
+    const tags = [...new Set(off.filter((t): t is string => typeof t === "string" && TAG.test(t)))];
+    if (tags.length > 0) out.ligatureSetsOff = tags.sort().slice(0, MAX_LIGATURE_SETS);
   }
   return out;
 }

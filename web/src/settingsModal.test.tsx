@@ -62,6 +62,27 @@ test("a font field overrides the theme's face, and Reset hands it back", () => {
   expect(document.documentElement.style.getPropertyValue("--font-mono")).toBe("");
 });
 
+// The groups refine the switch rather than duplicating it, so they go when it does — and their
+// labels come from the font's own feature table, not from a list written here.
+test("the ligature groups appear under the switch and only while it is on", () => {
+  render(<SettingsModal onClose={() => {}} />);
+  const box = screen.getByLabelText("Code ligatures") as HTMLInputElement;
+  expect(box.checked).toBe(true);
+  const arrows = screen.getByLabelText("Arrows") as HTMLInputElement;
+  expect(arrows.checked).toBe(true);
+  // ss06 is Markdown Strings, which is not part of what the switch means.
+  expect(screen.queryByLabelText("Markdown Strings")).toBeNull();
+
+  fireEvent.click(arrows);
+  expect(document.documentElement.style.getPropertyValue("--code-features")).toContain('"liga" 0');
+  fireEvent.click(screen.getByLabelText("Arrows"));
+
+  fireEvent.click(box);
+  expect(screen.queryByLabelText("Arrows")).toBeNull();
+  // The font store outlives a render, so what this switched is switched back for the next test.
+  fireEvent.click(screen.getByLabelText("Code ligatures"));
+});
+
 // The switch has to mean the same thing whichever face is in play, which is why it knows about the
 // one it is turning off: calt is the ligatures in JetBrains Mono but texture healing in Monaspace.
 test("the ligature switch composes features for the face in use", () => {

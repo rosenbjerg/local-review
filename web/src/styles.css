@@ -2496,6 +2496,20 @@ textarea:focus-visible {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+/* Two columns of nine short labels: one column is a tall thin list, three crowds the 320px the form
+   gives a control. The label wraps its own box so the whole row is a hit target, not just the box. */
+.ligature-sets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 10px;
+}
+.ligature-set {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
 .settings-note {
   margin: 2px 0 0;
   font-size: var(--text-xs);

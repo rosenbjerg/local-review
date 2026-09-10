@@ -299,10 +299,34 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   texture healing, and its ligatures are opt-in stylistic sets. So off omits `"calt" 0` for a
   Monaspace face, and on adds `ss01`–`ss05`, `ss07`–`ss10`, without which Monaspace shows eight
   ligatures where JetBrains Mono shows its whole set — the same code rendering differently per theme.
+  Both branches ask `ligatureSetsFor` the one question — does this face keep its ligatures in
+  addressable sets — rather than testing for Monaspace twice.
   `font-feature-settings` is the only property used for it: its precedence against `font-variant-*` is
   defined but easily misremembered, so the two are never mixed, and nothing on the code surfaces uses
   the latter. Ligatures break at element boundaries anyway, so a `=>` split by a word-diff range or a
   Shiki token renders unligated whatever the switch says.
+- **`fontFeatures.ts` is generated, and it is the only place a set's meaning is recorded.**
+  `bun scripts/fontfeatures.ts` decodes the bundled WOFF2 (directory → brotli → `GSUB`, `name`) and
+  reads each `ss##`/`cv##` UI name out of its `FeatureParams`, so "ss03 is Arrows" comes from
+  Monaspace rather than from anyone's memory, and a font upgrade that renumbers a set fails CI
+  (`--check`) instead of mislabelling a checkbox. Only bundled faces are in it: nothing in the
+  browser reports a font's feature table — `document.fonts` and `FontFace` give back only what you
+  set — and the metric probe behind `isFamilyAvailable` has no analogue here, because canvas can't
+  carry `font-feature-settings` and monospace ligatures preserve their advance width anyway. Reading
+  an installed face would take the Local Font Access API (`queryLocalFonts`, Chromium only), which
+  hands back uncompressed SFNT bytes the same parser would take.
+- **The per-group checkboxes silence `liga`, and only once one is off.** Monaspace's `liga` holds
+  lookups 38-46, disjoint from every stylistic set's (48-144) and shared with none of them, so it is
+  a ninth source of ligatures the sets neither contain nor suppress — left on, it goes on drawing an
+  arrow after Arrows is unchecked. So `featuresFor` adds `"liga" 0` exactly when a group is off:
+  every group on emits the same value it always did, and an untouched switch cannot regress. Every
+  group off emits the ligatures-off value rather than an empty one, or the face's own defaults would
+  show through what reads as fully off. The groups render only while the switch is on — they refine
+  it, they are not a second route to the same off — and a face with no readable table gets a sentence
+  saying its ligatures move together instead of an empty row. `ligatureSetsOff` stores what is *off*,
+  so a set added by a font upgrade is on by default, and the tags are Monaspace's: a pick sits dormant
+  in storage under another face and comes back, because only a set the face's own table names is
+  applied.
 - **`--code-features` goes wherever `--font-mono` goes, and nowhere else.** `font-feature-settings`
   inherits, and `ss01`–`ss10` are private to a face: the list composed for Monaspace's ligatures is,
   in Inter, `ss05` circled and `ss06` squared characters. `.diff` sets the token on the table, so it
