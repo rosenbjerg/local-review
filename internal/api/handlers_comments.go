@@ -87,14 +87,21 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusInternalServerError, err)
 		return
 	}
-	if repo != nil {
-		cs := []store.Comment{*c}
-		// One comment, so a warm-up would cost more than it saves.
-		annotateComments(repo, headRef, cs, newContentCache(repo, headRef))
-		c = &cs[0]
-	}
+	c = annotatedComment(repo, headRef, c)
 	s.notify(id)
 	writeJSON(w, c)
+}
+
+// annotatedComment recomputes one comment's anchor for a handler's response, so a client that
+// swaps the returned comment into its list sees the same staleness a review read reports.
+// One comment, so a cache warm-up would cost more than it saves.
+func annotatedComment(repo *git.Repo, headRef string, c *store.Comment) *store.Comment {
+	if repo == nil {
+		return c
+	}
+	cs := []store.Comment{*c}
+	annotateComments(repo, headRef, cs, newContentCache(repo, headRef))
+	return &cs[0]
 }
 
 func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) {
@@ -152,17 +159,23 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, errString("invalid comment type"))
 		return
 	}
-	// The range may have moved: re-capture snippet and anchor sha on the comment's own side, or staleness misfires.
 	existing, err := s.Store.GetComment(id)
 	if err != nil {
 		storeError(w, err)
 		return
 	}
-	snippet := ""
+	var repo *git.Repo
+	var headRef string
+	if repoPath, hr, err := s.Store.ReviewRepoHead(existing.ReviewID); err == nil {
+		repo, headRef = git.New(repoPath), hr
+	}
+	snippet := existing.Snippet
 	commitSHA := existing.CommitSHA
-	if req.StartLine > 0 {
-		if repoPath, headRef, err := s.Store.ReviewRepoHead(existing.ReviewID); err == nil {
-			repo := git.New(repoPath)
+	// Only a request that actually moves the range re-anchors: the browser resends the stored
+	// lines when editing a body, and re-capturing there would reset a moved comment to current.
+	if req.StartLine != existing.StartLine || req.EndLine != existing.EndLine {
+		snippet = ""
+		if req.StartLine > 0 && repo != nil {
 			snippet = captureSnippet(repo, headRef, existing.FilePath, req.StartLine, req.EndLine, existing.Side)
 			if sha, err := repo.ResolveSHA(headRef); err == nil {
 				commitSHA = sha
@@ -174,7 +187,9 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 		storeError(w, err)
 		return
 	}
-	s.notify(c.ReviewID)
+	reviewID := c.ReviewID
+	c = annotatedComment(repo, headRef, c)
+	s.notify(reviewID)
 	writeJSON(w, c)
 }
 

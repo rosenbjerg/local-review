@@ -89,11 +89,14 @@ value must not read as "absent"; neither header present means no browser — cur
 - **The server captures the snippet** (`captureSnippet` in `annotate.go`, reading via `readSide`):
   clients send only the line range, so the stored text always matches the file. Line-0 file comments
   keep an empty snippet. Each comment records the `commit_sha` it was anchored at (best-effort).
+  A `PATCH` re-captures **only when its range differs from the stored one** — the browser resends the
+  stored lines when saving a body edit, so re-capturing unconditionally would re-anchor a moved
+  comment to whatever now occupies its old lines and erase its staleness.
 - `Side` rules (`side_test.go`): `api/side.go`'s `readSide` is the **only** side → git-read map, so
   capture and the staleness check can't read different sides; `sideOf` is the **only** wire
   validator, so no endpoint can skip it; test `Side.IsHead()`, never `== SideHead` — the zero value
   is `""`, and an equality test demotes a Go-built `Comment` to snippet matching.
-- **Staleness is derived on every read** (`GetReview`, `CreateReview`, `Export`, add-comment):
+- **Staleness is derived on every read** (`GetReview`, `CreateReview`, `Export`, add/update-comment):
   `anchorStatus` ∈ `current` | `moved` | `outdated`, plus `currentStartLine`/`currentEndLine`/
   `currentFilePath`, all `omitempty` and computed only in the API layer. Head-anchored comments with a
   `commit_sha` use `annotateByDiff`: diff that commit against head and map the range through the

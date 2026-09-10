@@ -224,3 +224,75 @@ func TestReplyRejectsEmptyBody(t *testing.T) {
 		t.Errorf("valid reply: status = %d, want 200 (%s)", rec.Code, rec.Body.String())
 	}
 }
+
+// Editing a comment's body must not re-anchor it. The browser resends the stored
+// startLine/endLine when saving an edit, so re-capturing unconditionally would rewrite
+// a moved comment's snippet to whatever now sits at its old lines and bump commit_sha
+// to head — silently pointing the note at unrelated code and clearing the stale warning.
+// A request that does move the range still re-captures.
+func TestUpdateCommentBodyKeepsAnchor(t *testing.T) {
+	r := newRepo(t)
+	r.write("f.txt", "a\nb\nTARGET1\nTARGET2\n")
+	head := r.commitAll("c1")
+
+	s := r.server()
+	rev, err := s.Store.CreateOrGetReview(r.dir, "main", "main", head)
+	if err != nil {
+		t.Fatalf("CreateOrGetReview: %v", err)
+	}
+
+	rec := postJSON(t, s.handleAddComment, rev.ID, map[string]any{
+		"filePath": "f.txt", "startLine": 3, "endLine": 4, "type": "bug", "body": "x",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("handleAddComment status %d: %s", rec.Code, rec.Body.String())
+	}
+	var c store.Comment
+	if err := json.Unmarshal(rec.Body.Bytes(), &c); err != nil {
+		t.Fatalf("decode comment: %v", err)
+	}
+
+	r.write("f.txt", "pre1\npre2\na\nb\nTARGET1\nTARGET2\n")
+	r.commitAll("c2")
+	if rv := getReview(t, s, rev.ID); rv.Comments[0].AnchorStatus != store.AnchorMoved {
+		t.Fatalf("after the insert: anchorStatus = %q, want moved", rv.Comments[0].AnchorStatus)
+	}
+
+	rec = postJSON(t, s.handleUpdateComment, c.ID, map[string]any{
+		"body": "edited", "type": "bug", "startLine": c.StartLine, "endLine": c.EndLine,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("handleUpdateComment status %d: %s", rec.Code, rec.Body.String())
+	}
+	var edited store.Comment
+	if err := json.Unmarshal(rec.Body.Bytes(), &edited); err != nil {
+		t.Fatalf("decode edited comment: %v", err)
+	}
+	if edited.Snippet != c.Snippet {
+		t.Errorf("body edit rewrote the snippet: %q, want %q", edited.Snippet, c.Snippet)
+	}
+	if edited.CommitSHA != c.CommitSHA {
+		t.Errorf("body edit re-anchored commit_sha: %q, want %q", edited.CommitSHA, c.CommitSHA)
+	}
+	rv := getReview(t, s, rev.ID)
+	if got := rv.Comments[0]; got.AnchorStatus != store.AnchorMoved || got.CurrentStartLine != 5 {
+		t.Errorf("after the body edit: anchorStatus = %q at L%d, want moved at L5", got.AnchorStatus, got.CurrentStartLine)
+	}
+
+	rec = postJSON(t, s.handleUpdateComment, c.ID, map[string]any{
+		"body": "edited", "type": "bug", "startLine": 5, "endLine": 6,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("handleUpdateComment status %d: %s", rec.Code, rec.Body.String())
+	}
+	var moved store.Comment
+	if err := json.Unmarshal(rec.Body.Bytes(), &moved); err != nil {
+		t.Fatalf("decode moved comment: %v", err)
+	}
+	if moved.Snippet != "TARGET1\nTARGET2" {
+		t.Errorf("a range change should re-capture: snippet = %q", moved.Snippet)
+	}
+	if moved.AnchorStatus != store.AnchorCurrent {
+		t.Errorf("re-anchored comment anchorStatus = %q, want current", moved.AnchorStatus)
+	}
+}
