@@ -65,15 +65,14 @@ func (h *hub) publish(reviewID int64, diff bool) {
 	}
 }
 
-func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
+func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r)
+	if err != nil {
+		return err
 	}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		httpError(w, http.StatusInternalServerError, errString("streaming unsupported"))
-		return
+		return errString("streaming unsupported")
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -89,31 +88,33 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := fmt.Fprint(w, ": connected\n\n"); err != nil {
-		return
+		return nil
 	}
 	flusher.Flush()
 
 	keepalive := time.NewTicker(25 * time.Second)
 	defer keepalive.Stop()
 
+	// Past the first write the status is already on the wire, so every exit below is a
+	// plain nil — an error return here would try to write a second header.
 	ctx := r.Context()
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case <-sub.signal:
 			event := "meta"
 			if sub.diffPending.Swap(false) {
 				event = "diff"
 			}
 			if _, err := fmt.Fprintf(w, "data: %s\n\n", event); err != nil {
-				return
+				return nil
 			}
 			flusher.Flush()
 		case <-keepalive.C:
 			// A comment line forces a write on an idle stream, so a dead connection errors out here.
 			if _, err := fmt.Fprint(w, ": keepalive\n\n"); err != nil {
-				return
+				return nil
 			}
 			flusher.Flush()
 		}

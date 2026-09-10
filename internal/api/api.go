@@ -102,40 +102,40 @@ func (s *Server) repoFor(name string) (*git.Repo, error) {
 	return git.New(abs), nil
 }
 
-func (s *Server) repoParam(w http.ResponseWriter, r *http.Request) (*git.Repo, bool) {
+func (s *Server) repoParam(r *http.Request) (*git.Repo, error) {
 	repo, err := s.repoFor(r.URL.Query().Get("repo"))
 	if err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return nil, false
+		return nil, badRequest(err)
 	}
-	return repo, true
+	return repo, nil
 }
 
+// Routes wires every handler through handle(), so a failure is written in exactly one place.
 func (s *Server) Routes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/repos", s.handleRepos)
-	mux.HandleFunc("GET /api/branches", s.handleBranches)
-	mux.HandleFunc("GET /api/diff", s.handleDiff)
-	mux.HandleFunc("GET /api/files", s.handleFiles)
-	mux.HandleFunc("GET /api/commits", s.handleCommits)
-	mux.HandleFunc("GET /api/file", s.handleFile)
-	mux.HandleFunc("GET /api/blob", s.handleBlob)
+	mux.HandleFunc("GET /api/repos", handle(s.handleRepos))
+	mux.HandleFunc("GET /api/branches", handle(s.handleBranches))
+	mux.HandleFunc("GET /api/diff", handle(s.handleDiff))
+	mux.HandleFunc("GET /api/files", handle(s.handleFiles))
+	mux.HandleFunc("GET /api/commits", handle(s.handleCommits))
+	mux.HandleFunc("GET /api/file", handle(s.handleFile))
+	mux.HandleFunc("GET /api/blob", handle(s.handleBlob))
 
-	mux.HandleFunc("POST /api/reviews", s.handleCreateReview)
-	mux.HandleFunc("GET /api/reviews/{id}", s.handleGetReview)
-	mux.HandleFunc("GET /api/reviews/{id}/events", s.handleEvents)
-	mux.HandleFunc("POST /api/reviews/{id}/export", s.handleExport)
-	mux.HandleFunc("POST /api/reviews/{id}/export.md", s.handleExportMarkdown)
-	mux.HandleFunc("POST /api/reviews/{id}/reset", s.handleResetReview)
-	mux.HandleFunc("POST /api/reviews/{id}/reviewed", s.handleSetReviewed)
-	mux.HandleFunc("POST /api/reviews/{id}/summary", s.handleSetSummary)
+	mux.HandleFunc("POST /api/reviews", handle(s.handleCreateReview))
+	mux.HandleFunc("GET /api/reviews/{id}", handle(s.handleGetReview))
+	mux.HandleFunc("GET /api/reviews/{id}/events", handle(s.handleEvents))
+	mux.HandleFunc("POST /api/reviews/{id}/export", handle(s.handleExport))
+	mux.HandleFunc("POST /api/reviews/{id}/export.md", handle(s.handleExportMarkdown))
+	mux.HandleFunc("POST /api/reviews/{id}/reset", handle(s.handleResetReview))
+	mux.HandleFunc("POST /api/reviews/{id}/reviewed", handle(s.handleSetReviewed))
+	mux.HandleFunc("POST /api/reviews/{id}/summary", handle(s.handleSetSummary))
 
-	mux.HandleFunc("POST /api/reviews/{id}/comments", s.handleAddComment)
-	mux.HandleFunc("GET /api/reviews/{id}/comments", s.handleListComments)
-	mux.HandleFunc("PATCH /api/comments/{id}", s.handleUpdateComment)
-	mux.HandleFunc("DELETE /api/comments/{id}", s.handleDeleteComment)
-	mux.HandleFunc("POST /api/comments/{id}/resolved", s.handleSetResolved)
+	mux.HandleFunc("POST /api/reviews/{id}/comments", handle(s.handleAddComment))
+	mux.HandleFunc("GET /api/reviews/{id}/comments", handle(s.handleListComments))
+	mux.HandleFunc("PATCH /api/comments/{id}", handle(s.handleUpdateComment))
+	mux.HandleFunc("DELETE /api/comments/{id}", handle(s.handleDeleteComment))
+	mux.HandleFunc("POST /api/comments/{id}/resolved", handle(s.handleSetResolved))
 
-	mux.HandleFunc("POST /api/comments/{id}/replies", s.handleAddReply)
-	mux.HandleFunc("PATCH /api/replies/{id}", s.handleUpdateReply)
-	mux.HandleFunc("DELETE /api/replies/{id}", s.handleDeleteReply)
+	mux.HandleFunc("POST /api/comments/{id}/replies", handle(s.handleAddReply))
+	mux.HandleFunc("PATCH /api/replies/{id}", handle(s.handleUpdateReply))
+	mux.HandleFunc("DELETE /api/replies/{id}", handle(s.handleDeleteReply))
 }

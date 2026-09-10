@@ -19,32 +19,28 @@ type addCommentReq struct {
 	Side string `json:"side"` // "" (head) | "head" | "worktree" | "index"
 }
 
-func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
+func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r)
+	if err != nil {
+		return err
 	}
-	req, ok := decodeBody[addCommentReq](w, r)
-	if !ok {
-		return
+	req, err := decodeBody[addCommentReq](w, r)
+	if err != nil {
+		return err
 	}
-	if req.StartLine < 0 {
-		httpError(w, http.StatusBadRequest, errString("startLine must be >= 0"))
-		return
+	if err := validStartLine(req.StartLine); err != nil {
+		return err
 	}
 	// The store accepts any string, so the read endpoints' path rule has to apply here too.
 	if err := validPath(req.FilePath); err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return
+		return err
 	}
 	if err := validBody(req.Body); err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return
+		return err
 	}
 	side, err := sideOf(req.Side)
 	if err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return
+		return err
 	}
 	if req.EndLine < req.StartLine {
 		req.EndLine = req.StartLine
@@ -52,9 +48,8 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 	if req.Type == "" {
 		req.Type = store.CommentSuggestion
 	}
-	if !validCommentType(req.Type) {
-		httpError(w, http.StatusBadRequest, errString("invalid comment type"))
-		return
+	if err := validCommentType(req.Type); err != nil {
+		return err
 	}
 	if req.Author == "" {
 		// An omitted author is the coding agent; the browser sends "reviewer".
@@ -62,8 +57,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 	}
 	repoPath, headRef, err := s.Store.ReviewRepoHead(id)
 	if err != nil {
-		storeError(w, err)
-		return
+		return storeErr(err)
 	}
 	repo := git.New(repoPath)
 	sha, _ := repo.ResolveSHA(headRef)
@@ -85,12 +79,11 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		Side:      side,
 	})
 	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
-		return
+		return err
 	}
 	c = annotatedComment(repo, headRef, c)
 	s.notify(id)
-	writeJSON(w, c)
+	return writeJSON(w, c)
 }
 
 // annotatedComment recomputes one comment's anchor for a handler's response, so a client that
@@ -105,17 +98,11 @@ func annotatedComment(repo *git.Repo, headRef string, c *store.Comment) *store.C
 	return &cs[0]
 }
 
-func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
-	}
-	review, err := s.Store.GetReview(id)
+func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) error {
+	review, err := s.loadAnnotatedReview(r)
 	if err != nil {
-		httpError(w, http.StatusNotFound, err)
-		return
+		return err
 	}
-	s.annotateReview(review)
 	comments := review.Comments
 	if author := r.URL.Query().Get("author"); author != "" {
 		filtered := make([]store.Comment, 0, len(comments))
@@ -126,7 +113,7 @@ func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) {
 		}
 		comments = filtered
 	}
-	writeJSON(w, map[string]any{"comments": comments})
+	return writeJSON(w, map[string]any{"comments": comments})
 }
 
 // Pointers, so an omitted field keeps its stored value: a body edit that also had to
@@ -139,33 +126,30 @@ type updateCommentReq struct {
 	EndLine   *int               `json:"endLine"`
 }
 
-func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
+func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r)
+	if err != nil {
+		return err
 	}
-	req, ok := decodeBody[updateCommentReq](w, r)
-	if !ok {
-		return
+	req, err := decodeBody[updateCommentReq](w, r)
+	if err != nil {
+		return err
 	}
 	existing, err := s.Store.GetComment(id)
 	if err != nil {
-		storeError(w, err)
-		return
+		return storeErr(err)
 	}
 	body := existing.Body
 	if req.Body != nil {
 		if err := validBody(*req.Body); err != nil {
-			httpError(w, http.StatusBadRequest, err)
-			return
+			return err
 		}
 		body = *req.Body
 	}
 	commentType := existing.Type
 	if req.Type != nil {
-		if !validCommentType(*req.Type) {
-			httpError(w, http.StatusBadRequest, errString("invalid comment type"))
-			return
+		if err := validCommentType(*req.Type); err != nil {
+			return err
 		}
 		commentType = *req.Type
 	}
@@ -177,9 +161,8 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 	if req.EndLine != nil {
 		endLine = *req.EndLine
 	}
-	if startLine < 0 {
-		httpError(w, http.StatusBadRequest, errString("startLine must be >= 0"))
-		return
+	if err := validStartLine(startLine); err != nil {
+		return err
 	}
 	if endLine < startLine {
 		endLine = startLine
@@ -202,49 +185,46 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 	}
 	c, err := s.Store.UpdateComment(id, body, commentType, startLine, endLine, snippet, commitSHA)
 	if err != nil {
-		storeError(w, err)
-		return
+		return storeErr(err)
 	}
 	reviewID := c.ReviewID
 	c = annotatedComment(repo, headRef, c)
 	s.notify(reviewID)
-	writeJSON(w, c)
+	return writeJSON(w, c)
 }
 
-func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
+func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r)
+	if err != nil {
+		return err
 	}
 	reviewID, err := s.Store.DeleteComment(id)
 	if err != nil {
-		storeError(w, err)
-		return
+		return storeErr(err)
 	}
 	s.notify(reviewID)
-	w.WriteHeader(http.StatusNoContent)
+	return noContent(w)
 }
 
 type setResolvedReq struct {
 	Resolved bool `json:"resolved"`
 }
 
-func (s *Server) handleSetResolved(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
+func (s *Server) handleSetResolved(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r)
+	if err != nil {
+		return err
 	}
-	req, ok := decodeBody[setResolvedReq](w, r)
-	if !ok {
-		return
+	req, err := decodeBody[setResolvedReq](w, r)
+	if err != nil {
+		return err
 	}
 	reviewID, err := s.Store.SetCommentResolved(id, req.Resolved)
 	if err != nil {
-		storeError(w, err)
-		return
+		return storeErr(err)
 	}
 	s.notify(reviewID)
-	w.WriteHeader(http.StatusNoContent)
+	return noContent(w)
 }
 
 // --- replies ---
@@ -254,63 +234,58 @@ type replyReq struct {
 	Author string `json:"author"`
 }
 
-func (s *Server) handleAddReply(w http.ResponseWriter, r *http.Request) {
-	commentID, ok := pathID(w, r)
-	if !ok {
-		return
+func (s *Server) handleAddReply(w http.ResponseWriter, r *http.Request) error {
+	commentID, err := pathID(r)
+	if err != nil {
+		return err
 	}
-	req, ok := decodeBody[replyReq](w, r)
-	if !ok {
-		return
+	req, err := decodeBody[replyReq](w, r)
+	if err != nil {
+		return err
 	}
 	if err := validBody(req.Body); err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return
+		return err
 	}
 	if req.Author == "" {
 		req.Author = "agent"
 	}
 	rep, reviewID, err := s.Store.AddReply(commentID, req.Body, req.Author)
 	if err != nil {
-		storeError(w, err)
-		return
+		return storeErr(err)
 	}
 	s.notify(reviewID)
-	writeJSON(w, rep)
+	return writeJSON(w, rep)
 }
 
-func (s *Server) handleUpdateReply(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
+func (s *Server) handleUpdateReply(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r)
+	if err != nil {
+		return err
 	}
-	req, ok := decodeBody[replyReq](w, r)
-	if !ok {
-		return
+	req, err := decodeBody[replyReq](w, r)
+	if err != nil {
+		return err
 	}
 	if err := validBody(req.Body); err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return
+		return err
 	}
 	rep, reviewID, err := s.Store.UpdateReply(id, req.Body)
 	if err != nil {
-		storeError(w, err)
-		return
+		return storeErr(err)
 	}
 	s.notify(reviewID)
-	writeJSON(w, rep)
+	return writeJSON(w, rep)
 }
 
-func (s *Server) handleDeleteReply(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
+func (s *Server) handleDeleteReply(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r)
+	if err != nil {
+		return err
 	}
 	reviewID, err := s.Store.DeleteReply(id)
 	if err != nil {
-		storeError(w, err)
-		return
+		return storeErr(err)
 	}
 	s.notify(reviewID)
-	w.WriteHeader(http.StatusNoContent)
+	return noContent(w)
 }

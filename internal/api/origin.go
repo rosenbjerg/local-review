@@ -10,7 +10,7 @@ import (
 func WithSameOrigin(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !sameOriginOK(r) {
-			httpError(w, http.StatusForbidden, errString(
+			writeError(w, forbidden(
 				"cross-site request refused: this API only accepts writes from the local-review page itself"))
 			return
 		}

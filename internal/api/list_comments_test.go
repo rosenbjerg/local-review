@@ -20,7 +20,7 @@ func listComments(t *testing.T, s *Server, id int64, author string) (int, []stor
 	req := httptest.NewRequest(http.MethodGet, url, nil)
 	req.SetPathValue("id", strconv.FormatInt(id, 10))
 	rec := httptest.NewRecorder()
-	s.handleListComments(rec, req)
+	handle(s.handleListComments)(rec, req)
 	var body struct {
 		Comments []store.Comment `json:"comments"`
 	}

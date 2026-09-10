@@ -13,7 +13,7 @@ import (
 
 // exportReq invokes an export handler with an optional query string, which is where
 // the `instructions` flag lives.
-func exportReq(t *testing.T, h http.HandlerFunc, id int64, query string) *httptest.ResponseRecorder {
+func exportReq(t *testing.T, h handlerFunc, id int64, query string) *httptest.ResponseRecorder {
 	t.Helper()
 	url := "/"
 	if query != "" {
@@ -22,7 +22,7 @@ func exportReq(t *testing.T, h http.HandlerFunc, id int64, query string) *httpte
 	req := httptest.NewRequest(http.MethodPost, url, nil)
 	req.SetPathValue("id", strconv.FormatInt(id, 10))
 	rec := httptest.NewRecorder()
-	h(rec, req)
+	handle(h)(rec, req)
 	return rec
 }
 

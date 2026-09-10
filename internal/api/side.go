@@ -35,7 +35,7 @@ func sideLabel(side store.Side, headRef string) string {
 func sideOf(v string) (store.Side, error) {
 	side, ok := store.ParseSide(v)
 	if !ok {
-		return side, errString(`invalid side: want "head", "worktree" or "index"`)
+		return side, badRequest(errString(`invalid side: want "head", "worktree" or "index"`))
 	}
 	return side, nil
 }

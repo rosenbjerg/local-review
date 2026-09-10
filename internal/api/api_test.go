@@ -46,13 +46,13 @@ func TestValidPath(t *testing.T) {
 
 func TestValidCommentType(t *testing.T) {
 	for _, ok := range []store.CommentType{store.CommentBug, store.CommentSuggestion, store.CommentQuestion, store.CommentNit} {
-		if !validCommentType(ok) {
-			t.Errorf("validCommentType(%q) should be true", ok)
+		if err := validCommentType(ok); err != nil {
+			t.Errorf("validCommentType(%q) = %v, want nil", ok, err)
 		}
 	}
 	for _, bad := range []store.CommentType{"", "issue", "praise", "Bug"} {
-		if validCommentType(bad) {
-			t.Errorf("validCommentType(%q) should be false", bad)
+		if validCommentType(bad) == nil {
+			t.Errorf("validCommentType(%q) should be rejected", bad)
 		}
 	}
 }
@@ -158,7 +158,7 @@ func getDiff(t *testing.T, s *Server, query string) (int, diffResp) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, "/api/diff?"+query, nil)
 	rec := httptest.NewRecorder()
-	s.handleDiff(rec, req)
+	handle(s.handleDiff)(rec, req)
 	var d diffResp
 	if rec.Code == http.StatusOK {
 		if err := json.Unmarshal(rec.Body.Bytes(), &d); err != nil {
@@ -292,9 +292,9 @@ func getFile(t *testing.T, s *Server, path, query string) (int, string) {
 	req := httptest.NewRequest(http.MethodGet, path+"?"+query, nil)
 	rec := httptest.NewRecorder()
 	if strings.HasSuffix(path, "/blob") {
-		s.handleBlob(rec, req)
+		handle(s.handleBlob)(rec, req)
 	} else {
-		s.handleFile(rec, req)
+		handle(s.handleFile)(rec, req)
 	}
 	return rec.Code, rec.Body.String()
 }
@@ -452,7 +452,7 @@ func getCommits(t *testing.T, s *Server, query string) (int, commitsResp) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, "/api/commits?"+query, nil)
 	rec := httptest.NewRecorder()
-	s.handleCommits(rec, req)
+	handle(s.handleCommits)(rec, req)
 	var c commitsResp
 	if rec.Code == http.StatusOK {
 		if err := json.Unmarshal(rec.Body.Bytes(), &c); err != nil {
@@ -566,7 +566,7 @@ func TestCreateReviewStaleBaseStoresResolvable(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/reviews", strings.NewReader(
 		`{"repo":"`+r.name+`","head":"bh/consign4","base":"main"}`))
 	rec := httptest.NewRecorder()
-	s.handleCreateReview(rec, req)
+	handle(s.handleCreateReview)(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("create with stale base: status %d, want 200: %s", rec.Code, rec.Body.String())
 	}
@@ -599,7 +599,7 @@ func TestNoCommonHistoryIsAReadable400(t *testing.T) {
 	t.Run("diff", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/diff?repo="+r.name+"&head=orphan&base=main", nil)
 		rec := httptest.NewRecorder()
-		s.handleDiff(rec, req)
+		handle(s.handleDiff)(rec, req)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status = %d, want 400 (%s)", rec.Code, rec.Body.String())
 		}
@@ -621,7 +621,7 @@ func TestNoCommonHistoryIsAReadable400(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/reviews", strings.NewReader(
 			`{"repo":"`+r.name+`","head":"orphan","base":"main"}`))
 		rec := httptest.NewRecorder()
-		s.handleCreateReview(rec, req)
+		handle(s.handleCreateReview)(rec, req)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status = %d, want 400 (%s)", rec.Code, rec.Body.String())
 		}
@@ -638,7 +638,7 @@ func TestNoCommonHistoryIsAReadable400(t *testing.T) {
 	t.Run("unrelated selection still works", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/diff?repo="+r.name+"&head=main&base=main", nil)
 		rec := httptest.NewRecorder()
-		s.handleDiff(rec, req)
+		handle(s.handleDiff)(rec, req)
 		if rec.Code != http.StatusOK {
 			t.Errorf("status = %d, want 200 (%s)", rec.Code, rec.Body.String())
 		}

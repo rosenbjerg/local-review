@@ -3,7 +3,6 @@ package api
 
 import (
 	"errors"
-	"fmt"
 	"mime"
 	"net/http"
 	"path/filepath"
@@ -14,40 +13,37 @@ import (
 	"local-review/internal/store"
 )
 
-func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) error {
 	repos, err := s.listRepos()
 	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
-		return
+		return err
 	}
-	writeJSON(w, map[string]any{"repos": repos})
+	return writeJSON(w, map[string]any{"repos": repos})
 }
 
-func (s *Server) handleBranches(w http.ResponseWriter, r *http.Request) {
-	repo, ok := s.repoParam(w, r)
-	if !ok {
-		return
+func (s *Server) handleBranches(w http.ResponseWriter, r *http.Request) error {
+	repo, err := s.repoParam(r)
+	if err != nil {
+		return err
 	}
 	branches, err := repo.ListBranches()
 	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
-		return
+		return err
 	}
 	// No separate "main" field: each Branch carries IsMain, and MainBranch() is up to four git processes.
-	writeJSON(w, map[string]any{"branches": branches})
+	return writeJSON(w, map[string]any{"branches": branches})
 }
 
 // handleDiff diffs `from` (all → merge-base(base, head); a sha → its parent, so that commit's
 // own changes show) against head, the working tree or the index per uncommitted/unstaged.
-func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
-	repo, ok := s.repoParam(w, r)
-	if !ok {
-		return
+func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) error {
+	repo, err := s.repoParam(r)
+	if err != nil {
+		return err
 	}
 	head := r.URL.Query().Get("head")
 	if err := validRef(head); err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return
+		return err
 	}
 	from := r.URL.Query().Get("from")
 	uncommitted := r.URL.Query().Get("uncommitted") == "true"
@@ -56,40 +52,30 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 	var fromRef string
 	if from == "" || from == "all" {
 		baseRef := r.URL.Query().Get("base")
-		if baseRef != "" {
-			if err := validRef(baseRef); err != nil {
-				httpError(w, http.StatusBadRequest, err)
-				return
-			}
+		if err := optionalRef(baseRef); err != nil {
+			return err
 		}
-		baseRef = resolveBase(repo, baseRef)
-		if baseRef == "" {
-			httpError(w, http.StatusBadRequest, errString("no main or master branch found; select a base branch"))
-			return
+		baseRef, err = resolveBaseRef(repo, baseRef)
+		if err != nil {
+			return err
 		}
-		mb, mbErr := repo.MergeBase(baseRef, head)
-		if mbErr != nil {
-			httpError(w, mergeBaseStatus(mbErr), mergeBaseError(mbErr, baseRef, head))
-			return
+		mb, err := repo.MergeBase(baseRef, head)
+		if err != nil {
+			return mergeBaseError(err, baseRef, head)
 		}
 		fromRef = mb
 	} else {
 		if err := validRef(from); err != nil {
-			httpError(w, http.StatusBadRequest, err)
-			return
+			return err
 		}
-		sha, shaErr := repo.ParentSHA(from)
-		if shaErr != nil {
-			httpError(w, http.StatusBadRequest, errString("unknown commit: "+from))
-			return
+		sha, err := repo.ParentSHA(from)
+		if err != nil {
+			return badRequestf("unknown commit: %s", from)
 		}
 		fromRef = sha
 	}
 
-	var (
-		diff []git.FileDiff
-		err  error
-	)
+	var diff []git.FileDiff
 	switch {
 	case !uncommitted:
 		diff, err = repo.Diff(fromRef, head)
@@ -99,86 +85,76 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		diff, err = repo.DiffStaged(fromRef)
 	}
 	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
-		return
+		return err
 	}
-	writeJSON(w, map[string]any{"base": fromRef, "head": head, "files": diff})
+	return writeJSON(w, map[string]any{"base": fromRef, "head": head, "files": diff})
 }
 
 // handleFiles lists the tracked files at ref, for commenting on a file the branch didn't change.
-func (s *Server) handleFiles(w http.ResponseWriter, r *http.Request) {
-	repo, ok := s.repoParam(w, r)
-	if !ok {
-		return
+func (s *Server) handleFiles(w http.ResponseWriter, r *http.Request) error {
+	repo, err := s.repoParam(r)
+	if err != nil {
+		return err
 	}
 	ref := r.URL.Query().Get("ref")
 	if err := validRef(ref); err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return
+		return err
 	}
 	files, err := repo.ListFiles(ref)
 	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
-		return
+		return err
 	}
-	writeJSON(w, map[string]any{"files": files})
+	return writeJSON(w, map[string]any{"files": files})
 }
 
 // handleCommits lists base..ref (the branch's own commits) for the "from" picker; with no
 // resolvable base it lists ref's full ancestry.
-func (s *Server) handleCommits(w http.ResponseWriter, r *http.Request) {
-	repo, ok := s.repoParam(w, r)
-	if !ok {
-		return
+func (s *Server) handleCommits(w http.ResponseWriter, r *http.Request) error {
+	repo, err := s.repoParam(r)
+	if err != nil {
+		return err
 	}
 	ref := r.URL.Query().Get("ref")
 	if err := validRef(ref); err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return
+		return err
 	}
 	base := r.URL.Query().Get("base")
-	if base != "" {
-		if err := validRef(base); err != nil {
-			httpError(w, http.StatusBadRequest, err)
-			return
-		}
+	if err := optionalRef(base); err != nil {
+		return err
 	}
-	base = resolveBase(repo, base)
 	limit := 50
 	if n, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && n > 0 {
 		limit = min(n, 200)
 	}
-	commits, err := repo.RecentCommits(base, ref, limit)
+	// Unlike diff and create-review, no resolvable base is not an error here: the picker
+	// then lists ref's whole ancestry rather than refusing to open.
+	commits, err := repo.RecentCommits(resolveBase(repo, base), ref, limit)
 	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
-		return
+		return err
 	}
-	writeJSON(w, map[string]any{"commits": commits})
+	return writeJSON(w, map[string]any{"commits": commits})
 }
 
 // readFileContent reads path from the requested side; fromWorktree reports where the content
 // actually came from, since a ref read may have fallen back to the on-disk copy.
-func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (content, path string, fromWorktree, ok bool) {
-	repo, ok := s.repoParam(w, r)
-	if !ok {
-		return "", "", false, false
+func (s *Server) readFileContent(r *http.Request) (content, path string, fromWorktree bool, err error) {
+	repo, err := s.repoParam(r)
+	if err != nil {
+		return "", "", false, err
 	}
 	path = r.URL.Query().Get("path")
 	if err := validPath(path); err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return "", "", false, false
+		return "", "", false, err
 	}
 	side, err := sideOf(r.URL.Query().Get("side"))
 	if err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return "", "", false, false
+		return "", "", false, err
 	}
 	// Only the head side reads a ref.
 	ref := r.URL.Query().Get("ref")
 	if side.IsHead() {
 		if err := validRef(ref); err != nil {
-			httpError(w, http.StatusBadRequest, err)
-			return "", "", false, false
+			return "", "", false, err
 		}
 	}
 	content, err = readSide(repo, ref, path, side)
@@ -193,22 +169,20 @@ func (s *Server) readFileContent(w http.ResponseWriter, r *http.Request) (conten
 	if err != nil {
 		// A path can outlive its file (a comment anchored before a rename or delete), so absence is a 404, not a 500.
 		if errors.Is(err, git.ErrNotFound) {
-			httpError(w, http.StatusNotFound, fmt.Errorf("%s does not exist in %s", path, sideLabel(side, ref)))
-			return "", "", false, false
+			return "", "", false, notFoundf("%s does not exist in %s", path, sideLabel(side, ref))
 		}
-		httpError(w, http.StatusInternalServerError, err)
-		return "", "", false, false
+		return "", "", false, err
 	}
-	return content, path, fromWorktree, true
+	return content, path, fromWorktree, nil
 }
 
 // "ref" echoes what was asked for; "worktree" says where the content actually came from.
-func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
-	content, path, fromWorktree, ok := s.readFileContent(w, r)
-	if !ok {
-		return
+func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) error {
+	content, path, fromWorktree, err := s.readFileContent(r)
+	if err != nil {
+		return err
 	}
-	writeJSON(w, map[string]any{
+	return writeJSON(w, map[string]any{
 		"path":     path,
 		"ref":      r.URL.Query().Get("ref"),
 		"content":  content,
@@ -216,10 +190,10 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleBlob(w http.ResponseWriter, r *http.Request) {
-	content, path, _, ok := s.readFileContent(w, r)
-	if !ok {
-		return
+func (s *Server) handleBlob(w http.ResponseWriter, r *http.Request) error {
+	content, path, _, err := s.readFileContent(r)
+	if err != nil {
+		return err
 	}
 	w.Header().Set("Content-Type", mimeForPath(path))
 	w.Header().Set("Cache-Control", "no-cache")
@@ -228,6 +202,7 @@ func (s *Server) handleBlob(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; sandbox")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	_, _ = w.Write([]byte(content))
+	return nil
 }
 
 func mimeForPath(path string) string {
@@ -256,16 +231,9 @@ func mimeForPath(path string) string {
 }
 
 // Two refs with no common ancestor are a bad selection (400 with prose), not a server fault (500).
-func mergeBaseStatus(err error) int {
-	if errors.Is(err, git.ErrNoMergeBase) {
-		return http.StatusBadRequest
-	}
-	return http.StatusInternalServerError
-}
-
 func mergeBaseError(err error, base, head string) error {
 	if errors.Is(err, git.ErrNoMergeBase) {
-		return fmt.Errorf("%s and %s share no common history — pick a base branch the work was started from", head, base)
+		return badRequestf("%s and %s share no common history — pick a base branch the work was started from", head, base)
 	}
 	return err
 }
@@ -279,4 +247,12 @@ func resolveBase(repo *git.Repo, base string) string {
 		}
 	}
 	return repo.MainBranch()
+}
+
+// resolveBaseRef is resolveBase for the callers that cannot proceed without one.
+func resolveBaseRef(repo *git.Repo, base string) (string, error) {
+	if ref := resolveBase(repo, base); ref != "" {
+		return ref, nil
+	}
+	return "", badRequest(errString("no main or master branch found; select a base branch"))
 }

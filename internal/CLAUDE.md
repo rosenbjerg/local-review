@@ -25,8 +25,9 @@ api/api.go              Server, repoFor (root-confined, symlink/traversal-safe),
 api/handlers_git.go     read-only: repos, branches, diff, files, commits, file, blob (+ mergeBase/resolveBase)
 api/handlers_reviews.go create/resume, read, reset, summary, reviewed marks, export
 api/handlers_comments.go comments + replies
-api/respond.go          decodeBody, pathID, writeJSON, httpError, storeError, notify
-api/validate.go         validRef, validPath, validBody, validCommentType
+api/errors.go           statusError + the handle() adapter — the one place a failure becomes a status
+api/respond.go          decodeBody, pathID, writeJSON, noContent, notify
+api/validate.go         validRef/optionalRef, validPath, validBody, validCommentType, validStartLine
 api/side.go             readSide (the one side → git-read map), sideOf (the one wire validator)
 api/annotate.go         live anchor status (diff tracking / snippet match), snippet capture, content + diff caches
 api/reviewed.go         re-hashes reviewed files, drops marks whose content changed
@@ -37,8 +38,14 @@ export/export.go        review → canonical markdown
 
 ## Conventions
 
-- Errors bubble up as JSON via `httpError`; a handler that returns a list initializes the slice so
-  it marshals as `[]`.
+- **Handlers return `error`.** `Routes` wraps each one in `handle()` (`errors.go`), which is the
+  only place a failure is written — a handler cannot report a status and then fall through into its
+  success path. The status rides on the error itself via `statusError`, built by `badRequest`/
+  `badRequestf`/`notFoundf`/`forbidden`/`storeErr`; an error carrying none is a 500, so a git or
+  driver failure never masquerades as a client mistake. `validate.go` and `sideOf` return
+  already-400 errors, so a handler just returns them. Past the first byte written (SSE, `/api/blob`)
+  every exit is a plain `nil`: the status is already on the wire.
+- A handler that returns a list initializes the slice so it marshals as `[]`.
 - Run `gofmt` on changed files before committing. Tests use throwaway repos under `t.TempDir()`.
 
 ## Repos and refs

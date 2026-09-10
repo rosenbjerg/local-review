@@ -2,9 +2,7 @@
 package api
 
 import (
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 )
@@ -18,43 +16,30 @@ func (s *Server) notify(reviewID int64) {
 // maxBodyBytes stops a buggy or hostile client from spilling a huge payload into memory and the DB.
 const maxBodyBytes = 8 << 20 // 8 MiB
 
-func decodeBody[T any](w http.ResponseWriter, r *http.Request) (req T, ok bool) {
+func decodeBody[T any](w http.ResponseWriter, r *http.Request) (req T, err error) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return req, false
+		return req, badRequest(err)
 	}
-	return req, true
+	return req, nil
 }
 
-func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+func pathID(r *http.Request) (int64, error) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		httpError(w, http.StatusBadRequest, errString("invalid id"))
-		return 0, false
+		return 0, badRequest(errString("invalid id"))
 	}
-	return id, true
+	return id, nil
 }
 
-func writeJSON(w http.ResponseWriter, v any) {
+func writeJSON(w http.ResponseWriter, v any) error {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(v)
+	return nil
 }
 
-func httpError(w http.ResponseWriter, code int, err error) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+// noContent is the success return for a mutation with nothing to send back.
+func noContent(w http.ResponseWriter) error {
+	w.WriteHeader(http.StatusNoContent)
+	return nil
 }
-
-func storeError(w http.ResponseWriter, err error) {
-	if errors.Is(err, sql.ErrNoRows) {
-		httpError(w, http.StatusNotFound, errString("not found"))
-		return
-	}
-	httpError(w, http.StatusInternalServerError, err)
-}
-
-type errString string
-
-func (e errString) Error() string { return string(e) }

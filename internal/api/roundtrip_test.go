@@ -12,14 +12,15 @@ import (
 )
 
 // postJSON invokes an {id}-path handler with a JSON body, setting the path value
-// the way the router would.
-func postJSON(t *testing.T, h http.HandlerFunc, id int64, body any) *httptest.ResponseRecorder {
+// the way the router would and going through the same adapter, so the status a test
+// reads is the one the server would send.
+func postJSON(t *testing.T, h handlerFunc, id int64, body any) *httptest.ResponseRecorder {
 	t.Helper()
 	b, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(b))
 	req.SetPathValue("id", strconv.FormatInt(id, 10))
 	rec := httptest.NewRecorder()
-	h(rec, req)
+	handle(h)(rec, req)
 	return rec
 }
 
@@ -28,7 +29,7 @@ func getReview(t *testing.T, s *Server, id int64) store.Review {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.SetPathValue("id", strconv.FormatInt(id, 10))
 	rec := httptest.NewRecorder()
-	s.handleGetReview(rec, req)
+	handle(s.handleGetReview)(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("handleGetReview status %d: %s", rec.Code, rec.Body.String())
 	}

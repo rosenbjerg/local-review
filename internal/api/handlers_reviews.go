@@ -1,8 +1,7 @@
-// Review-level endpoints: create/resume, read, reset, delete, summary, reviewed marks, export.
+// Review-level endpoints: create/resume, read, reset, summary, reviewed marks, export.
 package api
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -18,77 +17,75 @@ type createReviewReq struct {
 	Head string `json:"head"`
 }
 
-func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) {
-	req, ok := decodeBody[createReviewReq](w, r)
-	if !ok {
-		return
+func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) error {
+	req, err := decodeBody[createReviewReq](w, r)
+	if err != nil {
+		return err
 	}
 	repo, err := s.repoFor(req.Repo)
 	if err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return
+		return badRequest(err)
 	}
 	if err := validRef(req.Head); err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return
+		return err
 	}
-	if req.Base != "" {
-		if err := validRef(req.Base); err != nil {
-			httpError(w, http.StatusBadRequest, err)
-			return
-		}
+	if err := optionalRef(req.Base); err != nil {
+		return err
 	}
 	// A base that no longer resolves falls back to the main branch, so a stale one isn't stored.
-	base := resolveBase(repo, req.Base)
-	if base == "" {
-		httpError(w, http.StatusBadRequest, errString("no main or master branch found; select a base branch"))
-		return
+	base, err := resolveBaseRef(repo, req.Base)
+	if err != nil {
+		return err
 	}
 	sha, err := repo.ResolveSHA(req.Head)
 	if err != nil {
-		httpError(w, http.StatusBadRequest, fmt.Errorf(
-			"could not resolve branch %q — it may have been deleted, renamed, or is mid-rebase; reload to refresh the branch list", req.Head))
-		return
+		return badRequestf(
+			"could not resolve branch %q — it may have been deleted, renamed, or is mid-rebase; reload to refresh the branch list", req.Head)
 	}
 	// Probe the merge-base now, so an incomparable base fails before a review row exists.
 	if _, err := repo.MergeBase(base, req.Head); err != nil {
-		httpError(w, mergeBaseStatus(err), mergeBaseError(err, base, req.Head))
-		return
+		return mergeBaseError(err, base, req.Head)
 	}
 	review, err := s.Store.CreateOrGetReview(repo.Path, base, req.Head, sha)
 	if err != nil {
-		httpError(w, http.StatusInternalServerError, err)
-		return
+		return err
 	}
 	s.annotateReview(review)
-	writeJSON(w, review)
+	return writeJSON(w, review)
 }
 
-func (s *Server) handleGetReview(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
+func (s *Server) handleGetReview(w http.ResponseWriter, r *http.Request) error {
+	review, err := s.loadAnnotatedReview(r)
+	if err != nil {
+		return err
+	}
+	return writeJSON(w, review)
+}
+
+// loadAnnotatedReview is the read every review-shaped endpoint starts from.
+func (s *Server) loadAnnotatedReview(r *http.Request) (*store.Review, error) {
+	id, err := pathID(r)
+	if err != nil {
+		return nil, err
 	}
 	review, err := s.Store.GetReview(id)
 	if err != nil {
-		httpError(w, http.StatusNotFound, err)
-		return
+		return nil, storeErr(err)
 	}
 	s.annotateReview(review)
-	writeJSON(w, review)
+	return review, nil
 }
 
-func (s *Server) handleResetReview(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
+func (s *Server) handleResetReview(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r)
+	if err != nil {
+		return err
 	}
 	if err := s.Store.ResetReview(id); err != nil {
-		httpError(w, http.StatusInternalServerError, err)
-		return
+		return err
 	}
 	s.notify(id)
-	w.WriteHeader(http.StatusNoContent)
+	return noContent(w)
 }
 
 // safeBaseURL derives the exported curl URL from Host, which is client-controlled and
@@ -109,62 +106,56 @@ func safeBaseURL(host string) string {
 }
 
 // renderExport is the one render (and status transition) behind both export shapes.
-func (s *Server) renderExport(w http.ResponseWriter, r *http.Request) (md, filename string, ok bool) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return "", "", false
-	}
-	review, err := s.Store.GetReview(id)
+func (s *Server) renderExport(r *http.Request) (md, filename string, err error) {
+	review, err := s.loadAnnotatedReview(r)
 	if err != nil {
-		httpError(w, http.StatusNotFound, err)
-		return "", "", false
+		return "", "", err
 	}
-	s.annotateReview(review)
 	instructions := r.URL.Query().Get("instructions") == "true"
 	md = export.Render(review, instructions, safeBaseURL(r.Host))
-	_ = s.Store.SetStatus(id, store.StatusExported)
+	_ = s.Store.SetStatus(review.ID, store.StatusExported)
 
-	return md, "code-review-" + sanitize(review.HeadRef) + "-" + export.ShortSHA(review.HeadSHA) + ".md", true
+	return md, "code-review-" + sanitize(review.HeadRef) + "-" + export.ShortSHA(review.HeadSHA) + ".md", nil
 }
 
-func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
-	md, filename, ok := s.renderExport(w, r)
-	if !ok {
-		return
+func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) error {
+	md, filename, err := s.renderExport(r)
+	if err != nil {
+		return err
 	}
-	writeJSON(w, map[string]any{"markdown": md, "filename": filename})
+	return writeJSON(w, map[string]any{"markdown": md, "filename": filename})
 }
 
 // handleExportMarkdown serves the markdown as the body, filename in Content-Disposition; errors stay JSON.
-func (s *Server) handleExportMarkdown(w http.ResponseWriter, r *http.Request) {
-	md, filename, ok := s.renderExport(w, r)
-	if !ok {
-		return
+func (s *Server) handleExportMarkdown(w http.ResponseWriter, r *http.Request) error {
+	md, filename, err := s.renderExport(r)
+	if err != nil {
+		return err
 	}
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	w.Header().Set("Content-Disposition", `inline; filename="`+filename+`"`)
 	_, _ = io.WriteString(w, md)
+	return nil
 }
 
 type setSummaryReq struct {
 	Summary string `json:"summary"`
 }
 
-func (s *Server) handleSetSummary(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
+func (s *Server) handleSetSummary(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r)
+	if err != nil {
+		return err
 	}
-	req, ok := decodeBody[setSummaryReq](w, r)
-	if !ok {
-		return
+	req, err := decodeBody[setSummaryReq](w, r)
+	if err != nil {
+		return err
 	}
 	if err := s.Store.SetReviewSummary(id, strings.TrimSpace(req.Summary)); err != nil {
-		storeError(w, err)
-		return
+		return storeErr(err)
 	}
 	s.notify(id)
-	w.WriteHeader(http.StatusNoContent)
+	return noContent(w)
 }
 
 type setReviewedReq struct {
@@ -173,25 +164,24 @@ type setReviewedReq struct {
 	Side      string   `json:"side"` // "" (head) | "head" | "worktree" | "index"
 }
 
-func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
-	id, ok := pathID(w, r)
-	if !ok {
-		return
+func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r)
+	if err != nil {
+		return err
 	}
-	req, ok := decodeBody[setReviewedReq](w, r)
-	if !ok {
-		return
+	req, err := decodeBody[setReviewedReq](w, r)
+	if err != nil {
+		return err
 	}
 	side, err := sideOf(req.Side)
 	if err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return
+		return err
 	}
 	// Fingerprint the on-screen side (dropped later if the content changes), warmed as one batch.
 	var cache *contentCache
 	if req.Reviewed {
-		if repoPath, hr, err := s.Store.ReviewRepoHead(id); err == nil {
-			cache = newContentCache(git.New(repoPath), hr)
+		if repoPath, headRef, err := s.Store.ReviewRepoHead(id); err == nil {
+			cache = newContentCache(git.New(repoPath), headRef)
 			cache.warm(req.FilePaths, side)
 		}
 	}
@@ -207,13 +197,11 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) {
 		marks = append(marks, store.FileReviewMark{Path: p, ContentHash: hash})
 	}
 	if len(marks) == 0 {
-		httpError(w, http.StatusBadRequest, errString("filePaths is required"))
-		return
+		return badRequest(errString("filePaths is required"))
 	}
 	if err := s.Store.SetFilesReviewed(id, marks, req.Reviewed, side); err != nil {
-		httpError(w, http.StatusInternalServerError, err)
-		return
+		return err
 	}
 	s.notify(id)
-	w.WriteHeader(http.StatusNoContent)
+	return noContent(w)
 }
