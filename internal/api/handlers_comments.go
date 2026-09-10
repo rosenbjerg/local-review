@@ -129,11 +129,14 @@ func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"comments": comments})
 }
 
+// Pointers, so an omitted field keeps its stored value: a body edit that also had to
+// restate the range would re-capture the snippet and erase a moved comment's staleness.
+// Sending a range is what asks for a re-anchor.
 type updateCommentReq struct {
-	Body      string            `json:"body"`
-	Type      store.CommentType `json:"type"`
-	StartLine int               `json:"startLine"`
-	EndLine   int               `json:"endLine"`
+	Body      *string            `json:"body"`
+	Type      *store.CommentType `json:"type"`
+	StartLine *int               `json:"startLine"`
+	EndLine   *int               `json:"endLine"`
 }
 
 func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
@@ -145,25 +148,41 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if req.StartLine < 0 {
-		httpError(w, http.StatusBadRequest, errString("startLine must be >= 0"))
-		return
-	}
-	if err := validBody(req.Body); err != nil {
-		httpError(w, http.StatusBadRequest, err)
-		return
-	}
-	if req.EndLine < req.StartLine {
-		req.EndLine = req.StartLine
-	}
-	if !validCommentType(req.Type) {
-		httpError(w, http.StatusBadRequest, errString("invalid comment type"))
-		return
-	}
 	existing, err := s.Store.GetComment(id)
 	if err != nil {
 		storeError(w, err)
 		return
+	}
+	body := existing.Body
+	if req.Body != nil {
+		if err := validBody(*req.Body); err != nil {
+			httpError(w, http.StatusBadRequest, err)
+			return
+		}
+		body = *req.Body
+	}
+	commentType := existing.Type
+	if req.Type != nil {
+		if !validCommentType(*req.Type) {
+			httpError(w, http.StatusBadRequest, errString("invalid comment type"))
+			return
+		}
+		commentType = *req.Type
+	}
+	startLine, endLine := existing.StartLine, existing.EndLine
+	reanchor := req.StartLine != nil || req.EndLine != nil
+	if req.StartLine != nil {
+		startLine = *req.StartLine
+	}
+	if req.EndLine != nil {
+		endLine = *req.EndLine
+	}
+	if startLine < 0 {
+		httpError(w, http.StatusBadRequest, errString("startLine must be >= 0"))
+		return
+	}
+	if endLine < startLine {
+		endLine = startLine
 	}
 	var repo *git.Repo
 	var headRef string
@@ -172,18 +191,16 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 	}
 	snippet := existing.Snippet
 	commitSHA := existing.CommitSHA
-	// Only a request that actually moves the range re-anchors: the browser resends the stored
-	// lines when editing a body, and re-capturing there would reset a moved comment to current.
-	if req.StartLine != existing.StartLine || req.EndLine != existing.EndLine {
+	if reanchor {
 		snippet = ""
-		if req.StartLine > 0 && repo != nil {
-			snippet = captureSnippet(repo, headRef, existing.FilePath, req.StartLine, req.EndLine, existing.Side)
+		if startLine > 0 && repo != nil {
+			snippet = captureSnippet(repo, headRef, existing.FilePath, startLine, endLine, existing.Side)
 			if sha, err := repo.ResolveSHA(headRef); err == nil {
 				commitSHA = sha
 			}
 		}
 	}
-	c, err := s.Store.UpdateComment(id, req.Body, req.Type, req.StartLine, req.EndLine, snippet, commitSHA)
+	c, err := s.Store.UpdateComment(id, body, commentType, startLine, endLine, snippet, commitSHA)
 	if err != nil {
 		storeError(w, err)
 		return

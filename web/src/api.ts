@@ -116,10 +116,8 @@ export const api = {
       body: JSON.stringify({ ...c, author: REVIEWER }),
     }),
 
-  updateComment: (
-    id: number,
-    c: { body: string; type: CommentType; startLine: number; endLine: number }
-  ) =>
+  // Omitted fields keep their stored value; sending a range would re-anchor the comment.
+  updateComment: (id: number, c: { body: string; type: CommentType }) =>
     req<Comment>(`/api/comments/${id}`, {
       method: "PATCH",
       body: JSON.stringify(c),

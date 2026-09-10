@@ -125,7 +125,6 @@ export default function App() {
   const refHover = useCommentRefs(jumpTo);
   const { commentActions, handleAddComment, handleDelete } = useCommentActions({
     review,
-    comments,
     setComments,
     setError,
     side,

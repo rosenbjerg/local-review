@@ -242,11 +242,11 @@ func TestAddCommentUnknownReviewIs404(t *testing.T) {
 	}
 }
 
-// Editing a comment's body must not re-anchor it. The browser resends the stored
-// startLine/endLine when saving an edit, so re-capturing unconditionally would rewrite
-// a moved comment's snippet to whatever now sits at its old lines and bump commit_sha
-// to head — silently pointing the note at unrelated code and clearing the stale warning.
-// A request that does move the range still re-captures.
+// A PATCH is partial: an omitted field keeps its stored value, and only a request that
+// carries a range re-anchors. Were a body edit made to restate the range, it would rewrite
+// a moved comment's snippet to whatever now sits at its old lines and bump commit_sha to
+// head — silently pointing the note at unrelated code and clearing the stale warning.
+// A request that does send a range still re-captures.
 func TestUpdateCommentBodyKeepsAnchor(t *testing.T) {
 	r := newRepo(t)
 	r.write("f.txt", "a\nb\nTARGET1\nTARGET2\n")
@@ -275,15 +275,23 @@ func TestUpdateCommentBodyKeepsAnchor(t *testing.T) {
 		t.Fatalf("after the insert: anchorStatus = %q, want moved", rv.Comments[0].AnchorStatus)
 	}
 
-	rec = postJSON(t, s.handleUpdateComment, c.ID, map[string]any{
-		"body": "edited", "type": "bug", "startLine": c.StartLine, "endLine": c.EndLine,
-	})
+	rec = postJSON(t, s.handleUpdateComment, c.ID, map[string]any{"body": "edited"})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("handleUpdateComment status %d: %s", rec.Code, rec.Body.String())
 	}
 	var edited store.Comment
 	if err := json.Unmarshal(rec.Body.Bytes(), &edited); err != nil {
 		t.Fatalf("decode edited comment: %v", err)
+	}
+	if edited.Body != "edited" {
+		t.Errorf("body edit did not land: %q", edited.Body)
+	}
+	if edited.Type != c.Type {
+		t.Errorf("an omitted type was overwritten: %q, want %q", edited.Type, c.Type)
+	}
+	if edited.StartLine != c.StartLine || edited.EndLine != c.EndLine {
+		t.Errorf("an omitted range was overwritten: L%d-%d, want L%d-%d",
+			edited.StartLine, edited.EndLine, c.StartLine, c.EndLine)
 	}
 	if edited.Snippet != c.Snippet {
 		t.Errorf("body edit rewrote the snippet: %q, want %q", edited.Snippet, c.Snippet)
@@ -296,9 +304,7 @@ func TestUpdateCommentBodyKeepsAnchor(t *testing.T) {
 		t.Errorf("after the body edit: anchorStatus = %q at L%d, want moved at L5", got.AnchorStatus, got.CurrentStartLine)
 	}
 
-	rec = postJSON(t, s.handleUpdateComment, c.ID, map[string]any{
-		"body": "edited", "type": "bug", "startLine": 5, "endLine": 6,
-	})
+	rec = postJSON(t, s.handleUpdateComment, c.ID, map[string]any{"startLine": 5, "endLine": 6})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("handleUpdateComment status %d: %s", rec.Code, rec.Body.String())
 	}

@@ -1,11 +1,10 @@
-import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { api } from "./api";
 import type { CommentActions } from "./components/CommentThread";
 import type { Comment, CommentType, Reply, Review, Side } from "./types";
 
 interface Params {
   review: Review | null;
-  comments: Comment[];
   setComments: Dispatch<SetStateAction<Comment[]>>;
   setError: (msg: string | null) => void;
   // The anchor side for new comments; the server captures the snippet from it.
@@ -13,14 +12,7 @@ interface Params {
 }
 
 // Comment/reply CRUD as optimistic mutations over the comments state.
-export function useCommentActions({ review, comments, setComments, setError, side }: Params) {
-  // These handlers reach every memoized file card, so they must not take a new identity when the comment list
-  // does; a ref hands handleUpdate the live list instead.
-  const commentsRef = useRef(comments);
-  useEffect(() => {
-    commentsRef.current = comments;
-  });
-
+export function useCommentActions({ review, setComments, setError, side }: Params) {
   async function handleAddComment(args: {
     filePath: string;
     startLine: number;
@@ -41,16 +33,9 @@ export function useCommentActions({ review, comments, setComments, setError, sid
   }
 
   async function handleUpdate(id: number, body: string, type: CommentType): Promise<boolean> {
-    const existing = commentsRef.current.find((c) => c.id === id);
-    if (!existing) return false;
     setError(null);
     try {
-      const updated = await api.updateComment(id, {
-        body,
-        type,
-        startLine: existing.startLine,
-        endLine: existing.endLine,
-      });
+      const updated = await api.updateComment(id, { body, type });
       setComments((cs) => cs.map((c) => (c.id === id ? updated : c)));
       return true;
     } catch (e) {
