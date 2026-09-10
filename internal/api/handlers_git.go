@@ -15,7 +15,7 @@ import (
 )
 
 func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) error {
-	repos, err := s.listRepos()
+	repos, err := s.repos.List()
 	if err != nil {
 		return err
 	}

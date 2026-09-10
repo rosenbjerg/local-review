@@ -23,7 +23,7 @@ func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		return err
 	}
-	repo, err := s.repoFor(req.Repo)
+	repo, err := s.repos.Open(req.Repo)
 	if err != nil {
 		return badRequest(err)
 	}

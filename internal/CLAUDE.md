@@ -21,7 +21,8 @@ store/comments.go       Comment, commentCols/scanComment, comment queries
 store/replies.go        Reply, replyCols/scanReply, reply queries
 store/reviewed.go       ReviewedFile, FileReviewMark, reviewed_files queries
 store/side.go           Side ↔ the two boolean columns — the only place that mapping exists
-api/api.go              Server, repoFor (root-confined, symlink/traversal-safe), listRepos, route table
+api/api.go              Server, repoParam, route table
+workspace/workspace.go  the root boundary: List (repo picker) and Open (root-confined, symlink/traversal-safe)
 api/handlers_git.go     read-only: repos, branches, diff, files, commits, file, blob (+ mergeBase/resolveBase)
 api/handlers_reviews.go create/resume, read, reset, summary, reviewed marks, export
 api/handlers_comments.go comments + replies
@@ -56,9 +57,12 @@ export/export.go        review → canonical markdown
 ## Repos and refs
 
 - Root-scoped, multi-repo: git-reading calls and review creation take a `repo` param (one path
-  segment). `repoFor` resolves symlinks on **both** sides before comparing, so a symlink dropped in
-  the root can't point at a repo outside it. Review/comment/export endpoints work off `review_id`.
-- Repo picker order (`listRepos`/`repoActivityDate`): the mtime of `.git/logs/HEAD` (one stat,
+  segment), resolved by `workspace.Open`, which resolves symlinks on **both** sides before comparing
+  so a symlink dropped in the root can't point at a repo outside it. It is the only way the server
+  turns a name into a `git.Repo`, and it returns the same `ErrInvalidName` for a traversal attempt
+  and a symlink escape, so a response never reports what exists outside the root.
+  Review/comment/export endpoints work off `review_id`.
+- Repo picker order (`workspace.List`/`activityDate`): the mtime of `.git/logs/HEAD` (one stat,
   covers checkouts and pulls), falling back to `.git` itself, by calendar **date** then name — never
   by timestamp, or two repos you alternate between swap all day. `lastActivity` is `YYYY-MM-DD`.
   `TestListReposOrder`.
