@@ -58,8 +58,24 @@ test("every place a prompt names an author names the same one", () => {
       ...[...rendered.matchAll(/"author": "([^"]+)"/g)].map((m) => m[1]),
       ...[...rendered.matchAll(/[?&]author=([\w-]+)/g)].map((m) => m[1]),
     ];
-    expect(named.length, `${p.kind} template names no author`).toBeGreaterThan(0);
     for (const name of named) expect(name, `${p.kind} template`).toBe(p.author);
+    // Only the review prompts have to name one. The reply prompt leaves the author to the API's
+    // "agent" default — which is its own author — so it writes none, and the placeholder is there
+    // for a reviewer who edits a `"author"` field back in.
+    if (p.group === "review") {
+      expect(named.length, `${p.kind} template names no author`).toBeGreaterThan(0);
+    }
+  }
+});
+
+test("the reply prompt sends the agent to the export's instructions instead of restating them", () => {
+  // `internal/export` is the only author of the agent contract (CONTRIBUTING). A copy here would be
+  // a second one, in another language, that the next wording change leaves behind.
+  const reply = AGENT_PROMPTS.filter((p) => p.group === "reply");
+  expect(reply.length).toBeGreaterThan(0);
+  for (const p of reply) {
+    expect(p.template, `${p.kind} template`).toContain("export.md?instructions=true");
+    expect(p.template, `${p.kind} template restates the reply endpoint`).not.toContain("/replies");
   }
 });
 
