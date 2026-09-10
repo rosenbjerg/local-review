@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Comment } from "./types";
+import { type Comment, effectivePath } from "./types";
 
 interface Params {
   comments: Comment[];
@@ -48,8 +48,10 @@ export function useJump({ comments, setSelectedFile, onProgrammaticScroll }: Par
     // The file may be lazy-unmounted or collapsed: signal expand, scroll to mount it, then retry the flash.
     const c = comments.find((x) => x.id === id);
     if (!c) return;
-    setExpandTarget({ path: c.filePath, n: ++expandN.current });
-    document.getElementById(`file-${c.filePath}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Cards are keyed by where the comment lives now, so a rename-moved one is under its new path.
+    const path = effectivePath(c);
+    setExpandTarget({ path, n: ++expandN.current });
+    document.getElementById(`file-${path}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
     let tries = 0;
     const poll = () => {
       if (flashComment(id) || tries++ > 40) {

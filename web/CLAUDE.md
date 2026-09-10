@@ -109,8 +109,9 @@ src/
   the card, and turns a 404 into a "No longer in `<side>`" note. `MediaView`'s `<img>` sides fall
   back to the same note via `onError`, keyed on src + `file.status`.
 - A rename-moved comment groups and renders under its `currentFilePath` (`effectivePath` in
-  `types.ts`, used by `commentsByPath`, the sorts, the filter and the explorer) and badges "moved
-  from `<old>`". Group and render by that, never by the stored path.
+  `types.ts`, used by `commentsByPath`, the sorts, the filter, the explorer and `useJump`) and badges
+  "moved from `<old>`". Group, render and **navigate** by that, never by the stored path — a jump
+  naming the stored path scrolls to no card and expands no `DiffView`.
 - Hunkless files (R100, mode-only, empty add/delete) get `noHunksNote` in Changed view. Files over
   `LARGE_FILE_LINES` (500) start collapsed.
 - Images render as a before/after pair via `/api/blob`; SVG is text with a Text/Image toggle; `.md`
