@@ -46,11 +46,15 @@ func TestMatchAt(t *testing.T) {
 
 func TestFindMatches(t *testing.T) {
 	lines := []string{"x", "a", "b", "x", "a", "b"}
-	if got := findMatches(lines, []string{"a", "b"}); !reflect.DeepEqual(got, []int{1, 4}) {
+	if got := findMatches(lines, []string{"a", "b"}, 10); !reflect.DeepEqual(got, []int{1, 4}) {
 		t.Errorf("findMatches = %v, want [1 4]", got)
 	}
-	if got := findMatches(lines, []string{"z"}); len(got) != 0 {
+	if got := findMatches(lines, []string{"z"}, 10); len(got) != 0 {
 		t.Errorf("findMatches(no hit) = %v, want empty", got)
+	}
+	// The caller passes 2: one hit or several is all it can act on, so the tail is never scanned.
+	if got := findMatches(lines, []string{"a", "b"}, 1); !reflect.DeepEqual(got, []int{1}) {
+		t.Errorf("findMatches(limit 1) = %v, want [1]", got)
 	}
 }
 

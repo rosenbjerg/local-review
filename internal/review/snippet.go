@@ -28,7 +28,7 @@ func annotateBySnippet(c *store.Comment, read func(string) ([]string, bool)) {
 		return
 	}
 	// Relocate only on an unambiguous hit; several matches read as outdated.
-	starts := findMatches(lines, snip)
+	starts := findMatches(lines, snip, 2)
 	if len(starts) == 1 {
 		markMoved(c, "", starts[0]+1, starts[0]+len(snip)) // same-file relocation
 		return
@@ -48,11 +48,16 @@ func matchAt(lines []string, start int, snip []string) bool {
 	return true
 }
 
-func findMatches(lines, snip []string) []int {
+// findMatches collects up to limit match positions. The caller only has to tell one hit
+// from several, so there is no reason to scan a large file past the second.
+func findMatches(lines, snip []string, limit int) []int {
 	var out []int
 	for i := 0; i+len(snip) <= len(lines); i++ {
 		if matchAt(lines, i, snip) {
 			out = append(out, i)
+			if len(out) >= limit {
+				return out
+			}
 		}
 	}
 	return out
