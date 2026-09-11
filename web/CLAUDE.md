@@ -12,6 +12,9 @@ bun run build     # tsc -b, then vite → dist (embedded by go:embed)
 bun run dev       # :5173, /api proxied to 127.0.0.1:7777 (a running local-review)
 bun run lint      # ESLint: rules-of-hooks + React Compiler rule (see ../COMPILER.md)
 bun run test      # vitest, jsdom + Testing Library (vitest.config.ts, vitest.setup.ts)
+
+# from the repo root — the React Compiler still compiles every file (CI runs --check)
+bun scripts/compilercheck.ts [--check]
 ```
 
 Test files are excluded from the build tsconfig and lint. Hook logic is tested via `renderHook`
@@ -163,9 +166,12 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
 - `useActiveFile` scans `root.children` for `#file-<path>` anchors — never a subtree query.
 - `.file-body` carries `content-visibility: auto` — not `.file`, which would clip the sticky header.
 - `DiffView` is `memo`ised with `samePropsExceptComments`: every prop by identity except `comments`
-  by value. `commentsByPath` shares one empty array; `useCommentActions` reads through a ref;
-  `onToggleReviewed` takes the path. **A prop that takes a new identity each render silently
-  disables the whole thing.**
+  by value. `commentsByPath` shares one empty array; `useCommentActions` returns one memoized
+  object; `onToggleReviewed` takes the path so `App` can pass one shared handler. **A prop that
+  takes a new identity each render silently disables the whole thing** — and the compiler is what
+  keeps the rest of them stable, so a bailout in `useReview` or `useCommentActions` breaks this
+  boundary without breaking anything visible. `diffViewMemo.test.tsx` pins the comparator and the
+  handler identities; `scripts/compilercheck.ts` pins the compiler.
 - `App` keys the comment-id `Set` on the joined id list, not the array, or every ping re-runs
   markdown-it + Shiki in every thread.
 
@@ -399,7 +405,14 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   node` bins, which bun honors by default, and CI installs no Node.
 - The React Compiler runs unconditionally via `@rolldown/plugin-babel` + `reactCompilerPreset`
   (`@vitejs/plugin-react` has no `babel` option since v6 — see `../COMPILER.md`). Intentional
-  partial-dep effects surface as `exhaustive-deps` warnings, never inline disables.
+  partial-dep effects surface as `exhaustive-deps` warnings (five of them), never inline disables.
+- **A file the compiler can't lower is skipped in silence** — the build passes, lint passes, and
+  the file just loses its memoization. `DiffView`, `FileExplorer`, `useReview` and
+  `useCommentActions` were all bailing out, which is why `samePropsExceptComments` had never
+  once returned true. `bun scripts/compilercheck.ts --check` is the guard (CI); `COMPILER.md`
+  lists the syntax to avoid — `try`/`finally`, a conditional inside a `try`, `x++` on a captured
+  local, a ref written during render, `?.` in a logical test, `for (;;)`, a call above its
+  declaration.
 - Vite 8 is Rolldown + Oxc: `build.rolldownOptions` / `oxc`, not `rollupOptions` / `esbuild`.
   LightningCSS leaves `color-mix()` and `:has()` intact.
 - `dist/.gitkeep` is tracked; the `preserveGitkeep` plugin recreates it after `emptyOutDir`.

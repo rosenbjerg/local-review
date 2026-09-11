@@ -13,6 +13,7 @@ Go backend + React frontend, shipped as one binary (`web/dist` is `go:embed`ded)
 
 ```sh
 ./start.sh <root-path> [flags]        # build frontend + binary, serve repos under root
+bun scripts/compilercheck.ts --check  # the React Compiler still compiles every web/src file
 
 bun install --cwd web
 bun run --cwd web build               # → web/dist (must precede go build)

@@ -42,6 +42,12 @@ jobs:
       - name: generated font features are current
         run: bun scripts/fontfeatures.ts --check
 
+      # Auto-memoization is load-bearing where a `memo` boundary compares props by identity,
+      # and a file the compiler can't compile loses it silently: the build succeeds, the app
+      # works, and lint says nothing. Four files had been bailing out unnoticed.
+      - name: react compiler compiles every file
+        run: bun scripts/compilercheck.ts --check
+
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod

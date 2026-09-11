@@ -1,0 +1,4 @@
+# Files the React Compiler cannot compile, one `<path>\treason` per line.
+# Regenerate with `bun scripts/compilercheck.ts`; CI runs it with --check.
+# A bailout costs that file its auto-memoization — which is load-bearing wherever a
+# `memo` boundary compares props by identity. Prefer fixing the syntax to adding a line.
