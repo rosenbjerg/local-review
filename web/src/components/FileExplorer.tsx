@@ -159,10 +159,12 @@ export function FileExplorer({
   function folderStats(node: DirNode): { total: number; reviewed: number } {
     let total = 0;
     let rev = 0;
+    // `total = total + 1` rather than `total++`: the compiler can't lower an UpdateExpression
+    // on a local captured by a lambda, and bails out of the whole component if it meets one.
     const walk = (n: TreeNode) => {
       if (n.kind === "file") {
-        total++;
-        if (reviewed.has(n.path)) rev++;
+        total = total + 1;
+        if (reviewed.has(n.path)) rev = rev + 1;
       } else {
         n.children.forEach(walk);
       }

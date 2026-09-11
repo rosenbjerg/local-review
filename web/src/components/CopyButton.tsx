@@ -21,8 +21,11 @@ export function CopyButton({
   }, []);
 
   async function copy() {
+    // Resolved before the try, which takes the await and nothing else: the compiler bails
+    // on a conditional inside one.
+    const value = typeof text === "function" ? text() : text;
     try {
-      await navigator.clipboard.writeText(typeof text === "function" ? text() : text);
+      await navigator.clipboard.writeText(value);
       setState("ok");
     } catch {
       setState("fail");

@@ -96,11 +96,15 @@ export function CommentComposer({
     if (!submittable || submitting) return;
     const trimmed = body.trim();
     setSubmitting(true);
+    // Was a try/finally, which the compiler can't lower. onSubmit reports failure by
+    // returning false rather than throwing, so the catch is belt-and-braces — but either
+    // way the composer has to stop blocking re-entry, so the reset sits after both.
     try {
       await onSubmit(trimmed, type);
-    } finally {
-      setSubmitting(false);
+    } catch {
+      // fall through — the caller surfaces the error
     }
+    setSubmitting(false);
   }
 
   // Bound on the root, not the textarea: the global shortcuts bail on this whole subtree, so the

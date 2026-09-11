@@ -145,11 +145,6 @@ export const DiffView = memo(function DiffView({
     if (expandTarget && expandTarget.path === path) setCollapsed(false);
   }, [expandTarget, path]);
 
-  // The find bar's "Search full file"; keyed on the signal alone, deliberately not on switchMode.
-  useEffect(() => {
-    if (showFullSignal && showFullSignal.path === path) void switchMode("full");
-  }, [showFullSignal, path]);
-
   // The hunks are in here as the content-change signal: on the worktree side nothing else in the key
   // moves when the file changes on disk, and a stale key leaves `source` set for the fetch effect to skip.
   const contentKey = useMemo(
@@ -157,9 +152,13 @@ export const DiffView = memo(function DiffView({
       `${repo} ${headRef} ${side} ${file.status} ${file.newPath} ${JSON.stringify(file.hunks)}`,
     [repo, headRef, side, file]
   );
-  // switchMode checks against the live key; its own closure's predates the await.
+  // switchMode checks against the live key; its own closure's predates the await. Written in
+  // an effect, not during render: switchMode only reads it after an await, by which point the
+  // effect has flushed, and a ref written during render bails the compiler out of this file.
   const contentKeyRef = useRef(contentKey);
-  contentKeyRef.current = contentKey;
+  useEffect(() => {
+    contentKeyRef.current = contentKey;
+  });
   useEffect(() => {
     setSource(null);
     setMissing(false);
@@ -265,20 +264,29 @@ export const DiffView = memo(function DiffView({
   async function switchMode(next: "changed" | "full") {
     if (next === "full" && !source) {
       const key = contentKey;
+      // Only the await sits in the try: the compiler bails on a conditional inside one, and
+      // a bailed-out DiffView is a DiffView that re-renders on every parent render.
+      let res;
       try {
-        const res = await api.file(repo, file.newPath, headRef, side);
-        // The side moved while this was in flight; the fetch effect owns the refetch.
-        if (key !== contentKeyRef.current) return;
-        setSubstituted(side === "head" && res.worktree);
-        setSource(res.content.replace(/\n$/, "").split("\n"));
+        res = await api.file(repo, file.newPath, headRef, side);
       } catch (e) {
         setLoadError(`Could not load full file: ${(e as Error).message}`);
         return;
       }
+      // The side moved while this was in flight; the fetch effect owns the refetch.
+      if (key !== contentKeyRef.current) return;
+      setSubstituted(side === "head" && res.worktree);
+      setSource(res.content.replace(/\n$/, "").split("\n"));
     }
     setLoadError(null);
     setMode(next);
   }
+
+  // The find bar's "Search full file"; keyed on the signal alone, deliberately not on switchMode.
+  useEffect(() => {
+    if (showFullSignal && showFullSignal.path === path) void switchMode("full");
+  }, [showFullSignal, path]);
+
 
   function onGutterMouseDown(newLine: number, shift: boolean, e: ReactMouseEvent) {
     e.preventDefault(); // avoid starting a native text selection while dragging

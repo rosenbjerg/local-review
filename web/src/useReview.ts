@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { type ComboOption } from "./components/Combobox";
-import type { Branch, Comment, Commit, DiffOpts, FileDiff, Repo, Review, Side } from "./types";
+import type {
+  Branch,
+  Comment,
+  Commit,
+  DiffOpts,
+  DiffResponse,
+  FileDiff,
+  Repo,
+  Review,
+  Side,
+} from "./types";
 import { LS, getString, readBasePref, readDiffViewPref, writeDiffViewPref } from "./storage";
 import { relativeDay, relativeTime } from "./time";
 
@@ -222,52 +232,61 @@ export function useReview() {
         return;
       }
       inFlight = true;
+      // Snapshot the selection this read belongs to: an axis toggle keeps review.id, so `cancelled` never fires
+      // and an older ping would otherwise land hunks from the side just left.
+      const seq = reqSeq.current;
+      const p = diffParams.current;
+      // A `diff` ping also refreshes branches (out-of-band checkout) and the commit picker. Their failures are
+      // swallowed: a `from` rebased away 400s the diff, and the check below then resets it instead of stranding the review.
+      // Started before the try, which holds the await and nothing else — the compiler bails on a
+      // conditional inside a try, and a bailed-out useReview hands unmemoized callbacks to DiffView.
+      const revP = api.getReview(id);
+      const diffP =
+        withDiff && p.repo && p.headRef
+          ? api.diff(p.repo, p.headRef, p.opts).catch(() => null)
+          : Promise.resolve(null);
+      const branchesP = withDiff && p.repo ? api.branches(p.repo).catch(() => null) : Promise.resolve(null);
+      const commitsP =
+        withDiff && p.repo && p.head
+          ? api.commits(p.repo, p.head, p.base, COMMIT_LIMIT).catch(() => null)
+          : Promise.resolve(null);
+      let rev: Review | null = null;
+      let d: DiffResponse | null = null;
+      let br: { branches: Branch[] } | null = null;
+      let cm: { commits: Commit[] } | null = null;
       try {
-        // Snapshot the selection this read belongs to: an axis toggle keeps review.id, so `cancelled` never fires
-        // and an older ping would otherwise land hunks from the side just left.
-        const seq = reqSeq.current;
-        const p = diffParams.current;
-        // A `diff` ping also refreshes branches (out-of-band checkout) and the commit picker. Their failures are
-        // swallowed: a `from` rebased away 400s the diff, and the check below then resets it instead of stranding the review.
-        const [rev, d, br, cm] = await Promise.all([
-          api.getReview(id),
-          withDiff && p.repo && p.headRef
-            ? api.diff(p.repo, p.headRef, p.opts).catch(() => null)
-            : Promise.resolve(null),
-          withDiff && p.repo ? api.branches(p.repo).catch(() => null) : Promise.resolve(null),
-          withDiff && p.repo && p.head
-            ? api.commits(p.repo, p.head, p.base, COMMIT_LIMIT).catch(() => null)
-            : Promise.resolve(null),
-        ]);
-        if (!cancelled) {
-          // Fetched by id, so not gated on seq — that would drop the comment/reviewed updates the ping came for.
-          setReview((prev) => keepIfSame(prev, rev));
-          setComments((prev) => keepIfSame(prev, rev.comments ?? []));
-          setReviewedFiles((prev) => keepIfSameSet(prev, rev.reviewedFiles ?? []));
-          if (reqSeq.current === seq) {
-            if (d) {
-              setFiles(d.files ?? []);
-              setBaseSha(d.base ?? "");
-            }
-            if (br) setBranches((prev) => keepIfSame(prev, br.branches ?? []));
-            if (cm) {
-              const list = cm.commits ?? [];
-              setCommits((prev) => keepIfSame(prev, list));
-              // A rebased-away `from` would 400 the next diff; reset only when the list proves it (see fromWasRemoved).
-              setFrom((cur) => (fromWasRemoved(cur, list) ? "all" : cur));
-            }
-          }
-        }
+        [rev, d, br, cm] = await Promise.all([revP, diffP, branchesP, commitsP]);
       } catch {
         // Transient refresh failure — keep the current state.
-      } finally {
-        inFlight = false;
-        if (pending && !cancelled) {
-          pending = false;
-          const wantDiff = pendingDiff;
-          pendingDiff = false;
-          refresh(wantDiff);
+      }
+      if (rev && !cancelled) {
+        const landed = rev;
+        // Fetched by id, so not gated on seq — that would drop the comment/reviewed updates the ping came for.
+        setReview((prev) => keepIfSame(prev, landed));
+        setComments((prev) => keepIfSame(prev, landed.comments ?? []));
+        setReviewedFiles((prev) => keepIfSameSet(prev, landed.reviewedFiles ?? []));
+        if (reqSeq.current === seq) {
+          if (d) {
+            setFiles(d.files ?? []);
+            setBaseSha(d.base ?? "");
+          }
+          if (br) setBranches((prev) => keepIfSame(prev, br.branches ?? []));
+          if (cm) {
+            const list = cm.commits ?? [];
+            setCommits((prev) => keepIfSame(prev, list));
+            // A rebased-away `from` would 400 the next diff; reset only when the list proves it (see fromWasRemoved).
+            setFrom((cur) => (fromWasRemoved(cur, list) ? "all" : cur));
+          }
         }
+      }
+      // Was a `finally`: the compiler can't lower one, so the drain runs on the straight-line
+      // path instead. Nothing above throws — the only await is inside the try.
+      inFlight = false;
+      if (pending && !cancelled) {
+        pending = false;
+        const wantDiff = pendingDiff;
+        pendingDiff = false;
+        refresh(wantDiff);
       }
     }
     const es = new EventSource(`/api/reviews/${id}/events`);
@@ -331,42 +350,65 @@ export function useReview() {
     setHead("");
   }
 
+  // recoverHead handles a failed start: head may be gone (deleted/renamed/mid-rebase), in which case
+  // fall back to the checked-out branch and let auto-start re-fire. Reports whether it recovered;
+  // a false means the caller should surface the original error. Split out of startReview's catch
+  // because the `??` chain below cannot live inside a try block without bailing the compiler out.
+  async function recoverHead(seq: number): Promise<boolean> {
+    let branchList = null;
+    try {
+      branchList = await api.branches(repo);
+    } catch {
+      // ignore — the caller surfaces the original error
+    }
+    if (!branchList) return false;
+    const list = branchList.branches ?? [];
+    if (reqSeq.current !== seq || list.some((b) => b.name === head)) return false;
+    setBranches(list);
+    const current = list.find((b) => b.isCurrent);
+    const firstLocal = list.find((b) => !b.isRemote);
+    changeHead(current?.name ?? firstLocal?.name ?? "");
+    return true;
+  }
+
   async function startReview() {
     if (!repo || !head) return;
     const seq = ++reqSeq.current;
     setLoading(true);
     setError(null);
+    // Built before the await, for the same reason as in refresh above.
+    const baseArg = base || undefined;
+    let rev: Review | null = null;
+    let failure: Error | null = null;
     try {
-      const rev = await api.createReview(repo, head, base || undefined);
-      if (reqSeq.current !== seq) return; // superseded by a repo switch / newer load
+      rev = await api.createReview(repo, head, baseArg);
+    } catch (e) {
+      failure = e as Error;
+    }
+    // Each `reqSeq` check is what the old early returns did: superseded by a repo switch / newer load.
+    if (rev && reqSeq.current === seq) {
       setReview(rev);
       setComments(rev.comments ?? []);
       setReviewedFiles(new Set(rev.reviewedFiles ?? []));
-      const diff = await api.diff(repo, rev.headRef, diffOpts(rev.baseRef));
-      if (reqSeq.current !== seq) return;
-      setFiles(diff.files ?? []);
-      setBaseSha(diff.base ?? "");
-    } catch (e) {
-      if (reqSeq.current !== seq) return;
-      // head may be gone (deleted/renamed/mid-rebase): if so fall back to current and let auto-start re-fire.
-      let recovered = false;
+      const opts = diffOpts(rev.baseRef);
+      const headRef = rev.headRef;
+      let diff: DiffResponse | null = null;
       try {
-        const r = await api.branches(repo);
-        const list = r.branches ?? [];
-        if (reqSeq.current === seq && !list.some((b) => b.name === head)) {
-          setBranches(list);
-          const current = list.find((b) => b.isCurrent);
-          const firstLocal = list.find((b) => !b.isRemote);
-          changeHead(current?.name ?? firstLocal?.name ?? "");
-          recovered = true;
-        }
-      } catch {
-        // ignore — surface the original error below
+        diff = await api.diff(repo, headRef, opts);
+      } catch (e) {
+        failure = e as Error;
       }
-      if (!recovered && reqSeq.current === seq) setError((e as Error).message);
-    } finally {
-      if (reqSeq.current === seq) setLoading(false);
+      if (diff && reqSeq.current === seq) {
+        setFiles(diff.files ?? []);
+        setBaseSha(diff.base ?? "");
+      }
     }
+    if (failure && reqSeq.current === seq) {
+      const recovered = await recoverHead(seq);
+      if (!recovered && reqSeq.current === seq) setError(failure.message);
+    }
+    // Was a `finally`; the seq gate is unchanged, so a superseded load still leaves loading alone.
+    if (reqSeq.current === seq) setLoading(false);
   }
 
   // Auto-start on a complete selection; the view axes have their own refetch effect, so they're not deps.

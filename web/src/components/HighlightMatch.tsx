@@ -6,8 +6,9 @@ export function HighlightMatch({ text, needle }: { text: string; needle: string 
   const lower = text.toLowerCase();
   const parts: ReactNode[] = [];
   let i = 0;
-  let key = 0;
-  for (;;) {
+  // `while (true)` rather than `for (;;)`, and the key off `parts.length` rather than a
+  // counter: an empty for-test and an UpdateExpression each bail the compiler out.
+  while (true) {
     const idx = lower.indexOf(needle, i);
     if (idx < 0) {
       parts.push(text.slice(i));
@@ -15,7 +16,7 @@ export function HighlightMatch({ text, needle }: { text: string; needle: string 
     }
     if (idx > i) parts.push(text.slice(i, idx));
     parts.push(
-      <mark key={key++} className="search-hl">
+      <mark key={parts.length} className="search-hl">
         {text.slice(idx, idx + needle.length)}
       </mark>
     );

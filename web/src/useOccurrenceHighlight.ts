@@ -64,7 +64,11 @@ export function useOccurrenceHighlight(enabled: boolean, rootRef: RefObject<HTML
     const read = () =>
       setTarget((prev) => {
         const next = readTarget();
-        return prev?.path === next?.path && prev?.term === next?.term ? prev : next;
+        // Compared field by field off locals: optional chaining inside a logical test is a
+        // shape the compiler can't lower, and it bails out of the whole hook over it.
+        const samePath = (prev ? prev.path : null) === (next ? next.path : null);
+        const sameTerm = (prev ? prev.term : null) === (next ? next.term : null);
+        return samePath && sameTerm ? prev : next;
       });
     const onMouseUp = (e: MouseEvent) => {
       if (e.detail < 3) read(); // a triple-click selects the whole line, not a word

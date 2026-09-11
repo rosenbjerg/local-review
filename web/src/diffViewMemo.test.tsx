@@ -1,5 +1,5 @@
 import { expect, test, vi } from "vitest";
-import { render } from "@testing-library/react";
+import { render, renderHook } from "@testing-library/react";
 
 // File cards mount once and never unmount, so every mounted card sits in App's
 // render output forever. Without a memo boundary they all re-render whenever
@@ -29,6 +29,7 @@ vi.mock("./components/FileHeader", () => ({
 }));
 
 import { DiffView } from "./components/DiffView";
+import { useCommentActions } from "./useCommentActions";
 import type { Comment, FileDiff } from "./types";
 
 const file: FileDiff = {
@@ -103,4 +104,33 @@ test("a card re-renders when a non-comment prop changes", () => {
   rerender(<DiffView {...props} comments={comments} side="worktree" />);
 
   expect(headerRenders).toBeGreaterThan(after);
+});
+
+// The tests above hand the card a props object built once, which is the comparator in
+// isolation — it says nothing about what App actually passes. Every prop but `comments`
+// is compared by identity, so a handler rebuilt each render disables the boundary
+// entirely, silently, and only in the real app. These pin the handlers at their source.
+test("the thread actions keep their identity across a re-render", () => {
+  const setComments = vi.fn();
+  const setError = vi.fn();
+  const { result, rerender } = renderHook(
+    ({ side }: { side: "head" | "worktree" }) =>
+      useCommentActions({ review: null, setComments, setError, side }),
+    { initialProps: { side: "head" as const } }
+  );
+  const first = result.current.commentActions;
+
+  rerender({ side: "head" });
+  expect(result.current.commentActions).toBe(first);
+
+  // Even the side changing leaves them alone: none of the six reads it.
+  rerender({ side: "worktree" });
+  expect(result.current.commentActions).toBe(first);
+});
+
+test("delete is one implementation, shared by the pane and the card", () => {
+  const { result } = renderHook(() =>
+    useCommentActions({ review: null, setComments: vi.fn(), setError: vi.fn(), side: "head" })
+  );
+  expect(result.current.handleDelete).toBe(result.current.commentActions.onDelete);
 });

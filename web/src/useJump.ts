@@ -54,10 +54,13 @@ export function useJump({ comments, setSelectedFile, onProgrammaticScroll }: Par
     document.getElementById(`file-${path}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
     let tries = 0;
     const poll = () => {
-      if (flashComment(id) || tries++ > 40) {
+      // `tries = tries + 1`, not `tries++`: the compiler can't lower an UpdateExpression on a
+      // local a lambda captured, and bails out of the whole hook when it meets one.
+      if (flashComment(id) || tries > 40) {
         jumpPoll.current = null;
         return;
       }
+      tries = tries + 1;
       jumpPoll.current = setTimeout(poll, 100);
     };
     jumpPoll.current = setTimeout(poll, 100);
