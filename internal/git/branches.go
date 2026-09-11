@@ -162,22 +162,53 @@ func sortBranches(branches []Branch) {
 	})
 }
 
+// mainCandidates is the precedence MainBranch resolves in: a local trunk first, then what
+// origin/HEAD points at, then origin's own trunks.
+var mainCandidates = []string{
+	"refs/heads/main",
+	"refs/heads/master",
+	"refs/remotes/origin/HEAD",
+	"refs/remotes/origin/main",
+	"refs/remotes/origin/master",
+}
+
+// MainBranch names the repo's trunk, or "" — not a fabricated "main", so callers then
+// require an explicit base. One for-each-ref over every candidate: this runs on the branch
+// list and on every auto-base diff, and five sequential rev-parses is five processes.
 func (r *Repo) MainBranch() string {
-	for _, name := range []string{"main", "master"} {
-		if _, err := r.run("rev-parse", "--verify", "--quiet", name); err == nil {
-			return name
-		}
+	// for-each-ref prints only the refs that exist, in the order given, so the first
+	// answering line is already the winner — except that origin/HEAD answers with its target.
+	out, err := r.run(append([]string{"for-each-ref", "--format=%(refname)\x1f%(symref:short)"}, mainCandidates...)...)
+	if err != nil {
+		return ""
 	}
-	if out, err := r.run("rev-parse", "--abbrev-ref", "origin/HEAD"); err == nil {
-		if name := strings.TrimSpace(out); name != "" && name != "origin/HEAD" {
-			return name
+	found := map[string]string{}
+	sc := bufio.NewScanner(strings.NewReader(out))
+	for sc.Scan() {
+		line := sc.Text()
+		if line == "" {
+			continue
 		}
-	}
-	for _, name := range []string{"origin/main", "origin/master"} {
-		if _, err := r.run("rev-parse", "--verify", "--quiet", name); err == nil {
-			return name
+		name, symref, ok := strings.Cut(line, "\x1f")
+		if !ok {
+			continue
 		}
+		found[name] = strings.TrimSpace(symref)
 	}
-	// "" rather than a fabricated "main": callers then require an explicit base.
+	for _, ref := range mainCandidates {
+		target, present := found[ref]
+		if !present {
+			continue
+		}
+		// origin/HEAD is a pointer, not a branch: it answers with what it points at, and an
+		// origin/HEAD that points nowhere usable is no answer at all.
+		if ref == "refs/remotes/origin/HEAD" {
+			if target != "" && target != "origin/HEAD" {
+				return target
+			}
+			continue
+		}
+		return strings.TrimPrefix(strings.TrimPrefix(ref, "refs/heads/"), "refs/remotes/")
+	}
 	return ""
 }

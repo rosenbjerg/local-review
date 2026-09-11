@@ -72,6 +72,11 @@ export/export.go        review → canonical markdown
   leading name is neither its prefix nor part of its rank, so `origin/main` heads the remotes. The
   `--format` separator is a literal `\x1f` byte — `git branch` prints `%x1f` verbatim, `git log`
   expands it. `TestSortBranches`, `TestBranchRank`, `TestListBranchesOrderedByActivity`.
+- `MainBranch()` probes `main`, `master`, `origin/HEAD`'s target, `origin/main`, `origin/master`
+  in **one** `for-each-ref` over all five candidate refs. It runs on the branch list and on every
+  auto-base diff and commit list, so the five sequential `rev-parse`s it replaced were five
+  processes on a hot path. `origin/HEAD` prints as `origin` under `%(refname:short)`, so it's
+  identified by carrying a symref, not by name.
 - Diff base defaults to the main-branch **name** (stored on the review); handlers resolve
   `merge-base(base, head)` at query time. `MainBranch()` prefers local `main`/`master`, then
   `origin/HEAD` / `origin/main` / `origin/master`, else `""` (create/diff then require a base). A
