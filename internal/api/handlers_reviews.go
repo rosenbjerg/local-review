@@ -177,12 +177,16 @@ func (s *Server) handleSetReviewed(w http.ResponseWriter, r *http.Request) error
 	if err != nil {
 		return err
 	}
-	// Fingerprint the on-screen side (dropped later if the content changes), warmed as one batch.
+	// Fingerprint the on-screen side (dropped later if the content changes), warmed as one
+	// batch. Not best-effort: an empty hash reads as a legacy row that always holds, so a
+	// mark stored without one could never go stale again.
 	var hashes map[string]string
 	if req.Reviewed {
-		if repo, headRef, err := s.reviewRepo(id); err == nil {
-			hashes = review.FingerprintFiles(repo, headRef, req.FilePaths, side)
+		repo, headRef, err := s.reviewRepo(id)
+		if err != nil {
+			return err
 		}
+		hashes = review.FingerprintFiles(repo, headRef, req.FilePaths, side)
 	}
 	marks := make([]store.FileReviewMark, 0, len(req.FilePaths))
 	for _, p := range req.FilePaths {

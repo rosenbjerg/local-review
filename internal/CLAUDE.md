@@ -160,7 +160,9 @@ fetches the marks and passes them in — so the derivation can be tested, and re
 - `reviewed_files` stores a SHA-256 fingerprint of the new-side content plus the `Side`. Every read
   re-hashes and drops marks whose content changed. An unreadable side at mark time (a reviewed
   deletion) stores `absentContentHash`, which holds only while the file stays unreadable; an empty
-  fingerprint is a legacy row and always holds. `SetFilesReviewed` upserts a whole batch in one
+  fingerprint is a legacy row and always holds — which is why `handleSetReviewed` **fails** rather
+  than marking without one: a mark stored with an empty hash would be indistinguishable from a
+  legacy row and could never go stale again. `SetFilesReviewed` upserts a whole batch in one
   transaction with one ping; the API always takes a `filePaths` array.
 - `summary` is review-level free text (`POST /api/reviews/{id}/summary`, trimmed). Rendered as
   `**Summary**`, not `## Summary`, since files own h2. `SetReviewSummary` reports a missing review
