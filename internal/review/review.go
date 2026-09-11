@@ -12,12 +12,14 @@ import (
 
 // Annotate fills in rev's derived fields: each comment's anchor status and the reviewed
 // marks that survive a re-hash. marks are the stored fingerprints; a nil slice leaves the
-// marks untouched, which is what a failed store read should do.
-func Annotate(rev *store.Review, marks []store.ReviewedFile) {
+// marks untouched, which is what a failed store read should do. diffs may be nil.
+func Annotate(rev *store.Review, marks []store.ReviewedFile, diffs *DiffCache) {
 	repo := git.New(rev.RepoPath)
 	// Both halves read absence as staleness, which holds only while the repo itself is
-	// readable — so probe once and, if it isn't, leave the stored state standing.
-	if err := blocker(repo, rev); err != nil {
+	// readable — so probe once and, if it isn't, leave the stored state standing. The probe
+	// resolves head, which is the one sha the rest of the pass needs.
+	headSHA, err := blocker(repo, rev)
+	if err != nil {
 		rev.AnnotationError = err.Error()
 		return
 	}
@@ -26,20 +28,24 @@ func Annotate(rev *store.Review, marks []store.ReviewedFile) {
 	warmCache(cache, rev.Comments, marks)
 
 	if len(rev.Comments) > 0 {
-		annotateComments(repo, rev.HeadRef, rev.Comments, cache)
+		annotateComments(repo, headSHA, rev.Comments, cache, diffs)
 	}
 	annotateReviewedFiles(rev, marks, cache)
 }
 
 // AnnotateComment recomputes one comment's anchor for a mutation's response, so a client that
 // swaps the returned comment into its list sees the same staleness a review read reports.
-// One comment, so a cache warm-up would cost more than it saves.
-func AnnotateComment(repo *git.Repo, headRef string, c *store.Comment) *store.Comment {
+// One comment, so neither a cache warm-up nor the cross-read diff cache would pay for itself.
+// headSHA may be empty, for the callers that had no reason to resolve head themselves.
+func AnnotateComment(repo *git.Repo, headRef, headSHA string, c *store.Comment) *store.Comment {
 	if repo == nil {
 		return c
 	}
+	if headSHA == "" {
+		headSHA, _ = repo.ResolveSHA(headRef)
+	}
 	cs := []store.Comment{*c}
-	annotateComments(repo, headRef, cs, newContentCache(repo, headRef))
+	annotateComments(repo, headSHA, cs, newContentCache(repo, headRef), nil)
 	return &cs[0]
 }
 
@@ -69,15 +75,17 @@ func warmCache(cache *contentCache, comments []store.Comment, reviewed []store.R
 	}
 }
 
-// blocker reports why staleness can't be judged, or nil when it can. An unreadable repo is
-// not a stale review: without this every comment would read as outdated at HTTP 200.
-func blocker(repo *git.Repo, rev *store.Review) error {
+// blocker reports why staleness can't be judged, or the resolved head sha when it can. An
+// unreadable repo is not a stale review: without this every comment would read as outdated
+// at HTTP 200.
+func blocker(repo *git.Repo, rev *store.Review) (string, error) {
 	if !git.IsRepo(rev.RepoPath) {
-		return fmt.Errorf("%s can no longer be read — the repository may have been moved, renamed, or deleted", rev.RepoPath)
+		return "", fmt.Errorf("%s can no longer be read — the repository may have been moved, renamed, or deleted", rev.RepoPath)
 	}
 	// A head that won't resolve fails every head-side read identically.
-	if _, err := repo.ResolveSHA(rev.HeadRef); err != nil {
-		return fmt.Errorf("branch %s no longer resolves — it may have been deleted, renamed, or is mid-rebase", rev.HeadRef)
+	sha, err := repo.ResolveSHA(rev.HeadRef)
+	if err != nil {
+		return "", fmt.Errorf("branch %s no longer resolves — it may have been deleted, renamed, or is mid-rebase", rev.HeadRef)
 	}
-	return nil
+	return sha, nil
 }

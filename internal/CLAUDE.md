@@ -35,7 +35,8 @@ api/annotate.go         reads the stored marks and hands them to review.Annotate
 api/origin.go           WithSameOrigin browser-write guard        api/logging.go  WithErrorLogging (Flush passes through for SSE)
 api/events.go           in-memory SSE hub                          api/watch.go    per-review filesystem poller
 review/review.go        Annotate / AnnotateComment — the derived pass, plus the unreadable-repo probe
-review/anchor.go        diff tracking: commit_sha → head through the hunks, rename following, diff caches
+review/anchor.go        diff tracking: commit_sha → head through the hunks, rename following, per-read caches
+review/diffcache.go     DiffCache: parsed `git diff <sha> <sha>` kept across reads, owned by api.Server
 review/snippet.go       the text-matching fallback, and CaptureSnippet
 review/content.go       ReadSide / SideLabel (the one side → git-read map) + the per-read content cache
 review/reviewed.go      FingerprintFiles + the reviewed-mark re-hash
@@ -143,6 +144,19 @@ fetches the marks and passes them in — so the derivation can be tested, and re
   plus every poller tick. `git.BatchObjects` reads many `<ref>:<path>` through one `cat-file
   --batch`, taking payloads by the header's byte count and correlating records by **position**
   (a found record reports the oid, not the spec); trees and oddities fall through to single reads.
+- **Nor a git process per comment, every 1.5 seconds.** Re-anchoring diffs `commit_sha` against
+  head once per (sha, path), and the poller re-reads the whole review on every tick — 30 comments
+  over 30 shas was 30 `git diff` and ~480ms, repeated unchanged forever. `review.DiffCache` keeps
+  the parsed output: both ends are resolved shas, so an entry can never go stale, only be evicted.
+  Two levels — a generation per `(repo path, head sha)`, entries within it per `(from sha, path)`
+  — so a moved head retires one generation instead of needing invalidation, capped at four.
+  `api.Server` owns the one instance and threads it through `annotateReview`, rather than a package
+  global, so tests get a fresh one. **Only successes are stored** (the per-read `diffCaches` still
+  absorbs errors) or a mid-rebase failure would outlive the rebase. The second read of an unchanged
+  review is 2 processes and ~30ms; `diffcache_test.go` counts the processes with a `git` shim,
+  because nothing else proves a process wasn't spawned.
+- `blocker` returns the head sha it resolved, and `annotateComments` takes that sha rather than the
+  ref — one `rev-parse` per pass instead of two, and an immutable key for the cache above.
   A terminator is told by the header's trailing `missing`/`ambiguous`, never by its field count —
   git echoes the spec back first, so a path with a space reads like a found record's three fields.
   A header the parser still can't read fails the **whole** batch: `warm` records an unanswered spec

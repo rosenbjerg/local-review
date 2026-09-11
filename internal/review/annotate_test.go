@@ -101,10 +101,10 @@ func TestCaptureSnippetPerSide(t *testing.T) {
 }
 
 // annotate runs annotateComments against headRef and returns the single mutated
-// comment for assertions.
+// comment for assertions. A fresh cache per call, so one test can't answer another's diff.
 func annotateOne(r *testRepo, headRef string, c store.Comment) store.Comment {
 	cs := []store.Comment{c}
-	annotateComments(r.repo, headRef, cs, newContentCache(r.repo, headRef))
+	annotateComments(r.repo, r.sha(headRef), cs, newContentCache(r.repo, headRef), NewDiffCache())
 	return cs[0]
 }
 
@@ -438,7 +438,7 @@ func TestAnnotateByDiffWholeTreeAgreesWithScoped(t *testing.T) {
 	if !shasWithSeveralComments(cs, "head-sha")[sha1] {
 		t.Fatal("fixture should select the whole-tree diff")
 	}
-	annotateComments(r.repo, "main", cs, newContentCache(r.repo, "main"))
+	annotateComments(r.repo, r.sha("main"), cs, newContentCache(r.repo, "main"), NewDiffCache())
 
 	byPath := map[string]store.Comment{}
 	for _, c := range cs {

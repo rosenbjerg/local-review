@@ -80,7 +80,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) error 
 	if err != nil {
 		return err
 	}
-	c = review.AnnotateComment(repo, headRef, c)
+	c = review.AnnotateComment(repo, headRef, sha, c)
 	s.notify(id)
 	return writeJSON(w, c)
 }
@@ -161,12 +161,14 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) err
 	}
 	snippet := existing.Snippet
 	commitSHA := existing.CommitSHA
+	// Empty unless the re-anchor resolved it; AnnotateComment resolves head itself when it has to.
+	headSHA := ""
 	if reanchor {
 		snippet = ""
 		if startLine > 0 && repo != nil {
 			snippet = review.CaptureSnippet(repo, headRef, existing.FilePath, startLine, endLine, existing.Side)
 			if sha, err := repo.ResolveSHA(headRef); err == nil {
-				commitSHA = sha
+				commitSHA, headSHA = sha, sha
 			}
 		}
 	}
@@ -175,7 +177,7 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) err
 		return storeErr(err)
 	}
 	reviewID := c.ReviewID
-	c = review.AnnotateComment(repo, headRef, c)
+	c = review.AnnotateComment(repo, headRef, headSHA, c)
 	s.notify(reviewID)
 	return writeJSON(w, c)
 }

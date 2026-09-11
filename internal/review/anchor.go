@@ -9,15 +9,16 @@ import (
 )
 
 // annotateComments checks each comment against the side it was anchored to; the wrong side never matches.
-func annotateComments(repo *git.Repo, headRef string, comments []store.Comment, cache *contentCache) {
-	headSHA, _ := repo.ResolveSHA(headRef)
-	caches := &diffCaches{scoped: map[string]*fileDiffResult{}, whole: map[string]*fileDiffResult{}}
+// headSHA is head already resolved — the caller needed it anyway, and an immutable sha is what the
+// cross-read cache can be keyed on.
+func annotateComments(repo *git.Repo, headSHA string, comments []store.Comment, cache *contentCache, diffs *DiffCache) {
+	caches := newDiffCaches(repo, headSHA, diffs)
 	// A sha with several comments reads one whole-tree diff instead of a scoped diff per path.
 	wholePreferred := shasWithSeveralComments(comments, headSHA)
 	for i := range comments {
 		c := &comments[i]
 		if diffTrackable(c, headSHA) {
-			if annotateByDiff(repo, c, headRef, caches, wholePreferred[c.CommitSHA]) {
+			if annotateByDiff(c, caches, wholePreferred[c.CommitSHA]) {
 				continue
 			}
 		}
@@ -52,54 +53,86 @@ func shasWithSeveralComments(comments []store.Comment, headSHA string) map[strin
 type fileDiffResult struct {
 	files []git.FileDiff
 	err   error
-	// Lazily built: the whole-tree diff is consulted once per comment, and a linear scan would be quadratic.
+	// Built up front, not on first use: a result reaching the cross-read cache is read by
+	// concurrent requests, and filling this lazily would race.
 	byOldPath map[string]*git.FileDiff
+}
+
+func newFileDiffResult(files []git.FileDiff, err error) *fileDiffResult {
+	res := &fileDiffResult{files: files, err: err}
+	if err != nil {
+		return res
+	}
+	res.byOldPath = make(map[string]*git.FileDiff, len(files))
+	for i := range files {
+		// First wins.
+		if _, dup := res.byOldPath[files[i].OldPath]; !dup {
+			res.byOldPath[files[i].OldPath] = &files[i]
+		}
+	}
+	return res
 }
 
 // entry looks up by OLD-side path, the side a head-anchored comment is keyed to; matching
 // NewPath would pick up an unrelated file renamed onto this path.
 func (res *fileDiffResult) entry(path string) *git.FileDiff {
-	if res.byOldPath == nil {
-		res.byOldPath = make(map[string]*git.FileDiff, len(res.files))
-		for i := range res.files {
-			// First wins.
-			if _, dup := res.byOldPath[res.files[i].OldPath]; !dup {
-				res.byOldPath[res.files[i].OldPath] = &res.files[i]
-			}
-		}
-	}
 	return res.byOldPath[path]
 }
 
-// diffCaches memoizes, per review read, the path-scoped diff per (sha, path) and the whole-tree diff per sha.
+// diffCaches memoizes diffs for one review read and reads through to the cross-read cache
+// behind it. Errors stay local: a mid-rebase failure must not outlive the read it happened in.
 type diffCaches struct {
-	scoped map[string]*fileDiffResult // key: commit_sha + "\x00" + path
-	whole  map[string]*fileDiffResult // key: commit_sha
+	repo    *git.Repo
+	headSHA string
+	shared  *DiffCache
+	gen     string
+	local   map[string]*fileDiffResult
 }
 
-// scopedEntry returns path's entry in `git diff <sha> head -- path`: nil if unchanged, ok=false on git error.
-func (dc *diffCaches) scopedEntry(repo *git.Repo, sha, head, path string) (fd *git.FileDiff, ok bool) {
-	key := sha + "\x00" + path
-	res := dc.scoped[key]
-	if res == nil {
-		files, err := repo.DiffFile(sha, head, path)
-		res = &fileDiffResult{files: files, err: err}
-		dc.scoped[key] = res
+func newDiffCaches(repo *git.Repo, headSHA string, shared *DiffCache) *diffCaches {
+	return &diffCaches{
+		repo:    repo,
+		headSHA: headSHA,
+		shared:  shared,
+		gen:     repo.Path + "\x00" + headSHA,
+		local:   map[string]*fileDiffResult{},
 	}
+}
+
+// resolve reads through the per-read map, then the cross-read cache, then git; run is
+// called only on a full miss, and only its successes are shared.
+func (dc *diffCaches) resolve(key string, run func() ([]git.FileDiff, error)) *fileDiffResult {
+	if res := dc.local[key]; res != nil {
+		return res
+	}
+	if res := dc.shared.get(dc.gen, key); res != nil {
+		dc.local[key] = res
+		return res
+	}
+	res := newFileDiffResult(run())
+	dc.local[key] = res
+	if res.err == nil {
+		dc.shared.put(dc.gen, key, res)
+	}
+	return res
+}
+
+// scopedEntry returns path's entry in `git diff <sha> <head> -- path`: nil if unchanged, ok=false on git error.
+func (dc *diffCaches) scopedEntry(sha, path string) (fd *git.FileDiff, ok bool) {
+	res := dc.resolve("s\x00"+sha+"\x00"+path, func() ([]git.FileDiff, error) {
+		return dc.repo.DiffFile(sha, dc.headSHA, path)
+	})
 	if res.err != nil {
 		return nil, false
 	}
 	return res.entry(path), true
 }
 
-// wholeEntry returns path's entry in the whole-tree `git diff <sha> head`, which pairs renames.
-func (dc *diffCaches) wholeEntry(repo *git.Repo, sha, head, path string) (fd *git.FileDiff, ok bool) {
-	res := dc.whole[sha]
-	if res == nil {
-		files, err := repo.Diff(sha, head)
-		res = &fileDiffResult{files: files, err: err}
-		dc.whole[sha] = res
-	}
+// wholeEntry returns path's entry in the whole-tree `git diff <sha> <head>`, which pairs renames.
+func (dc *diffCaches) wholeEntry(sha, path string) (fd *git.FileDiff, ok bool) {
+	res := dc.resolve("w\x00"+sha, func() ([]git.FileDiff, error) {
+		return dc.repo.Diff(sha, dc.headSHA)
+	})
 	if res.err != nil {
 		return nil, false
 	}
@@ -121,15 +154,15 @@ func markMoved(c *store.Comment, path string, start, end int) {
 
 // annotateByDiff tracks a head-anchored comment from commit_sha to head: a path-scoped diff,
 // escalating to the whole-tree diff when the file reads as deleted. False → snippet matching.
-func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, caches *diffCaches, preferWhole bool) bool {
+func annotateByDiff(c *store.Comment, caches *diffCaches, preferWhole bool) bool {
 	if preferWhole {
-		fd, ok := caches.wholeEntry(repo, c.CommitSHA, headRef, c.FilePath)
+		fd, ok := caches.wholeEntry(c.CommitSHA, c.FilePath)
 		if !ok {
 			return false
 		}
 		return annotateFromEntry(c, fd)
 	}
-	fd, ok := caches.scopedEntry(repo, c.CommitSHA, headRef, c.FilePath)
+	fd, ok := caches.scopedEntry(c.CommitSHA, c.FilePath)
 	if !ok {
 		return false
 	}
@@ -139,7 +172,7 @@ func annotateByDiff(repo *git.Repo, c *store.Comment, headRef string, caches *di
 	}
 	if fd.Status == git.FileDeleted {
 		// The pathspec reports a rename as a bare deletion; escalate to tell the two apart.
-		return annotateDeletedOrRenamed(repo, c, headRef, caches)
+		return annotateDeletedOrRenamed(c, caches)
 	}
 	if fd.Binary || len(fd.Hunks) == 0 {
 		return false // binary or mode-only change — let snippet matching decide
@@ -171,8 +204,8 @@ func annotateFromEntry(c *store.Comment, fd *git.FileDiff) bool {
 	return mapContiguous(c, fd.Hunks, "")
 }
 
-func annotateDeletedOrRenamed(repo *git.Repo, c *store.Comment, headRef string, caches *diffCaches) bool {
-	fd, ok := caches.wholeEntry(repo, c.CommitSHA, headRef, c.FilePath)
+func annotateDeletedOrRenamed(c *store.Comment, caches *diffCaches) bool {
+	fd, ok := caches.wholeEntry(c.CommitSHA, c.FilePath)
 	if !ok {
 		return false
 	}

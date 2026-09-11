@@ -60,6 +60,8 @@ scripts/fontfeatures.ts WOFF2 → GSUB/name → web/src/fontFeatures.ts; CI runs
   answer `"<path> does not exist in <side>"` and the frontend renders a note, not a blank card.
 - **Comment staleness and reviewed marks are derived, never persisted.** Every review read
   recomputes `anchorStatus` and re-hashes reviewed files; the stored values are the original anchor.
+  `review.DiffCache` does not weaken that: it caches **git output for a pair of resolved shas**,
+  which cannot change, never a verdict. Errors stay out of it, so a mid-rebase failure can't stick.
 - **Markdown output comes only from `internal/export`.** The frontend renders it, never generates it.
 - **`internal/api` is transport only.** Deriving what a review currently points at belongs to
   `internal/review`, confining the served root to `internal/workspace`; neither takes a request.

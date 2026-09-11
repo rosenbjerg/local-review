@@ -13,5 +13,5 @@ func (s *Server) annotateReview(rev *store.Review) {
 	if err != nil {
 		marks = nil
 	}
-	review.Annotate(rev, marks)
+	review.Annotate(rev, marks, s.diffs)
 }

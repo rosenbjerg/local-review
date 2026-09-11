@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"local-review/internal/git"
+	"local-review/internal/review"
 	"local-review/internal/store"
 	"local-review/internal/workspace"
 )
@@ -14,11 +15,20 @@ type Server struct {
 	repos *workspace.Workspace
 	hub   *hub
 	watch *watchRegistry
+	// One cache for the whole process: the poller re-reads a review every 1.5s, and the
+	// diffs a re-anchor needs are the same ones every time until head moves.
+	diffs *review.DiffCache
 }
 
 func New(root string, st *store.Store) *Server {
 	h := newHub()
-	return &Server{Store: st, repos: workspace.New(root), hub: h, watch: newWatchRegistry(h)}
+	return &Server{
+		Store: st,
+		repos: workspace.New(root),
+		hub:   h,
+		watch: newWatchRegistry(h),
+		diffs: review.NewDiffCache(),
+	}
 }
 
 // repoParam resolves the `repo` query param. Every failure here is the client naming a
