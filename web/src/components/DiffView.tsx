@@ -6,6 +6,7 @@ import { buildRows, planRows, type PlannedRow, type Row } from "../diffRows";
 import { EXPAND_STEP, type Gap, type Reveal } from "../hunkGaps";
 import { hunkWordRanges, splitPieces, type Segment } from "../wordDiff";
 import { langForPath, tokenize, type Token } from "../highlight";
+import { LARGE_FILE_LINES, changedLineCount } from "../fileHeight";
 import { useTheme } from "../theme";
 import type { Comment, CommentType, FileDiff, LineKind, Side } from "../types";
 import { sideLabel as labelForSide } from "../types";
@@ -51,7 +52,6 @@ interface Props {
   commentIds: Set<number>;
 }
 
-export const LARGE_FILE_LINES = 500;
 const HIGHLIGHT_MAX_LINES = 2000;
 
 // Cards never unmount, and the React Compiler can't cache inside App's file map, so the memo
@@ -97,10 +97,7 @@ export const DiffView = memo(function DiffView({
   activeComment,
   commentIds,
 }: Props) {
-  const changedLines = useMemo(
-    () => file.hunks.reduce((n, h) => n + h.lines.length, 0),
-    [file]
-  );
+  const changedLines = useMemo(() => changedLineCount(file), [file]);
   const stat = useMemo(() => fileStat(file), [file]);
   const isLarge = changedLines > LARGE_FILE_LINES;
 

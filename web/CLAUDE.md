@@ -30,6 +30,7 @@ src/
                          the reqSeq stale-response guard, reviewed marks, summary
   useCommentActions.ts   optimistic comment/reply CRUD; identity-stable handlers
   useJump.ts             comment/file navigation: activeComment, expand signals, jumpTo
+  scrollTo.ts            the one way to scroll the diff column: re-aims every frame, lands long jumps
   useActiveFile.ts       scroll-spy over the diff column + suppress()
   usePanelResize.ts      the two pane widths + open flags; a drag writes grid-template-columns via ref
   useKeyboardShortcuts.ts  the one window keydown listener
@@ -43,6 +44,7 @@ src/
   commentSort.ts  commentFilter.ts  commentTurn.ts  commentsByPath.ts  commentRef.ts  reviewNav.ts
   wordDiff.ts            intra-line diff        hunkGaps.ts  expandable hidden regions
   diffRows.ts            the diff table as data: buildRows + planRows       diffStats.ts  occurrences.ts
+  fileHeight.ts          LARGE_FILE_LINES + what a LazyFile placeholder is worth
   theme.ts               theme registry + store (owns <html data-theme>)   themes/  hand-written Shiki themes
   fonts.ts               font-family override store (owns the inline --font-mono/--font-sans on <html>)
   fonts/                 bundled woff2 + licences (Inter, Monaspace Neon, JetBrains Mono)
@@ -119,6 +121,35 @@ src/
   naming the stored path scrolls to no card and expands no `DiffView`.
 - Hunkless files (R100, mode-only, empty add/delete) get `noHunksNote` in Changed view. Files over
   `LARGE_FILE_LINES` (500) start collapsed.
+- **Never `scrollIntoView` the diff column.** `scrollTo.ts` owns every scroll into it — `useJump`,
+  `App`'s `openFile` and mark-and-advance, and `useOccurrenceHighlight`'s find-step. A card mounts
+  lazily and then grows again when its source lands and the gap rows appear, so a one-shot scroll
+  animates to an offset that is stale before it arrives, and the further the jump the worse, because
+  everything passed on the way mounts behind it. `scrollToAim` re-reads the target every frame; any
+  frame that finds it further than `FAR_SCREENS` away skips to `APPROACH_SCREENS` short of it and
+  animates only the arrival, which keeps the motion while leaving the cards behind it placeholders —
+  the trip is what costs, since every card it passes mounts (a fetch and a tokenize) and never
+  unmounts again. That test is per frame, not per target, so it also catches the case where the
+  target is thrown screens away mid-flight — mark-and-advance collapsing the card being left. It
+  keeps correcting for `SCROLL_MS` after arriving, and it holds on a `provisional`
+  aim — the card standing in for a thread that hasn't mounted — for up to `MAX_WAIT`, then glides to
+  the thread once it appears and calls `onTarget` so the caller can re-suppress the scroll-spy for a
+  window that started late. One scroll per column: a new one cancels the one running, which is what
+  keeps find-next from being yanked back by a jump still settling (FindBar is outside the column, so
+  its clicks never reach the gesture cancel). Any wheel, touch or pointer gesture on the column
+  cancels it too. `scrollTo.test.ts`.
+- **A jump sets `selectedFile` itself.** `useActiveFile` cannot report the landing: a far jump's first
+  scroll event falls inside its own suppression window, so leaning on the spy left mark-reviewed and
+  j/k pointing at the file being left.
+- `fileHeight.ts` is what an unmounted card is worth, and the `LARGE_FILE_LINES` threshold that
+  starts one collapsed. The placeholder holds the scroll position of everything below it and a jump
+  past it aims through it, so it counts what Changed view renders: a row per diff line, **one**
+  metadata row per hunk (the gap bar carries the `@@` header, so the two never stack) plus the
+  trailing gap, and open threads. Rows are sized off the live `--mono-offset` — the code size is a
+  user setting spanning -4…+8px, so a fixed row height is out by two thirds at the ends of it.
+  `fileHeight.test.ts` reads `styles.css` to pin `MONO_BASE_PX`/`MONO_LINE_RATIO` against it. A
+  hunkless entry in the diff (R100 rename, mode-only, empty add) renders one note row; only a
+  synthetic `unchanged` card opens in Full view on a file of unknown length.
 - Images render as a before/after pair via `/api/blob`; SVG is text with a Text/Image toggle; `.md`
   gets Code/Rendered (`MarkdownView`). Both take line-0 file comments; `FileComments` owns the
   composer state.

@@ -3,7 +3,7 @@ import { AddFileModal } from "./components/AddFileModal";
 import { AgentPromptsModal } from "./components/AgentPromptsModal";
 import { CommentRefPopover } from "./components/CommentRefPopover";
 import { CommentsPanel } from "./components/CommentsPanel";
-import { DiffView, LARGE_FILE_LINES } from "./components/DiffView";
+import { DiffView } from "./components/DiffView";
 import { ExportModal } from "./components/ExportModal";
 import { FileExplorer, orderedFiles } from "./components/FileExplorer";
 import { FindBar } from "./components/FindBar";
@@ -38,6 +38,8 @@ import type { CommentSort } from "./commentSort";
 import { isCommentSort, sortComments } from "./commentSort";
 import { awaitingYouCount } from "./commentTurn";
 import { commentsFor, groupByPath } from "./commentsByPath";
+import { diffRowHeight, estFileHeight } from "./fileHeight";
+import { offsetOf, useFonts } from "./fonts";
 import { totalStat } from "./diffStats";
 import { nextUnreviewed } from "./reviewNav";
 import type { FileDiff } from "./types";
@@ -114,10 +116,12 @@ export default function App() {
     startResize,
     onResizeKey,
   } = usePanelResize();
+  const fonts = useFonts();
   const { suppress: suppressActiveFile } = useActiveFile(diffColRef, setSelectedFile, review?.id);
   const { activeComment, expandTarget, expandComment, jumpTo, jumpToFile, resetJump } = useJump({
     comments,
     setSelectedFile,
+    rootRef: diffColRef,
     onProgrammaticScroll: suppressActiveFile,
   });
   const [showFullSignal, setShowFullSignal] = useState<{ path: string; n: number } | null>(null);
@@ -180,22 +184,8 @@ export default function App() {
   function openFile(path: string) {
     setShowAddFile(false);
     setOpenedFiles((s) => (s.includes(path) ? s : [...s, path]));
-    setSelectedFile(path);
-    suppressActiveFile();
-    // The card mounts on the next render; defer the scroll until it exists.
-    setTimeout(
-      () => document.getElementById(`file-${path}`)?.scrollIntoView({ behavior: "smooth", block: "start" }),
-      50
-    );
-  }
-
-  function estFileHeight(f: FileDiff): number {
-    const path = f.newPath || f.oldPath;
-    const lines = f.hunks.reduce((n, h) => n + h.lines.length, 0);
-    const collapsed = reviewedFiles.has(path) || lines > LARGE_FILE_LINES;
-    if (collapsed) return 44;
-    if (f.binary) return 400;
-    return Math.min(lines, 400) * 18 + 44;
+    // The card mounts on the next render; jumpToFile's aim waits for it.
+    jumpToFile(path);
   }
 
   // Synthetic cards for paths the diff didn't touch: opened here, or anchoring a comment — which
@@ -234,6 +224,19 @@ export default function App() {
   );
   // Per-file slices are what let DiffView's memo skip cards whose comments didn't change.
   const commentsByPath = useMemo(() => groupByPath(comments), [comments]);
+
+  // Off the live font size, not a constant: the placeholder has to be drawn at the scale the card
+  // will mount at, or every card below it jumps when it does.
+  const rowH = diffRowHeight(offsetOf(fonts, "monoOffset"));
+  const estHeight = (f: FileDiff) => {
+    const path = f.newPath || f.oldPath;
+    return estFileHeight({
+      file: f,
+      reviewed: reviewedFiles.has(path),
+      comments: commentsFor(commentsByPath, path),
+      rowH,
+    });
+  };
 
   // The pane and the n/p nav share one ordering and one filter.
   const sortedComments = useMemo(
@@ -275,8 +278,8 @@ export default function App() {
     toggleReviewed(selectedFile, true);
     const next = nextUnreviewed(orderedFilePaths, selectedFile, reviewedFiles);
     if (!next) return;
-    // Deferred: marking collapses the card above the target, invalidating an offset computed first.
-    setTimeout(() => jumpToFile(next), 50);
+    // Marking collapses the card above the target; the jump re-aims per frame, so it lands anyway.
+    jumpToFile(next);
   }
 
   useKeyboardShortcuts({
@@ -465,7 +468,7 @@ export default function App() {
                     key={path}
                     anchorId={`file-${path}`}
                     label={path}
-                    estHeight={estFileHeight(f)}
+                    estHeight={estHeight(f)}
                     rootRef={diffColRef}
                   >
                     <DiffView

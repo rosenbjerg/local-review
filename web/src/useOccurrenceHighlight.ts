@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { mapSpansToNodes, matchSpans, normalizeTerm } from "./occurrences";
+import { scrollToAim } from "./scrollTo";
 
 // TS 5.6's DOM lib types `Highlight` but leaves HighlightRegistry's maplike members off.
 declare global {
@@ -49,8 +50,14 @@ export function useOccurrenceHighlight(enabled: boolean, rootRef: RefObject<HTML
   function step(delta: number) {
     const n = ranges.current.length;
     if (n === 0) return;
-    const range = showActive((active.current + delta + n) % n);
-    range?.startContainer.parentElement?.closest("tr")?.scrollIntoView({ block: "center" });
+    showActive((active.current + delta + n) % n);
+    // Through scrollToAim, not scrollIntoView: it cancels a jump still settling (FindBar sits
+    // outside the column, so its click never reaches the gesture that would), and Shiki swapping a
+    // line's text nodes mid-scroll re-homes the range, which re-reading the row each frame follows.
+    scrollToAim(rootRef.current, () => {
+      const row = ranges.current[active.current]?.startContainer.parentElement?.closest("tr");
+      return row ? { el: row, block: "center" } : null;
+    });
   }
 
   function clear() {
