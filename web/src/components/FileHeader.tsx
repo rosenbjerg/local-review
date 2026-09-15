@@ -2,6 +2,7 @@ import type { DiffStat } from "../diffStats";
 import type { FileStatus } from "../types";
 import { Chevron } from "./Chevron";
 import { CommentCount } from "./CommentCount";
+import { CopyButton } from "./CopyButton";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { ViewToggle } from "./ViewToggle";
 
@@ -60,6 +61,13 @@ export function FileHeader({
       <span className="file-path" title={path}>
         {path}
       </span>
+      <CopyButton
+        icon
+        className="btn-icon copy-icon"
+        idleLabel="Copy path"
+        title="Copy the file path"
+        text={path}
+      />
       <DiffStatBadge stat={stat} />
       {openCount > 0 && <CommentCount n={openCount} />}
       <label className="viewed-check" title="Mark file as reviewed">

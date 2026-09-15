@@ -119,6 +119,12 @@ export function lineLabel(c: Comment): string {
   return end > start ? `L${start}–${end}` : `L${start}`;
 }
 
+// Not lineLabel's job: that one renders an en dash, which nothing downstream can parse.
+export function commentRef(c: Comment): string {
+  const { start, end } = effectiveLines(c);
+  return `${effectivePath(c)}:${start}${end > start ? `-${end}` : ""}`;
+}
+
 export type ReviewStatus = "draft" | "exported";
 
 export interface Review {

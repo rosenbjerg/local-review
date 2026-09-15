@@ -905,6 +905,18 @@ textarea:focus-visible {
 .btn-icon:hover {
   color: var(--text);
 }
+/* .btn-icon carries no reset of its own — every other use pairs it with .btn, which brings one. */
+.copy-icon {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+/* After .btn-icon:hover, and matching its specificity, or hovering a failed copy repaints it. */
+.btn-icon.copy-fail,
+.btn-icon.copy-fail:hover {
+  color: var(--danger);
+}
 .btn-icon.is-loading svg {
   animation: spin 900ms linear infinite;
 }
@@ -1795,6 +1807,10 @@ textarea:focus-visible {
 .meta-author {
   color: var(--text);
   font-weight: 600;
+}
+/* Cancels the button's own padding so the icon keeps the row's 8px rhythm against the line label. */
+.thread-meta .copy-icon {
+  margin-left: -4px;
 }
 .thread-meta .link,
 .reply-meta .link {

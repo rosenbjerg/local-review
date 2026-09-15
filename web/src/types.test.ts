@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import type { Comment, Side } from "./types";
-import { effectiveLines, effectivePath, lineLabel, sideLabel } from "./types";
+import { commentRef, effectiveLines, effectivePath, lineLabel, sideLabel } from "./types";
 
 // Minimal Comment factory (this file is excluded from the build tsconfig).
 const c = (o: Partial<Comment>): Comment =>
@@ -57,6 +57,18 @@ test("lineLabel renders a single line or a range off the effective lines", () =>
   expect(lineLabel(c({ startLine: 3, endLine: 3 }))).toBe("L3");
   expect(lineLabel(c({ startLine: 2, endLine: 4 }))).toBe("L2–4"); // en-dash
   expect(lineLabel(c({ anchorStatus: "moved", currentStartLine: 5, currentEndLine: 7 }))).toBe("L5–7");
+});
+
+test("commentRef pairs the effective path with the effective lines, hyphenated", () => {
+  expect(commentRef(c({ startLine: 3, endLine: 3 }))).toBe("a.go:3");
+  expect(commentRef(c({ startLine: 2, endLine: 4 }))).toBe("a.go:2-4");
+  expect(
+    commentRef(
+      c({ anchorStatus: "moved", currentFilePath: "b.go", currentStartLine: 5, currentEndLine: 7 })
+    )
+  ).toBe("b.go:5-7");
+  // an outdated comment has no current home, so it refers to where it was anchored
+  expect(commentRef(c({ anchorStatus: "outdated", startLine: 2, endLine: 4 }))).toBe("a.go:2-4");
 });
 
 // Both wordings reach the same file card: the missing/substituted notes come from this function,

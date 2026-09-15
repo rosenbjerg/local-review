@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Comment, CommentType, Reply } from "../types";
-import { lineLabel } from "../types";
+import { commentRef, lineLabel } from "../types";
 import { langForPath } from "../highlight";
 import { Chevron } from "./Chevron";
 import { CommentComposer } from "./CommentComposer";
+import { CopyButton } from "./CopyButton";
 import { AnchorBadge } from "./AnchorBadge";
 import { Markdown } from "./Markdown";
 import { MetaTimestamps } from "./MetaTimestamps";
@@ -155,6 +156,14 @@ export function CommentThread({ comment, actions, expandSignal, commentIds }: Pr
         <span className="muted meta-id">#{comment.id}</span>
         <span className={`badge badge-${comment.type}`}>{comment.type}</span>
         <span className="muted">{lineLabel(comment)}</span>
+        <CopyButton
+          icon
+          iconSize={12}
+          className="btn-icon copy-icon"
+          idleLabel="Copy reference"
+          title="Copy a path:line reference to this comment"
+          text={() => commentRef(comment)}
+        />
         <AnchorBadge
           comment={comment}
           onToggle={hasSnippet ? () => setSnippetOpen((o) => !o) : undefined}
