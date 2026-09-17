@@ -38,14 +38,46 @@ for (const info of bundledLanguagesInfo) {
   for (const alias of info.aliases ?? []) ALIAS_TO_ID.set(alias, info.id);
 }
 
-// Extensions that are neither a language id nor one of Shiki's aliases.
-const EXT_EXTRA: Record<string, string> = {
+// Extensions that are neither a language id nor one of Shiki's aliases. Every value has to be one
+// of the two, or `langForPath` silently returns null and the file renders unhighlighted —
+// `highlight.test.ts` is what catches that.
+export const EXT_EXTRA: Record<string, string> = {
   h: "c",
   cc: "cpp",
   cxx: "cpp",
   hpp: "cpp",
   hh: "cpp",
   htm: "html",
+
+  xcstrings: "json",
+  webmanifest: "json",
+  geojson: "json",
+  topojson: "json",
+  arb: "json",
+  avsc: "json",
+  har: "json",
+  ipynb: "json",
+  babelrc: "json",
+  eslintrc: "json",
+  prettierrc: "json",
+  swcrc: "json",
+  ndjson: "jsonl",
+
+  svg: "xml",
+  plist: "xml",
+  entitlements: "xml",
+  stringsdict: "xml",
+  storyboard: "xml",
+  xib: "xml",
+  resx: "xml",
+  xaml: "xml",
+  axaml: "xml",
+  csproj: "xml",
+  fsproj: "xml",
+  vbproj: "xml",
+  props: "xml",
+  targets: "xml",
+  nuspec: "xml",
 };
 
 export function langForPath(path: string): string | null {

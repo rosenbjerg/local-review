@@ -192,6 +192,13 @@ src/
 - Shiki (`highlight.ts`): JS regex engine (oniguruma's wasm failed to load), one Shiki theme per UI
   theme registered up front, grammars lazy per file. Whole file tokenized once; deleted lines
   per-line; files > 2000 lines skip highlighting. Both tokenize effects list the theme in deps.
+- **`EXT_EXTRA` is where an extension Shiki doesn't know names the language it really is** —
+  `.xcstrings` is JSON, `.plist` and `.svg` are XML. A value Shiki doesn't recognise fails silently:
+  `langForPath` returns null and the file renders as plain text, indistinguishable from "no grammar
+  exists". `highlight.test.ts` resolves every value against the alias map, so a typo or a Shiki
+  upgrade that renames a language fails there. `internal/export`'s `extToLang` is a separate map
+  serving markdown fences; the two are deliberately independent, but an alias worth adding is
+  usually worth adding to both, or a snippet exports unfenced while the UI colours it.
 - Mermaid (`mermaid.ts`): a second pass after highlighting, only the `language-mermaid` fence,
   lazy import. Load-bearing: `htmlLabels: false` (else awaits `<img>` loads from untrusted source),
   `securityLevel: 'strict'`, `suppressErrorRendering: true`. `useMaxWidth: false` per diagram type;
