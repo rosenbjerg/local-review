@@ -34,6 +34,14 @@ In CI `./...` walks `web/node_modules` (a dependency vendors a Go package), so
 `.github/workflows/ci.yml` uses `go list ./... | grep -v /web/node_modules/` and
 gofmt-checks `git ls-files '*.go'`.
 
+## Commits
+
+A commit subject is a changelog bullet: say what the tool now does for the person using it,
+in the imperative, with no type prefix, scope, file name or issue number. "Copy a file's path,
+or a comment's path:line reference", not "feat(ui): add copy button to FileHeader.tsx". Anything
+that only makes sense while reading the diff — the approach taken, what was renamed, why the
+old way was wrong — belongs in the body, not the subject.
+
 ## Layout
 
 ```

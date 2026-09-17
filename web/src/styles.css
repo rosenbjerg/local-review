@@ -1654,6 +1654,10 @@ textarea:focus-visible {
      table's line-height either way, which is what holds the baseline grid together. */
   font-size: calc(var(--font-size-mono) - 1px);
 }
+.row-gap {
+  -webkit-user-select: none;
+  user-select: none;
+}
 .gap-gutter {
   text-align: center;
   padding: 0 2px;
