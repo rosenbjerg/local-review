@@ -35,6 +35,7 @@ vi.mock("./api", () => {
 
 import { api } from "./api";
 import { readBasePref, readDiffViewPref, writeBasePref } from "./storage";
+import type { FileDiff } from "./types";
 import { useReview } from "./useReview";
 
 const branch = (
@@ -430,6 +431,71 @@ test("a ping that changes a comment replaces it", async () => {
   });
 
   await waitFor(() => expect(result.current.comments[0]?.body).toBe("edited"));
+});
+
+// The same rule one level down, and the one that actually costs: the diff's file list was
+// exempt, on the reading that a `diff` ping means git moved. It means *something* moved —
+// the poller fires on mtime — so editing one file re-identified all of them, and every
+// mounted card re-rendered and re-ran Shiki over its deleted lines for nothing.
+test("a diff ping over an unchanged diff keeps every file's identity", async () => {
+  const onDisk: FileDiff[] = [
+    {
+      oldPath: "a.ts",
+      newPath: "a.ts",
+      status: "modified",
+      hunks: [{ header: "@@ -1 +1 @@", lines: [{ kind: "del", oldLine: 1, content: "x" }] }],
+    },
+    {
+      oldPath: "b.ts",
+      newPath: "b.ts",
+      status: "modified",
+      hunks: [{ header: "@@ -1 +1 @@", lines: [{ kind: "add", newLine: 1, content: "y" }] }],
+    },
+  ];
+  // Each fetch parses its own object graph, which is the whole reason identity needs keeping.
+  vi.mocked(api.diff).mockImplementation(async () => ({
+    base: "base",
+    head: "head",
+    files: JSON.parse(JSON.stringify(onDisk)),
+  }));
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.files).toHaveLength(2));
+  const before = result.current.files;
+  const diffs = vi.mocked(api.diff).mock.calls.length;
+
+  await act(async () => {
+    lastEventSource()?.onmessage?.({ data: "diff" });
+  });
+  await waitFor(() => expect(vi.mocked(api.diff).mock.calls.length).toBe(diffs + 1));
+
+  expect(result.current.files).toBe(before);
+});
+
+// ...and one file moving must still reach its card, while the rest stay put.
+test("a diff ping that changes one file leaves the others' identity alone", async () => {
+  const fileAt = (path: string, content: string): FileDiff => ({
+    oldPath: path,
+    newPath: path,
+    status: "modified",
+    hunks: [{ header: "@@ -1 +1 @@", lines: [{ kind: "add", newLine: 1, content }] }],
+  });
+  let bContent = "y";
+  vi.mocked(api.diff).mockImplementation(async () => ({
+    base: "base",
+    head: "head",
+    files: [fileAt("a.ts", "x"), fileAt("b.ts", bContent)],
+  }));
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.files).toHaveLength(2));
+  const before = result.current.files;
+
+  bContent = "edited";
+  await act(async () => {
+    lastEventSource()?.onmessage?.({ data: "diff" });
+  });
+
+  await waitFor(() => expect(result.current.files[1].hunks[0].lines[0].content).toBe("edited"));
+  expect(result.current.files[0]).toBe(before[0]);
 });
 
 function setVisibility(state: "visible" | "hidden") {

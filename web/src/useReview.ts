@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
+import { mergeFiles } from "./mergeFiles";
 import { type ComboOption } from "./components/Combobox";
 import type {
   Branch,
@@ -267,7 +268,7 @@ export function useReview() {
         setReviewedFiles((prev) => keepIfSameSet(prev, landed.reviewedFiles ?? []));
         if (reqSeq.current === seq) {
           if (d) {
-            setFiles(d.files ?? []);
+            setFiles((prev) => mergeFiles(prev, d.files ?? []));
             setBaseSha(d.base ?? "");
           }
           if (br) setBranches((prev) => keepIfSame(prev, br.branches ?? []));
@@ -323,7 +324,7 @@ export function useReview() {
       .diff(repo, review.headRef, diffOpts(review.baseRef))
       .then((d) => {
         if (reqSeq.current !== seq) return;
-        setFiles(d.files ?? []);
+        setFiles((prev) => mergeFiles(prev, d.files ?? []));
         setBaseSha(d.base ?? "");
       })
       .catch((e) => {
@@ -399,7 +400,7 @@ export function useReview() {
         failure = e as Error;
       }
       if (diff && reqSeq.current === seq) {
-        setFiles(diff.files ?? []);
+        setFiles((prev) => mergeFiles(prev, diff.files ?? []));
         setBaseSha(diff.base ?? "");
       }
     }

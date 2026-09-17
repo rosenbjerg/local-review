@@ -44,6 +44,7 @@ src/
   commentSort.ts  commentFilter.ts  commentTurn.ts  commentsByPath.ts  commentRef.ts  reviewNav.ts
   wordDiff.ts            intra-line diff        hunkGaps.ts  expandable hidden regions
   diffRows.ts            the diff table as data: buildRows + planRows       diffStats.ts  occurrences.ts
+  mergeFiles.ts          carries a FileDiff's identity across a refetch that didn't change it
   fileHeight.ts          LARGE_FILE_LINES + what a LazyFile placeholder is worth
   theme.ts               theme registry + store (owns <html data-theme>)   themes/  hand-written Shiki themes
   fonts.ts               font-family override store (owns the inline --font-mono/--font-sans on <html>)
@@ -82,8 +83,14 @@ src/
 - `branchesLoaded` tells "still loading" from "a repo with no commits". Branches are normalized from
   `null` at every ingest point.
 - **A no-op SSE ping must not churn state identity**: `keepIfSame`/`keepIfSameSet` keep the previous
-  value when the new one is structurally equal (the diff's file list is exempt — a `diff` ping means
-  git moved). Downstream memos are keyed on identity.
+  value when the new one is structurally equal. Downstream memos are keyed on identity.
+- **The file list holds identity per file, not per list** (`mergeFiles.ts`). A `diff` ping does not
+  mean *this* file moved: the poller fires on mtime, so one edit — or a save to identical bytes —
+  used to re-identify every file in the diff, re-rendering every mounted card and re-running Shiki
+  over its deleted lines. `mergeFiles` keeps a file's object when its JSON is unchanged, and the
+  array itself when they all were. Keyed on **both** paths: a rename's old path is routinely another
+  file's new path. That identity is exact (same object ⟺ equal content), which is what keeps
+  `DiffView`'s `contentKey` invariant below honest. `mergeFiles.test.ts`, `useReview.test.ts`.
 - SSE: refetch the review on any ping; the diff, branches and commits only on `diff`. Refetch params
   come from a ref (the effect is keyed on `review.id`). Git-derived results are gated on the shared
   `reqSeq`; the review half is **not** (fetched by id). A hidden tab takes the review but defers the
