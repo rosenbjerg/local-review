@@ -56,15 +56,9 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) error {
 		if err := optionalRef(baseRef); err != nil {
 			return err
 		}
-		baseRef, err = resolveBaseRef(repo, baseRef)
-		if err != nil {
+		if _, fromRef, err = mergeBaseFrom(repo, baseRef, head); err != nil {
 			return err
 		}
-		mb, err := repo.MergeBase(baseRef, head)
-		if err != nil {
-			return mergeBaseError(err, baseRef, head)
-		}
-		fromRef = mb
 	} else {
 		if err := validRef(from); err != nil {
 			return err
@@ -250,10 +244,30 @@ func resolveBase(repo *git.Repo, base string) string {
 	return repo.MainBranch()
 }
 
-// resolveBaseRef is resolveBase for the callers that cannot proceed without one.
-func resolveBaseRef(repo *git.Repo, base string) (string, error) {
-	if ref := resolveBase(repo, base); ref != "" {
-		return ref, nil
+// mergeBaseFrom names the base a diff is scoped by and resolves where it starts. It asks
+// merge-base straight out rather than probing the base first: a base that doesn't resolve
+// exits 128 where no common history exits 1, so one process settles the usual case and the
+// second is only spent when the stored base has gone stale. This runs on every diff the
+// filesystem poller provokes, which while an agent works is one every 1.5s.
+func mergeBaseFrom(repo *git.Repo, base, head string) (baseRef, from string, err error) {
+	if base != "" {
+		mb, err := repo.MergeBase(base, head)
+		if err == nil {
+			return base, mb, nil
+		}
+		// Unrelated histories are the reviewer's selection to fix; falling back to main here
+		// would quietly diff against something they didn't ask for.
+		if errors.Is(err, git.ErrNoMergeBase) {
+			return "", "", mergeBaseError(err, base, head)
+		}
 	}
-	return "", badRequest(errString("no main or master branch found; select a base branch"))
+	main := repo.MainBranch()
+	if main == "" {
+		return "", "", badRequest(errString("no main or master branch found; select a base branch"))
+	}
+	mb, err := repo.MergeBase(main, head)
+	if err != nil {
+		return "", "", mergeBaseError(err, main, head)
+	}
+	return main, mb, nil
 }

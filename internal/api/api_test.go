@@ -525,6 +525,32 @@ func TestHandleDiffStaleBaseFallsBack(t *testing.T) {
 	}
 }
 
+// With no base given and no trunk to fall back on there is nothing to diff against, and the
+// reviewer has to pick one. The message has to say so: merge-base's own failure names two refs
+// the reviewer never chose. Nothing covered this branch while resolving the base was a separate
+// step from taking the merge-base.
+func TestDiffWithNoBaseAndNoTrunkAsksForOne(t *testing.T) {
+	r := newRepo(t)
+	r.write("f.txt", "l1\n")
+	r.commitAll("c1")
+	r.git("branch", "-m", "main", "work") // no main, no master, no remote
+	s := r.server()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/diff?repo="+r.name+"&head=work", nil)
+	rec := httptest.NewRecorder()
+	handle(s.handleDiff)(rec, req)
+	body := rec.Body.String()
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (%s)", rec.Code, body)
+	}
+	if !strings.Contains(body, "no main or master branch found") {
+		t.Errorf("error %q should say there is no trunk to default to", body)
+	}
+	if strings.Contains(body, "exit status") {
+		t.Errorf("error %q leaks git's exit status", body)
+	}
+}
+
 func TestCreateReviewStaleBaseStoresResolvable(t *testing.T) {
 	r, s := staleBaseFixture(t)
 	req := httptest.NewRequest(http.MethodPost, "/api/reviews", strings.NewReader(

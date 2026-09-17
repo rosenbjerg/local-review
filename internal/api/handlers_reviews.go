@@ -32,19 +32,17 @@ func (s *Server) handleCreateReview(w http.ResponseWriter, r *http.Request) erro
 	if err := optionalRef(req.Base); err != nil {
 		return err
 	}
-	// A base that no longer resolves falls back to the main branch, so a stale one isn't stored.
-	base, err := resolveBaseRef(repo, req.Base)
-	if err != nil {
-		return err
-	}
+	// Head first: every other failure below reads as a base problem, and a deleted head is not one.
 	sha, err := repo.ResolveSHA(req.Head)
 	if err != nil {
 		return badRequestf(
 			"could not resolve branch %q — it may have been deleted, renamed, or is mid-rebase; reload to refresh the branch list", req.Head)
 	}
-	// Probe the merge-base now, so an incomparable base fails before a review row exists.
-	if _, err := repo.MergeBase(base, req.Head); err != nil {
-		return mergeBaseError(err, base, req.Head)
+	// Resolves the merge-base as well as the base name, so an incomparable base fails before a
+	// review row exists. A base that no longer resolves falls back to main, so a stale one isn't stored.
+	base, _, err := mergeBaseFrom(repo, req.Base, req.Head)
+	if err != nil {
+		return err
 	}
 	rev, err := s.Store.CreateOrGetReview(repo.Path, base, req.Head, sha)
 	if err != nil {

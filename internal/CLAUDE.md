@@ -23,7 +23,7 @@ store/reviewed.go       ReviewedFile, FileReviewMark, reviewed_files queries
 store/side.go           Side ↔ the two boolean columns — the only place that mapping exists
 api/api.go              Server, repoParam / reviewRepo (the two ways a request names a repo), route table
 workspace/workspace.go  the root boundary: List (repo picker) and Open (root-confined, symlink/traversal-safe)
-api/handlers_git.go     read-only: repos, branches, diff, files, commits, file, blob (+ mergeBase/resolveBase)
+api/handlers_git.go     read-only: repos, branches, diff, files, commits, file, blob (+ mergeBaseFrom/resolveBase)
 api/handlers_reviews.go create/resume, read, reset, summary, reviewed marks, export
 api/handlers_comments.go comments + replies
 api/errors.go           statusError + the handle() adapter — the one place a failure becomes a status
@@ -80,10 +80,16 @@ export/export.go        review → canonical markdown
   identified by carrying a symref, not by name.
 - Diff base defaults to the main-branch **name** (stored on the review); handlers resolve
   `merge-base(base, head)` at query time. `MainBranch()` prefers local `main`/`master`, then
-  `origin/HEAD` / `origin/main` / `origin/master`, else `""` (create/diff then require a base). A
-  base that no longer resolves falls back to auto via `resolveBase` (shared by diff, commits,
-  create-review). No common ancestor → `git.ErrNoMergeBase` → 400 naming both ends; anything else
-  from `merge-base` stays a 500 with git's message.
+  `origin/HEAD` / `origin/main` / `origin/master`, else `""` (create/diff then require a base).
+- **`mergeBaseFrom` asks merge-base before proving the base resolves**, which settles the usual
+  case in one process rather than two — `/api/diff` runs on every poller ping, so the second was
+  a per-ping cost. It can read the answer off the exit code: no common ancestor is exit 1
+  (`git.ErrNoMergeBase` → 400 naming both ends), an unresolvable ref is 128, which is what falls
+  back to `MainBranch()`; no trunk either → 400 asking for a base. Anything else from `merge-base`
+  stays a 500 with git's message. `spawn_test.go` pins the process count — nothing else would
+  notice it climbing. `handleCreateReview` uses it too, but resolves **head** first, or a deleted
+  head surfaces as a base problem. `handleCommits` still uses `resolveBase`: `base..ref` wants the
+  name and no merge-base at all.
 - `/api/diff` takes `from` + `uncommitted` + `unstaged`. `from=all` (or empty) → merge-base; a sha →
   `ParentSHA(sha)`, so the picked commit's own changes are **included**. `ParentSHA` takes the first
   parent via `rev-list --parents -n 1`, which is what tells a root commit (→ `EmptyTreeSHA`) from an
