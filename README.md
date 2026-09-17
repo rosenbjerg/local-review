@@ -47,8 +47,9 @@ One binary: Go backend with the React frontend embedded. Nothing to install but 
   up, and the tab title counts what an agent said while you were away.
 - **A proper diff viewer.** Word-level diffs, ~235 highlighted languages, light and dark
   editor color themes with the code and interface fonts set to your taste, expandable
-  context between hunks, rendered markdown and mermaid, image previews, and lazy
-  rendering so a huge branch stays responsive.
+  context between hunks, rendered markdown and mermaid, image previews, generated files
+  (lockfiles, `dist/`, snapshots) folded shut so they stop drowning the real changes, and
+  lazy rendering so a huge branch stays responsive.
 - **Keyboard-driven.** `j`/`k` between files, `n`/`p` between comments, `v` to mark
   reviewed and jump to the next unread, `/` to search files, `?` for the rest.
 

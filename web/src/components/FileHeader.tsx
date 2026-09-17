@@ -10,6 +10,7 @@ interface Props {
   status: FileStatus;
   path: string;
   stat: DiffStat;
+  generated: boolean;
   collapsed: boolean;
   onToggleCollapsed: () => void;
   openCount: number;
@@ -31,6 +32,7 @@ export function FileHeader({
   status,
   path,
   stat,
+  generated,
   collapsed,
   onToggleCollapsed,
   openCount,
@@ -68,6 +70,11 @@ export function FileHeader({
         title="Copy the file path"
         text={path}
       />
+      {generated && (
+        <span className="gen-badge" title="Generated file — starts collapsed">
+          generated
+        </span>
+      )}
       <DiffStatBadge stat={stat} />
       {openCount > 0 && <CommentCount n={openCount} />}
       <label className="viewed-check" title="Mark file as reviewed">

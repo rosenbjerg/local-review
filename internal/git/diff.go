@@ -37,11 +37,12 @@ const (
 )
 
 type FileDiff struct {
-	OldPath string     `json:"oldPath"`
-	NewPath string     `json:"newPath"`
-	Status  FileStatus `json:"status"`
-	Binary  bool       `json:"binary,omitempty"`
-	Hunks   []Hunk     `json:"hunks"`
+	OldPath   string     `json:"oldPath"`
+	NewPath   string     `json:"newPath"`
+	Status    FileStatus `json:"status"`
+	Binary    bool       `json:"binary,omitempty"`
+	Generated bool       `json:"generated,omitempty"`
+	Hunks     []Hunk     `json:"hunks"`
 }
 
 // diffArgs pins the output shape the parser relies on: verbatim non-ASCII paths and the

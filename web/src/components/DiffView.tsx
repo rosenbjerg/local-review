@@ -100,12 +100,13 @@ export const DiffView = memo(function DiffView({
   const changedLines = useMemo(() => changedLineCount(file), [file]);
   const stat = useMemo(() => fileStat(file), [file]);
   const isLarge = changedLines > LARGE_FILE_LINES;
+  const generated = !!file.generated;
 
   // A synthetic "unchanged" card has no hunks, so it lives in full mode.
   const unchanged = file.status === "unchanged";
   const [mode, setMode] = useState<"changed" | "full">(unchanged ? "full" : "changed");
   const [source, setSource] = useState<string[] | null>(null);
-  const [collapsed, setCollapsed] = useState(reviewed || isLarge);
+  const [collapsed, setCollapsed] = useState(reviewed || isLarge || generated);
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
   const [dragAnchor, setDragAnchor] = useState<number | null>(null);
   const [newTokens, setNewTokens] = useState<Map<number, Token[]> | null>(null);
@@ -134,8 +135,8 @@ export const DiffView = memo(function DiffView({
   const sideLabel = labelForSide(side, headRef);
 
   useEffect(() => {
-    setCollapsed(reviewed || isLarge);
-  }, [reviewed, isLarge]);
+    setCollapsed(reviewed || isLarge || generated);
+  }, [reviewed, isLarge, generated]);
 
   // Runs after the collapse effect so an expand-on-jump wins over it.
   useEffect(() => {
@@ -501,6 +502,7 @@ export const DiffView = memo(function DiffView({
         status={file.status}
         path={path}
         stat={stat}
+        generated={generated}
         collapsed={collapsed}
         onToggleCollapsed={() => setCollapsed((c) => !c)}
         openCount={openCount}

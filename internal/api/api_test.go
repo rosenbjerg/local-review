@@ -634,3 +634,38 @@ func TestNoCommonHistoryIsAReadable400(t *testing.T) {
 		}
 	})
 }
+
+// The flag has to survive the handler and the JSON, since the browser is what acts on it.
+func TestDiffCarriesTheGeneratedFlag(t *testing.T) {
+	r := newRepo(t)
+	r.write("f.txt", "l1\n")
+	r.write("bun.lock", "v1\n")
+	r.write(".gitattributes", "noisy.txt linguist-generated=true\n")
+	r.write("noisy.txt", "a\n")
+	r.commitAll("c1")
+	r.git("checkout", "-q", "-b", "feature")
+	r.write("f.txt", "l1\nl2\n")
+	r.write("bun.lock", "v2\n")
+	r.write("noisy.txt", "b\n")
+	r.commitAll("c2")
+	s := r.server()
+
+	code, d := getDiff(t, s, "repo="+r.name+"&head=feature&base=main")
+	if code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", code)
+	}
+	want := map[string]bool{"f.txt": false, "bun.lock": true, "noisy.txt": true}
+	for _, f := range d.Files {
+		w, ok := want[f.NewPath]
+		if !ok {
+			continue
+		}
+		if f.Generated != w {
+			t.Errorf("%s generated = %v, want %v", f.NewPath, f.Generated, w)
+		}
+		delete(want, f.NewPath)
+	}
+	for path := range want {
+		t.Errorf("%s missing from the diff", path)
+	}
+}

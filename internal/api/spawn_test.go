@@ -45,7 +45,9 @@ func countGit(t *testing.T, s *Server, h func(http.ResponseWriter, *http.Request
 // that is one every 1.5s — where a git process is ~11ms of spawn whatever it then does. Taking
 // the merge-base directly, rather than proving the base resolves first and then taking it,
 // settles the usual case in one process instead of two. This pins that: a number going up here
-// is a per-ping cost, and nothing else in the suite would notice.
+// is a per-ping cost, and nothing else in the suite would notice. The third is the one batched
+// `check-attr` behind the generated-file flag — it asks about every path at once, so it stays one
+// however many files the diff holds.
 func TestDiffTakesTheBaseInOneProcess(t *testing.T) {
 	r := newRepo(t)
 	r.write("f.txt", "l1\n")
@@ -59,8 +61,8 @@ func TestDiffTakesTheBaseInOneProcess(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", code)
 	}
-	if len(calls) != 2 {
-		t.Errorf("a diff with a resolvable base ran %d git processes, want 2 (merge-base, diff):\n  %s",
+	if len(calls) != 3 {
+		t.Errorf("a diff with a resolvable base ran %d git processes, want 3 (merge-base, diff, check-attr):\n  %s",
 			len(calls), strings.Join(calls, "\n  "))
 	}
 }

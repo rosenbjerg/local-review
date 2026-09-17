@@ -414,3 +414,41 @@ test("a theme switch re-tokenizes the source under the new theme", async () => {
   // Same source both times — only the theme moved, so the file wasn't refetched.
   expect(vi.mocked(api.file).mock.calls.length).toBe(1);
 });
+
+// A lockfile or a dist/ bundle is noise on an agent's branch: the card opens collapsed and says
+// why, but nothing is hidden — the header still expands it and it still takes comments.
+test("a generated file starts collapsed and is labelled", async () => {
+  const gen = (): FileDiff => ({
+    oldPath: "bun.lock",
+    newPath: "bun.lock",
+    status: "modified",
+    generated: true,
+    hunks: [{ header: "@@ -1 +1 @@", lines: [{ kind: "add", newLine: 1, content: "dep" }] }],
+  });
+  vi.mocked(api.file).mockResolvedValue(content("dep"));
+
+  render(<DiffView {...props} file={gen()} headRef="main" />);
+
+  expect(screen.getByText("generated")).toBeTruthy();
+  expect(screen.queryByText("dep")).toBeNull();
+
+  fireEvent.click(screen.getByTitle("Expand file"));
+  await waitFor(() => expect(screen.getByText("dep")).toBeTruthy());
+});
+
+// The same file without the flag opens normally, so the collapse is the flag's doing and not
+// something else about a one-line diff.
+test("an ordinary file of the same shape opens", async () => {
+  const plain = (): FileDiff => ({
+    oldPath: "bun.lock",
+    newPath: "bun.lock",
+    status: "modified",
+    hunks: [{ header: "@@ -1 +1 @@", lines: [{ kind: "add", newLine: 1, content: "dep" }] }],
+  });
+  vi.mocked(api.file).mockResolvedValue(content("dep"));
+
+  render(<DiffView {...props} file={plain()} headRef="main" />);
+
+  expect(screen.queryByText("generated")).toBeNull();
+  await waitFor(() => expect(screen.getByText("dep")).toBeTruthy());
+});

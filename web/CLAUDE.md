@@ -131,7 +131,12 @@ src/
   "moved from `<old>`". Group, render and **navigate** by that, never by the stored path — a jump
   naming the stored path scrolls to no card and expands no `DiffView`.
 - Hunkless files (R100, mode-only, empty add/delete) get `noHunksNote` in Changed view. Files over
-  `LARGE_FILE_LINES` (500) start collapsed.
+  `LARGE_FILE_LINES` (500) start collapsed, as do ones the backend flagged `generated` (lockfiles,
+  `dist/`, snapshots — `internal/git/generated.go`), which carry a `generated` badge on the file
+  header saying why. Nothing else changes: they stay in the tree, in the reviewed denominator and in
+  `j`/`k`, and they still take comments. **`estFileHeight` has to agree with whatever starts a card
+  collapsed** — a placeholder sized for an open card leaves every card below it jumping when this one
+  mounts as a 44px header.
 - **Never `scrollIntoView` the diff column.** `scrollTo.ts` owns every scroll into it — `useJump`,
   `App`'s `openFile` and mark-and-advance, and `useOccurrenceHighlight`'s find-step. A card mounts
   lazily and then grows again when its source lands and the gap rows appear, so a one-shot scroll

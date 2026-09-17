@@ -1279,6 +1279,15 @@ textarea:focus-visible {
   color: var(--muted);
   background: var(--muted-soft);
 }
+.gen-badge {
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
 
 /* File explorer */
 .explorer {

@@ -36,7 +36,7 @@ export function estFileHeight(args: {
 }): number {
   const { file, reviewed, comments, rowH } = args;
   const lines = changedLineCount(file);
-  if (reviewed || lines > LARGE_FILE_LINES) return CARD_CHROME;
+  if (reviewed || file.generated || lines > LARGE_FILE_LINES) return CARD_CHROME;
   if (file.binary) return BINARY;
   // Only a synthetic card is `unchanged`; a real file with no hunks renders the note instead.
   if (file.status === "unchanged") return UNKNOWN_FILE;

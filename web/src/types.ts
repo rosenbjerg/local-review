@@ -62,6 +62,7 @@ export interface FileDiff {
   newPath: string;
   status: FileStatus;
   binary?: boolean;
+  generated?: boolean;
   hunks: Hunk[];
 }
 

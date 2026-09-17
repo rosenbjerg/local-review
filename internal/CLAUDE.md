@@ -14,6 +14,7 @@ git/commits.go          RecentCommits
 git/diff.go             Diff / DiffFile / DiffWorktree / DiffStaged + the diff parser
 git/linemap.go          MapOldLine, HunksOldExtent — an old-side line through the hunks
 git/fingerprint.go      RefsFingerprint + WorktreeFingerprint (the poller's two change signals)
+git/generated.go        Generated/MarkGenerated: linguist-generated + the built-in pattern list
 store/store.go          Store, Open (WAL, foreign_keys, single connection), time helpers
 store/schema.go         migrate() + ensureColumn
 store/reviews.go        Review, reviewCols/scanReview, review + draft-pruning queries
@@ -97,6 +98,14 @@ export/export.go        review → canonical markdown
   (`--cached`, staged only). The response `base` is the resolved before ref. `GET /api/commits` is
   `git log base..head`.
 - `parseDiff` flags binaries (`Binary`), including untracked ones. Renames pair via `--find-renames`.
+- **The `generated` flag is `/api/diff`'s alone.** `MarkGenerated` is called by the handler, never by
+  `Diff`/`DiffWorktree`/`DiffStaged`: `internal/review` reads those on every SSE ping to re-anchor and
+  has no use for the flag, and `DiffCache` would be caching it pointlessly. It is one batched
+  `check-attr -z --stdin` however many files the diff holds — the third process `spawn_test.go`
+  expects. `.gitattributes` decides wherever it speaks (`set`/`true` → generated, `unset`/`false` →
+  not, both beating the patterns); `unspecified` falls to `generatedByName`. A `check-attr` failure
+  leaves the pattern answers standing rather than failing the diff — the flag only decides whether a
+  card starts collapsed.
 
 ## Reads that must not fail loudly or wrongly
 

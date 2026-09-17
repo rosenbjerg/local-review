@@ -62,3 +62,9 @@ test("open threads are counted, resolved ones barely", () => {
   expect(est(f, { comments: [comment({ resolved: true })] })).toBe(base + 40);
   expect(est(f, { comments: [comment({ replies: [{}, {}] as Comment[] })] })).toBe(base + 140 + 180);
 });
+
+// A generated file starts collapsed, so its placeholder has to be worth a collapsed card —
+// otherwise every card below it jumps when this one mounts at a fraction of the reserved height.
+test("a generated file is a collapsed header", () => {
+  expect(est(file({ hunks: [hunk(10)], generated: true }))).toBe(44);
+});

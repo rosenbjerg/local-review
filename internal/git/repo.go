@@ -38,12 +38,24 @@ var optionalLocksOff = []string{"GIT_OPTIONAL_LOCKS=0"}
 
 // runEnv is run with extra KEY=VALUE entries appended to the process environment.
 func (r *Repo) runEnv(env []string, args ...string) (string, error) {
+	return r.runIn(env, "", args...)
+}
+
+// runStdin is run with input fed to the command on stdin.
+func (r *Repo) runStdin(input string, args ...string) (string, error) {
+	return r.runIn(nil, input, args...)
+}
+
+func (r *Repo) runIn(env []string, input string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", r.Path}, args...)...)
 	// GIT_TERMINAL_PROMPT=0: never block on a credential prompt.
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	cmd.Env = append(cmd.Env, env...)
+	if input != "" {
+		cmd.Stdin = strings.NewReader(input)
+	}
 	var out, errb bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errb

@@ -82,6 +82,7 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	repo.MarkGenerated(diff)
 	return writeJSON(w, map[string]any{"base": fromRef, "head": head, "files": diff})
 }
 
