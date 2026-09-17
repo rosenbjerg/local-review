@@ -13,7 +13,7 @@ git/content.go          file content per side (ref / index / worktree), BatchObj
 git/commits.go          RecentCommits
 git/diff.go             Diff / DiffFile / DiffWorktree / DiffStaged + the diff parser
 git/linemap.go          MapOldLine, HunksOldExtent — an old-side line through the hunks
-git/fingerprint.go      WorktreeFingerprint (content-free change signal for the poller)
+git/fingerprint.go      RefsFingerprint + WorktreeFingerprint (the poller's two change signals)
 store/store.go          Store, Open (WAL, foreign_keys, single connection), time helpers
 store/schema.go         migrate() + ensureColumn
 store/reviews.go        Review, reviewCols/scanReview, review + draft-pruning queries
@@ -206,14 +206,22 @@ new path.
 
 ## Live sync
 
-- `GET /api/reviews/{id}/events` streams typed pings: `data: meta` (comment/reply/reviewed, via
-  `notify`) or `data: diff` (content moved). `publish(reviewID, diff bool)`. `diff` upgrades a
-  coalesced `meta`: a per-subscriber `atomic.Bool diffPending` rides beside the coalescing wakeup
-  channel and the handler clears it with `Swap`. Sends are non-blocking, so a stalled tab never
-  blocks a handler; empty entries prune on last unsubscribe; a 25s keepalive comment turns a
-  half-open connection into a write error.
+- `GET /api/reviews/{id}/events` streams three typed pings, each a superset of the last:
+  `data: meta` (comment/reply/reviewed, via `notify`), `data: diff` (content moved) and
+  `data: refs` (a ref moved). `publish(reviewID, diff, refs bool)`. A broader ping upgrades a
+  coalesced narrower one: two per-subscriber `atomic.Bool`s ride beside the coalescing wakeup
+  channel, and `takeEvent` clears **both** with `Swap` whichever wins — leaving one set would send
+  a second ping, and a spurious `diff` costs the client a whole diff refetch (`events_test.go`).
+  Sends are non-blocking, so a stalled tab never blocks a handler; empty entries prune on last
+  unsubscribe; a 25s keepalive comment turns a half-open connection into a write error.
 - `watch.go` runs one poller per review while it has subscribers (ref-counted), ticking every
-  `watchInterval` (~1.5s) over `git.WorktreeFingerprint` and publishing `diff` on change. The
-  fingerprint is content-free (HEAD sha + change set + mtimes). A git error is no-change; the
-  baseline is seeded on the first tick so connecting never self-fires. Its git commands run with
-  `GIT_OPTIONAL_LOCKS=0` (`git.runEnv`) so they never take `index.lock` under a concurrent commit.
+  `watchInterval` (~1.5s) over **both** fingerprints and publishing `refs` when the refs moved,
+  else `diff` when the worktree did. Splitting them is what keeps a plain edit — nearly every ping
+  while an agent works — from costing the client a branch and a commit refetch, five git processes.
+  `RefsFingerprint` is HEAD (sha **and** symbolic name, or `git switch`, which moves no ref, would
+  read as no change) plus every local and remote branch tip; tags are out, since nothing the client
+  refetches reads them. `WorktreeFingerprint` is the change set plus those paths' mtimes, and no
+  longer HEAD — a commit shows in the change set it empties, and an empty commit is the refs half's
+  to report. A git error is no-change; both baselines are seeded on the first tick so connecting
+  never self-fires. Its git commands run with `GIT_OPTIONAL_LOCKS=0` (`git.runEnv`) so they never
+  take `index.lock` under a concurrent commit.

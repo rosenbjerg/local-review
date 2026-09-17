@@ -91,11 +91,15 @@ src/
   array itself when they all were. Keyed on **both** paths: a rename's old path is routinely another
   file's new path. That identity is exact (same object ⟺ equal content), which is what keeps
   `DiffView`'s `contentKey` invariant below honest. `mergeFiles.test.ts`, `useReview.test.ts`.
-- SSE: refetch the review on any ping; the diff, branches and commits only on `diff`. Refetch params
-  come from a ref (the effect is keyed on `review.id`). Git-derived results are gated on the shared
-  `reqSeq`; the review half is **not** (fetched by id). A hidden tab takes the review but defers the
-  diff (`missedDiff`, replayed on visible). The focus/visibility refetch is the fallback when the
-  stream isn't `OPEN`, and passes `diff`. A `from` sha rebased away resets to `all`.
+- SSE: the three ping kinds nest. Refetch the review on any ping; the diff on `diff` **or** `refs`;
+  branches and commits on `refs` alone — the pickers read refs, a plain edit moves none, and
+  refetching them on every ping cost five git processes only for `keepIfSame` to discard both.
+  Refetch params come from a ref (the effect is keyed on `review.id`). Git-derived results are gated
+  on the shared `reqSeq`; the review half is **not** (fetched by id). A hidden tab takes the review
+  but defers the rest (`missedDiff`/`missedRefs`, replayed on visible, each carrying only what was
+  actually missed). The focus/visibility refetch is the fallback when the stream isn't `OPEN`, and
+  asks for everything — a dead stream may have missed anything. A `from` sha rebased away resets to
+  `all`, which rides on the `refs` ping a rebase produces.
 - `setSummary` trims, matching the server, so the optimistic value equals the refetched one.
 - `App`'s `hasReviewState` is the one predicate behind both `canReset` and `requestReset`'s no-op
   guard, so the toolbar can't enable a dialog that then declines to do anything.

@@ -10,7 +10,7 @@ import (
 // notify sends a metadata-only ping; a failed Touch is non-fatal, the mutation already landed.
 func (s *Server) notify(reviewID int64) {
 	_ = s.Store.Touch(reviewID)
-	s.hub.publish(reviewID, false)
+	s.hub.publish(reviewID, false, false)
 }
 
 // maxBodyBytes stops a buggy or hostile client from spilling a huge payload into memory and the DB.

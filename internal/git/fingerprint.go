@@ -9,13 +9,29 @@ import (
 	"strings"
 )
 
-// WorktreeFingerprint is a content-free change signal — HEAD, the changed-path set and
-// those paths' mtimes — so its cost stays flat however large the diff.
-func (r *Repo) WorktreeFingerprint() (string, error) {
-	head, err := r.runEnv(optionalLocksOff, "rev-parse", "HEAD")
+// RefsFingerprint is a change signal for what the branch and commit pickers read: HEAD and
+// every local and remote branch tip. HEAD contributes its symbolic name as well as its sha,
+// or `git switch`, which moves no ref at all, would read as no change.
+func (r *Repo) RefsFingerprint() (string, error) {
+	// for-each-ref matches only the ref namespace, so HEAD needs the separate rev-parse.
+	head, err := r.runEnv(optionalLocksOff, "rev-parse", "HEAD", "--symbolic-full-name", "HEAD")
 	if err != nil {
 		return "", err
 	}
+	// Tags are deliberately out: nothing the client refetches on a refs ping reads them.
+	refs, err := r.runEnv(optionalLocksOff, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads", "refs/remotes")
+	if err != nil {
+		return "", err
+	}
+	h := sha256.New()
+	h.Write([]byte(head))
+	h.Write([]byte(refs))
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// WorktreeFingerprint is a content-free change signal — the changed-path set and those paths'
+// mtimes — so its cost stays flat however large the diff. HEAD is RefsFingerprint's to report.
+func (r *Repo) WorktreeFingerprint() (string, error) {
 	tracked, err := r.runEnv(optionalLocksOff, "diff", "--name-only", "-z", "HEAD")
 	if err != nil {
 		return "", err
@@ -25,7 +41,6 @@ func (r *Repo) WorktreeFingerprint() (string, error) {
 		return "", err
 	}
 	h := sha256.New()
-	h.Write([]byte(head))
 	h.Write([]byte(tracked))
 	h.Write([]byte(untracked))
 	for _, p := range append(splitNUL(tracked), splitNUL(untracked)...) {

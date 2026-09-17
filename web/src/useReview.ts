@@ -210,7 +210,7 @@ export function useReview() {
     };
   });
 
-  // SSE refetch: a `diff` ping refetches review + diff (+ branches and commits); a `meta` ping only the review.
+  // SSE refetch: a `meta` ping refetches the review, `diff` the diff too, `refs` also branches and commits.
   useEffect(() => {
     if (!review) return;
     const id = review.id;
@@ -218,18 +218,23 @@ export function useReview() {
     let inFlight = false;
     let pending = false;
     let pendingDiff = false;
-    // A `diff` ping deferred while hidden; the focus fallback stands down while the stream is OPEN, so nothing else would fetch it.
+    let pendingRefs = false;
+    // Deferred while hidden; the focus fallback stands down while the stream is OPEN, so nothing else would fetch them.
     let missedDiff = false;
-    async function refresh(withDiff: boolean) {
+    let missedRefs = false;
+    async function refresh(withDiff: boolean, withRefs: boolean) {
       if (cancelled) return;
-      // A hidden tab still takes the review (it feeds the unseen-activity badge) but defers the diff, which nothing renders.
+      // A hidden tab still takes the review (it feeds the unseen-activity badge) but defers the rest, which nothing renders.
       const hidden = document.visibilityState !== "visible";
       if (hidden && withDiff) missedDiff = true;
+      if (hidden && withRefs) missedRefs = true;
       withDiff = withDiff && !hidden;
+      withRefs = withRefs && !hidden;
       if (inFlight) {
-        // Ping mid-fetch: queue exactly one trailing refetch, carrying the diff if any queued ping wanted it.
+        // Ping mid-fetch: queue exactly one trailing refetch, carrying whatever any queued ping wanted.
         pending = true;
         pendingDiff = pendingDiff || withDiff;
+        pendingRefs = pendingRefs || withRefs;
         return;
       }
       inFlight = true;
@@ -237,8 +242,9 @@ export function useReview() {
       // and an older ping would otherwise land hunks from the side just left.
       const seq = reqSeq.current;
       const p = diffParams.current;
-      // A `diff` ping also refreshes branches (out-of-band checkout) and the commit picker. Their failures are
-      // swallowed: a `from` rebased away 400s the diff, and the check below then resets it instead of stranding the review.
+      // Branches and the commit picker ride on `refs` alone: a plain edit moves neither, and refetching them
+      // anyway cost five git processes on every ping. Their failures are swallowed: a `from` rebased away 400s
+      // the diff, and the check below then resets it instead of stranding the review.
       // Started before the try, which holds the await and nothing else — the compiler bails on a
       // conditional inside a try, and a bailed-out useReview hands unmemoized callbacks to DiffView.
       const revP = api.getReview(id);
@@ -246,9 +252,9 @@ export function useReview() {
         withDiff && p.repo && p.headRef
           ? api.diff(p.repo, p.headRef, p.opts).catch(() => null)
           : Promise.resolve(null);
-      const branchesP = withDiff && p.repo ? api.branches(p.repo).catch(() => null) : Promise.resolve(null);
+      const branchesP = withRefs && p.repo ? api.branches(p.repo).catch(() => null) : Promise.resolve(null);
       const commitsP =
-        withDiff && p.repo && p.head
+        withRefs && p.repo && p.head
           ? api.commits(p.repo, p.head, p.base, COMMIT_LIMIT).catch(() => null)
           : Promise.resolve(null);
       let rev: Review | null = null;
@@ -286,23 +292,28 @@ export function useReview() {
       if (pending && !cancelled) {
         pending = false;
         const wantDiff = pendingDiff;
+        const wantRefs = pendingRefs;
         pendingDiff = false;
-        refresh(wantDiff);
+        pendingRefs = false;
+        refresh(wantDiff, wantRefs);
       }
     }
     const es = new EventSource(`/api/reviews/${id}/events`);
-    es.onmessage = (e) => refresh(e.data === "diff");
+    // `refs` is a superset of `diff`: a ref moved, so the content almost certainly did too.
+    es.onmessage = (e) => refresh(e.data === "diff" || e.data === "refs", e.data === "refs");
     // No onerror — EventSource auto-reconnects; the focus fallback covers the gap.
     function onFocus() {
       if (document.visibilityState !== "visible") return; // also fires on hide
-      if (missedDiff) {
+      if (missedDiff || missedRefs) {
+        const wantRefs = missedRefs;
         missedDiff = false;
-        refresh(true); // a ping deferred its diff while the tab was hidden
+        missedRefs = false;
+        refresh(true, wantRefs); // a ping deferred its fetches while the tab was hidden
         return;
       }
       if (es.readyState === EventSource.OPEN) return; // stream live — it'll push
-      // A dead stream may have missed a content change.
-      refresh(true);
+      // A dead stream may have missed anything, so ask for all of it.
+      refresh(true, true);
     }
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);

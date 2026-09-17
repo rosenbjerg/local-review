@@ -157,7 +157,9 @@ func TestFileReadsReportAbsenceAsNotFound(t *testing.T) {
 // The fingerprint must change for every kind of real change the poller cares about
 // (commit, unstaged edit, new/deleted file) yet stay stable when nothing that
 // affects the diff changed — including a no-op rewrite with identical content, so
-// an editor "save" doesn't trigger a spurious refetch.
+// an editor "save" doesn't trigger a spurious refetch. HEAD is no longer part of it:
+// a commit still shows, in the change set it empties, and the one it wouldn't — an
+// empty commit — is RefsFingerprint's to report.
 func TestWorktreeFingerprint(t *testing.T) {
 	dir, r := initRepoOn(t, "main")
 	firstCommit(t, dir)
@@ -207,6 +209,68 @@ func TestWorktreeFingerprint(t *testing.T) {
 	}
 	if fp() == committed {
 		t.Error("deleting a tracked file should change the fingerprint")
+	}
+}
+
+// The refs fingerprint is what separates a `refs` ping from a `diff` one, and a `refs` ping
+// costs the client a branch and a commit refetch — five git processes on top of the diff. So
+// it has to move for anything the pickers read, and above all must NOT move for a plain edit,
+// which is what nearly every ping is while an agent works.
+func TestRefsFingerprint(t *testing.T) {
+	dir, r := initRepoOn(t, "main")
+	firstCommit(t, dir)
+
+	fp := func() string {
+		t.Helper()
+		s, err := r.RefsFingerprint()
+		if err != nil {
+			t.Fatalf("RefsFingerprint: %v", err)
+		}
+		return s
+	}
+
+	base := fp()
+	if base != fp() {
+		t.Fatal("fingerprint must be stable when nothing changes")
+	}
+
+	mustWrite(t, dir, "f.txt", "edited\n")
+	if fp() != base {
+		t.Error("an unstaged edit must not move the refs fingerprint — that is a diff ping, not a refs one")
+	}
+
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-q", "-m", "c2")
+	committed := fp()
+	if committed == base {
+		t.Error("a commit should change the fingerprint")
+	}
+
+	// An empty commit is the case WorktreeFingerprint cannot see, since it leaves the change set alone.
+	gitCmd(t, dir, "commit", "-q", "--allow-empty", "-m", "c3")
+	empty := fp()
+	if empty == committed {
+		t.Error("an empty commit should change the fingerprint")
+	}
+
+	gitCmd(t, dir, "branch", "other")
+	branched := fp()
+	if branched == empty {
+		t.Error("a new branch should change the fingerprint")
+	}
+
+	// `git switch` moves no ref at all — only HEAD's symbolic name — yet every branch row's
+	// isCurrent turns on it, and with it whether the uncommitted axis is offered.
+	gitCmd(t, dir, "checkout", "-q", "other")
+	switched := fp()
+	if switched == branched {
+		t.Error("switching branches should change the fingerprint")
+	}
+
+	// Same sha, no symbolic name: detaching is invisible to anything that reads refs alone.
+	gitCmd(t, dir, "checkout", "-q", "--detach", "HEAD")
+	if fp() == switched {
+		t.Error("detaching HEAD should change the fingerprint")
 	}
 }
 

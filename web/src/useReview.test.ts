@@ -149,13 +149,13 @@ test("an SSE diff ping resets a 'from' whose commit was rebased away", async () 
   act(() => result.current.setFrom("c2"));
   expect(result.current.from).toBe("c2");
 
-  // The branch is rebased: the next commit refetch no longer contains c2.
+  // The branch is rebased — a ref move, which is the ping that carries the commit refetch.
   vi.mocked(api.commits).mockResolvedValue({
     commits: [{ sha: "c3", shortSha: "c3", subject: "c", relDate: "" }],
   });
   const es = (globalThis as unknown as { EventSource: { instances: { onmessage: ((e: { data: string }) => void) | null }[] } }).EventSource.instances.at(-1);
   await act(async () => {
-    es?.onmessage?.({ data: "diff" });
+    es?.onmessage?.({ data: "refs" });
   });
 
   await waitFor(() => expect(result.current.from).toBe("all"));
@@ -165,7 +165,7 @@ test("an SSE diff ping resets a 'from' whose commit was rebased away", async () 
 // longer branch one new commit slides a still-valid pick out of the list. Treating
 // that as "rebased away" silently widened the view to the whole branch — and `diff`
 // pings are frequent, so it happened mid-review while an agent worked.
-test("an SSE diff ping keeps a 'from' that only slid out of the commit window", async () => {
+test("an SSE refs ping keeps a 'from' that only slid out of the commit window", async () => {
   const window50 = (offset: number) =>
     Array.from({ length: 50 }, (_, i) => {
       const n = offset + i;
@@ -179,11 +179,11 @@ test("an SSE diff ping keeps a 'from' that only slid out of the commit window", 
   act(() => result.current.setFrom("c1"));
   expect(result.current.from).toBe("c1");
 
-  // A commit lands: the window slides and c1 falls off the end, though it still exists.
+  // A commit lands (a ref move): the window slides and c1 falls off the end, though it still exists.
   vi.mocked(api.commits).mockResolvedValue({ commits: window50(2) });
   const es = (globalThis as unknown as { EventSource: { instances: { onmessage: ((e: { data: string }) => void) | null }[] } }).EventSource.instances.at(-1);
   await act(async () => {
-    es?.onmessage?.({ data: "diff" });
+    es?.onmessage?.({ data: "refs" });
   });
 
   await waitFor(() => expect(result.current.fromOptions.some((o) => o.hint === "picked earlier")).toBe(true));
@@ -496,6 +496,57 @@ test("a diff ping that changes one file leaves the others' identity alone", asyn
 
   await waitFor(() => expect(result.current.files[1].hunks[0].lines[0].content).toBe("edited"));
   expect(result.current.files[0]).toBe(before[0]);
+});
+
+// The pickers read refs, and a plain edit moves none — but every `diff` ping used to refetch the
+// branch list and the commit list anyway, five git processes per ping, only for `keepIfSame` to
+// throw both away. The poller now separates the two signals; this is the client half of that.
+test("a diff ping refetches the diff alone, a refs ping the pickers too", async () => {
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.review).not.toBeNull());
+  const counts = () => ({
+    diff: vi.mocked(api.diff).mock.calls.length,
+    branches: vi.mocked(api.branches).mock.calls.length,
+    commits: vi.mocked(api.commits).mock.calls.length,
+  });
+  const before = counts();
+
+  await act(async () => {
+    lastEventSource()?.onmessage?.({ data: "diff" });
+  });
+  await waitFor(() => expect(counts().diff).toBe(before.diff + 1));
+  expect(counts().branches).toBe(before.branches);
+  expect(counts().commits).toBe(before.commits);
+
+  const afterDiff = counts();
+  await act(async () => {
+    lastEventSource()?.onmessage?.({ data: "refs" });
+  });
+  await waitFor(() => expect(counts().branches).toBe(afterDiff.branches + 1));
+  expect(counts().commits).toBe(afterDiff.commits + 1);
+  // A ref moved, so the content almost certainly did too.
+  expect(counts().diff).toBe(afterDiff.diff + 1);
+});
+
+// A meta ping is the narrowest of the three and must stay that way: comment churn is the most
+// frequent ping of all, and it moves nothing git-derived.
+test("a meta ping refetches nothing git-derived", async () => {
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.review).not.toBeNull());
+  const before = {
+    diff: vi.mocked(api.diff).mock.calls.length,
+    branches: vi.mocked(api.branches).mock.calls.length,
+    commits: vi.mocked(api.commits).mock.calls.length,
+  };
+
+  await act(async () => {
+    lastEventSource()?.onmessage?.({ data: "meta" });
+  });
+  await waitFor(() => expect(vi.mocked(api.getReview).mock.calls.length).toBeGreaterThan(0));
+
+  expect(vi.mocked(api.diff).mock.calls.length).toBe(before.diff);
+  expect(vi.mocked(api.branches).mock.calls.length).toBe(before.branches);
+  expect(vi.mocked(api.commits).mock.calls.length).toBe(before.commits);
 });
 
 function setVisibility(state: "visible" | "hidden") {

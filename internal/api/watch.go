@@ -10,8 +10,8 @@ import (
 
 const watchInterval = 1500 * time.Millisecond
 
-// watchRegistry runs one ref-counted filesystem poller per review with live SSE
-// subscribers, turning out-of-band edits and commits into `diff` pings.
+// watchRegistry runs one ref-counted poller per review with live SSE subscribers, turning
+// out-of-band edits into `diff` pings and ref moves into `refs` pings.
 type watchRegistry struct {
 	hub    *hub
 	mu     sync.Mutex
@@ -58,25 +58,33 @@ func (wr *watchRegistry) poll(ctx context.Context, reviewID int64, repoPath stri
 	repo := git.New(repoPath)
 	ticker := time.NewTicker(watchInterval)
 	defer ticker.Stop()
-	var last string
+	var lastRefs, lastTree string
 	var haveBaseline bool
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			fp, err := repo.WorktreeFingerprint()
+			refs, err := repo.RefsFingerprint()
 			if err != nil {
 				continue // mid-rebase or unreadable: treat as no change
 			}
-			if !haveBaseline {
-				// Seed the baseline so connecting doesn't self-fire.
-				last, haveBaseline = fp, true
+			tree, err := repo.WorktreeFingerprint()
+			if err != nil {
 				continue
 			}
-			if fp != last {
-				last = fp
-				wr.hub.publish(reviewID, true)
+			if !haveBaseline {
+				// Seed the baselines so connecting doesn't self-fire.
+				lastRefs, lastTree, haveBaseline = refs, tree, true
+				continue
+			}
+			movedRefs, movedTree := refs != lastRefs, tree != lastTree
+			lastRefs, lastTree = refs, tree
+			// A ref move is the superset: it carries the diff the client would refetch anyway.
+			if movedRefs {
+				wr.hub.publish(reviewID, true, true)
+			} else if movedTree {
+				wr.hub.publish(reviewID, true, false)
 			}
 		}
 	}
