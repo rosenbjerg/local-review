@@ -221,13 +221,19 @@ new path.
   Sends are non-blocking, so a stalled tab never blocks a handler; empty entries prune on last
   unsubscribe; a 25s keepalive comment turns a half-open connection into a write error.
 - `watch.go` runs one poller per review while it has subscribers (ref-counted), ticking every
-  `watchInterval` (~1.5s) over **both** fingerprints and publishing `refs` when the refs moved,
-  else `diff` when the worktree did. Splitting them is what keeps a plain edit — nearly every ping
-  while an agent works — from costing the client a branch and a commit refetch, five git processes.
+  `watchInterval` (~1.5s) and publishing `refs` when the refs moved, else `diff` when the worktree
+  did. Splitting them is what keeps a plain edit — nearly every ping while an agent works — from
+  costing the client a branch and a commit refetch, five git processes.
+- **Only the worktree is read every tick.** The refs are re-read when the worktree moved, and
+  otherwise once a `refsInterval` (~12s) — `refsDue`, pinned by `watch_test.go`. Everything that
+  moves a ref and matters promptly (commit, rebase, checkout) moves the worktree too; a bare
+  `git fetch` moves refs alone, and at two processes a read, paying for it every 1.5s was most of
+  the cost of watching a repository nobody is touching.
   `RefsFingerprint` is HEAD (sha **and** symbolic name, or `git switch`, which moves no ref, would
   read as no change) plus every local and remote branch tip; tags are out, since nothing the client
   refetches reads them. `WorktreeFingerprint` is the change set plus those paths' mtimes, and no
-  longer HEAD — a commit shows in the change set it empties, and an empty commit is the refs half's
-  to report. A git error is no-change; both baselines are seeded on the first tick so connecting
-  never self-fires. Its git commands run with `GIT_OPTIONAL_LOCKS=0` (`git.runEnv`) so they never
+  longer HEAD — a commit shows in the change set it empties, and an empty commit, which doesn't,
+  is the refs half's to notice on its own cadence. A git error is no-change and discards the whole
+  tick, refs reading included, so the next one re-reads both; the baselines are seeded on the first
+  tick so connecting never self-fires. Its git commands run with `GIT_OPTIONAL_LOCKS=0` (`git.runEnv`) so they never
   take `index.lock` under a concurrent commit.
