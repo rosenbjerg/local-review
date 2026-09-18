@@ -126,7 +126,14 @@ export function TopBar({ selection: s, actions, status }: Props) {
   return (
     <header className="topbar">
       <div className="topbar-side">
-        <span className="logo">local-review</span>
+        <a
+          className="logo"
+          href="https://github.com/rosenbjerg/local-review"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          local-review
+        </a>
       </div>
       {/* The selection wraps as one cluster, so a narrow window folds it onto its own line. */}
       <div className="topbar-center">
