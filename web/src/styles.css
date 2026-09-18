@@ -579,7 +579,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
+  padding: 4px 10px;
   background: var(--bg-elev);
   border-bottom: 1px solid var(--border);
   box-shadow: var(--elev-1);
@@ -1303,9 +1303,6 @@ textarea:focus-visible {
 }
 
 /* File explorer */
-.explorer {
-  padding: 8px 0;
-}
 .explorer-sticky {
   position: sticky;
   top: 0;
@@ -1584,7 +1581,7 @@ textarea:focus-visible {
   font-size: var(--text-md);
 }
 .file-comments {
-  margin-top: 12px;
+  margin: 12px 0 4px 4px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2057,7 +2054,7 @@ textarea:focus-visible {
 
 /* Review summary */
 .review-summary {
-  padding: 8px 8px 12px;
+  padding: 8px;
   border-bottom: 1px solid var(--border);
 }
 .review-summary-head {
