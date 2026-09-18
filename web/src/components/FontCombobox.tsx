@@ -17,6 +17,11 @@ interface Props {
   bundled: readonly string[];
   // Candidates this machine turned out to have.
   installed: readonly string[];
+  // Every family the machine reports, once it may be asked. Offered as matches for what is typed,
+  // never listed: there can be two hundred.
+  known?: readonly string[];
+  // Set while access to the machine's fonts could still be asked for; the footer then offers it.
+  onRequestKnown?: () => void;
   fallbackVar: string;
   sample?: string;
   onChange: (value: string) => void;
@@ -36,6 +41,8 @@ export function FontCombobox({
   fallbackLabel,
   bundled,
   installed,
+  known = [],
+  onRequestKnown,
   fallbackVar,
   sample,
   onChange,
@@ -59,13 +66,23 @@ export function FontCombobox({
   const rows: Row[] = useMemo(() => {
     // Matched on the normalized form, so the spacing someone would naturally type still finds the face.
     const q = typed ? normalizeName(value) : "";
-    const matched = faces
+    const listed = new Set(faces.map((f) => normalizeName(f.name)));
+    const pool =
+      q === ""
+        ? faces
+        : [
+            ...faces,
+            ...known
+              .filter((name) => !listed.has(normalizeName(name)))
+              .map((name) => ({ name, group: "On this machine" })),
+          ];
+    const matched = pool
       .filter((f) => q === "" || normalizeName(f.name).includes(q))
       .map((f) => ({ face: f.name, value: f.name, hint: "", group: f.group }));
     // The clear row is an action, not a face, so it only stands while nothing is being searched for.
     if (q !== "") return matched;
     return [{ face: fallback, value: "", hint: fallbackLabel, group: "" }, ...matched];
-  }, [faces, value, typed, fallback, fallbackLabel]);
+  }, [faces, known, value, typed, fallback, fallbackLabel]);
 
   const nav = useListNavigation({
     length: rows.length,
@@ -192,7 +209,27 @@ export function FontCombobox({
           })}
           {/* The list only holds what it thought to probe for, so it has to say it isn't the limit. */}
           <li className="combobox-foot" aria-hidden="true">
-            Any other font installed here works — type its name
+            {onRequestKnown ? (
+              <>
+                Type any font&apos;s name, or{" "}
+                <button
+                  type="button"
+                  className="font-suggest"
+                  // Mousedown, like a row: a click would come after the blur that closes the list.
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onRequestKnown();
+                  }}
+                >
+                  allow access
+                </button>{" "}
+                to list them
+              </>
+            ) : known.length > 0 ? (
+              "Type any installed font\u2019s name"
+            ) : (
+              "Any other font installed here works \u2014 type its name"
+            )}
           </li>
         </ul>
       )}

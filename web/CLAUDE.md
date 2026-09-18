@@ -430,7 +430,11 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   Clearing is a row naming the fallback, not an empty field — empty reads as "nothing" when it means
   "whatever the theme brings". Rows are grouped into what ships with the app and what this machine
   turned out to have, and the list closes with a line saying anything else installed can be typed:
-  the list is a probe of a few dozen guessed names, not the set of choices. `fontCombobox.test.tsx`.
+  the list is a probe of a few dozen guessed names, not the set of choices. With font access granted
+  the machine's own families (`known`) join that group, but only as matches for what is typed — two
+  hundred rows is not a list — and while access could still be asked for, the closing line offers
+  it, on mousedown like a row, since a click would land after the blur that closes the list.
+  `fontCombobox.test.tsx`.
 - **Font names go wrong at the spacing**, not the spelling — the family really is
   `JetBrainsMono Nerd Font`, and CSS resolves neither a near miss nor a hint about one. So the filter
   matches on `normalizeName` (lowercased, non-alphanumerics dropped), which finds the face from the

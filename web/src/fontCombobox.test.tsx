@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import { FontCombobox } from "./components/FontCombobox";
+
+type Extra = Partial<Pick<React.ComponentProps<typeof FontCombobox>, "known" | "onRequestKnown">>;
 
 // Unlike Combobox, the value here is free text — a face the availability probe never listed, or a
 // whole stack — so what is typed has to survive closing the list, and the suggestions are only
 // suggestions. Clearing back to the fallback is a row rather than an empty field, since an empty
 // field reads as "nothing" when it actually means "whatever the theme brings".
-function open(initial = "") {
+function open(initial = "", extra: Extra = {}) {
   function Harness() {
     const [v, setV] = useState(initial);
     return (
@@ -22,6 +24,7 @@ function open(initial = "") {
         fallbackVar="--mono-fallback"
         sample="0O1lI"
         onChange={setV}
+        {...extra}
       />
     );
   }
@@ -77,4 +80,33 @@ test("the keyboard walks the list and Enter takes the active row", () => {
   fireEvent.keyDown(input, { key: "ArrowDown" });
   fireEvent.keyDown(input, { key: "Enter" });
   expect(input.value).toBe("JetBrains Mono");
+});
+
+// Two hundred families is not a list anyone scrolls, so the machine's families answer to what is
+// typed rather than sitting in the list — and one the probe already found isn't shown twice.
+test("the machine's families answer to what is typed but are not listed", () => {
+  const input = open("", { known: ["SF Pro", "Fira Code"] });
+  expect(screen.getAllByText("Fira Code").length).toBe(1);
+  expect(screen.queryByText("SF Pro")).toBeNull();
+  expect(screen.getByText(/Type any installed font/)).toBeTruthy();
+
+  fireEvent.change(input, { target: { value: "sf" } });
+  const row = screen.getByText("SF Pro");
+  expect(row.style.fontFamily).toBe('"SF Pro", var(--mono-fallback)');
+  fireEvent.mouseDown(row);
+  expect(input.value).toBe("SF Pro");
+
+  fireEvent.click(input);
+  fireEvent.change(input, { target: { value: "fira" } });
+  expect(screen.getAllByText("Fira Code").length).toBe(1);
+});
+
+// The ask sits where someone looks for a font that isn't offered. It has to act on mousedown, as
+// a row does, since a click would land after the blur that closes the list.
+test("the footer offers access while it can still be asked for", () => {
+  const request = vi.fn();
+  open("", { onRequestKnown: request });
+  fireEvent.mouseDown(screen.getByText("allow access"));
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole("listbox")).toBeTruthy();
 });

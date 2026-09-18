@@ -261,6 +261,8 @@ function FontField({
           }
           bundled={BUNDLED[fontKey]}
           installed={installed}
+          known={local.families}
+          onRequestKnown={local.status === "prompt" ? requestLocalFonts : undefined}
           fallbackVar={fontKey === "monoFamily" ? "--mono-fallback" : "--sans-fallback"}
           sample={sample}
           onChange={(v) => setFontFamily(fontKey, v)}
