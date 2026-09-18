@@ -12,6 +12,7 @@ import materialTheme from "@shikijs/themes/material-theme";
 import catppuccinMocha from "@shikijs/themes/catppuccin-mocha";
 import catppuccinLatte from "@shikijs/themes/catppuccin-latte";
 import darkPlus from "@shikijs/themes/dark-plus";
+import monokai from "@shikijs/themes/monokai";
 import { darcula } from "./themes/darcula";
 import { riderNight, riderDay } from "./themes/rider";
 import { webstormDark, webstormLight } from "./themes/webstorm";
@@ -32,6 +33,7 @@ const SHIKI_THEMES: Record<ShikiTheme, ThemeRegistrationAny> = {
   "catppuccin-mocha": catppuccinMocha,
   "catppuccin-latte": catppuccinLatte,
   "dark-plus": darkPlus,
+  monokai,
 };
 
 const ALIAS_TO_ID = new Map<string, string>();

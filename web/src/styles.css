@@ -517,6 +517,47 @@
   color-scheme: dark;
 }
 
+/* Monokai (Shiki bundles the syntax theme; the chrome is VS Code's Monokai workbench). Raised fills step
+   down to the sidebar's darker olive, as the IDE draws them. The IDE's own accent is an olive grey that
+   drops to 3:1 as link text, so the accent is the palette's orange with the editor background on it;
+   diff rows are its inserted/removed tints flattened onto --bg, edged with its green and pink. */
+.theme-option[data-theme="monokai"],
+:root[data-theme="monokai"] {
+  --bg: #272822;
+  --bg-elev: #1e1f1c;
+  --bg-hover: #3e3d32;
+  --border: #414339;
+  --text: #f8f8f2;
+  --muted: #90908a;
+  --accent: #fd971f;
+  --accent-hover: #ffab4a;
+  --add-bg: #39471c;
+  --add-border: #a6e22e;
+  --del-bg: #552734;
+  --del-border: #f92672;
+  --add-word-bg: #546d20;
+  --del-word-bg: #7e2744;
+  --sel-bg: #49483e;
+  --occ-bg: rgba(230, 219, 116, 0.25);
+  --occ-bg-active: rgba(230, 219, 116, 0.5);
+  --danger: #f92672;
+  --danger-border: #c4265e;
+  --success: #a6e22e;
+  --success-border: #86b42b;
+  --warn: #e6db74;
+  --warn-border: #b3b42b;
+  --info: #66d9ef;
+  --info-border: #56adbc;
+  --shadow-color: rgba(0, 0, 0, 0.5);
+  --highlight-color: rgba(255, 255, 255, 0.05);
+  --on-accent: #272822;
+  --checker-bg: #272822;
+  --checker-fg: #3e3d32;
+  --backdrop: rgba(0, 0, 0, 0.6);
+  --font-mono: "JetBrains Mono", var(--mono-fallback);
+  color-scheme: dark;
+}
+
 
 * {
   box-sizing: border-box;
