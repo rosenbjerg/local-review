@@ -1,7 +1,8 @@
 // Package workspace confines the tool to one root directory: it lists the git repositories
 // under that root and resolves a repo name to a path that provably lives inside it. Every
 // git-reading request passes through Open, so this is the boundary that keeps a served
-// instance from being talked into reading somewhere else on disk.
+// instance from being talked into reading somewhere else on disk. A root that is itself a
+// git repository serves that one repo, and Open then accepts only its name.
 package workspace
 
 import (
@@ -16,9 +17,17 @@ import (
 
 type Workspace struct {
 	Root string
+	// Non-empty when Root is itself a repo: the one name Open accepts, and the one row List returns.
+	repo string
 }
 
-func New(root string) *Workspace { return &Workspace{Root: root} }
+func New(root string) *Workspace {
+	w := &Workspace{Root: root}
+	if git.IsRepo(root) {
+		w.repo = filepath.Base(root)
+	}
+	return w
+}
 
 // Entry is one repo-picker row. LastActivity is a local YYYY-MM-DD date, not a
 // timestamp, so the order can't reshuffle through the working day; empty if undatable.
@@ -29,8 +38,12 @@ type Entry struct {
 
 const activityDateLayout = "2006-01-02"
 
-// List returns the git repositories directly under the root, newest-worked-in first.
+// List returns the git repositories directly under the root, newest-worked-in first, or the
+// root itself when that is the repo.
 func (w *Workspace) List() ([]Entry, error) {
+	if w.repo != "" {
+		return []Entry{{Name: w.repo, LastActivity: activityDate(w.Root)}}, nil
+	}
 	entries, err := os.ReadDir(w.Root)
 	if err != nil {
 		return nil, err
@@ -78,6 +91,12 @@ var ErrInvalidName = errors.New("invalid repo name")
 func (w *Workspace) Open(name string) (*git.Repo, error) {
 	if name == "" {
 		return nil, errors.New("repo is required")
+	}
+	if w.repo != "" {
+		if name != w.repo {
+			return nil, ErrInvalidName
+		}
+		return git.New(w.Root), nil
 	}
 	if name != filepath.Base(name) || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
 		return nil, ErrInvalidName

@@ -122,3 +122,39 @@ func TestActivityDateGitlink(t *testing.T) {
 		t.Errorf("activityDate = %q, want 2024-03-04", got)
 	}
 }
+
+// A root that is itself a repo serves that one repo: only its own name resolves, and it
+// resolves to the root. A repo nested under it is a submodule or a vendored tree, not a
+// sibling to pick between, so it must stay unaddressable.
+func TestSingleRepoRoot(t *testing.T) {
+	parent := t.TempDir()
+	when := time.Date(2024, 5, 6, 12, 0, 0, 0, time.Local)
+	mkRepo(t, parent, "proj", when)
+	root := filepath.Join(parent, "proj")
+	mkRepo(t, root, "vendored", when)
+	w := New(root)
+
+	repos, err := w.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(repos) != 1 || repos[0].Name != "proj" {
+		t.Fatalf("List = %v, want one entry named proj", repos)
+	}
+	if repos[0].LastActivity != "2024-05-06" {
+		t.Errorf("lastActivity = %q, want 2024-05-06", repos[0].LastActivity)
+	}
+
+	repo, err := w.Open("proj")
+	if err != nil {
+		t.Fatalf("Open(\"proj\") = %v, want the root repo", err)
+	}
+	if repo.Path != root {
+		t.Errorf("Open(\"proj\").Path = %q, want %q", repo.Path, root)
+	}
+	for _, bad := range []string{"", ".", "..", "../proj", "vendored", "proj/vendored", "nope"} {
+		if _, err := w.Open(bad); err == nil {
+			t.Errorf("Open(%q) should be rejected", bad)
+		}
+	}
+}

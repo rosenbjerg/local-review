@@ -131,14 +131,18 @@ export function TopBar({ selection: s, actions, status }: Props) {
       {/* The selection wraps as one cluster, so a narrow window folds it onto its own line. */}
       <div className="topbar-center">
         <div className="crumbs">
-          <Combobox
-            ariaLabel="repository"
-            value={s.repo}
-            options={s.repoOptions}
-            onChange={s.onRepoChange}
-            disabled={s.loading}
-            emptyText="(none found)"
-          />
+          {s.repoOptions.length === 1 ? (
+            <span className="crumb-static">{s.repo}</span>
+          ) : (
+            <Combobox
+              ariaLabel="repository"
+              value={s.repo}
+              options={s.repoOptions}
+              onChange={s.onRepoChange}
+              disabled={s.loading}
+              emptyText="(none found)"
+            />
+          )}
           <span className="crumb-sep" aria-hidden="true">
             /
           </span>

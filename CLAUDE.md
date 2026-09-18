@@ -12,13 +12,13 @@ Go backend + React frontend, shipped as one binary (`web/dist` is `go:embed`ded)
 ## Commands
 
 ```sh
-./start.sh <root-path> [flags]        # build frontend + binary, serve repos under root
+./start.sh [root-path] [flags]        # build frontend + binary; root is a repo or a folder of them
 bun scripts/compilercheck.ts --check  # the React Compiler still compiles every web/src file
 
 bun install --cwd web
 bun run --cwd web build               # → web/dist (must precede go build)
 go build -o local-review .
-./local-review -root <folder>         # http://127.0.0.1:7777; -port -data-dir -no-open -retention-days
+./local-review -root <repo|folder>    # http://127.0.0.1:7777; -port -data-dir -no-open -retention-days
 
 ./local-review -root <folder> -no-open && bun run --cwd web dev   # hot reload on :5173, /api proxied to :7777
 bun scripts/screenshot.ts             # regenerate docs/screenshot.png (--no-build, --keep)
@@ -48,7 +48,7 @@ old way was wrong — belongs in the body, not the subject.
 main.go                 server: embeds web/dist, DB path, draft pruning, error logging → same-origin guard,
                         graceful shutdown, opens the browser
 internal/               Go backend, six packages (see internal/CLAUDE.md): git (shells out), store (SQLite),
-                        workspace (the root boundary), review (derived anchor + reviewed state), api (HTTP),
+                        workspace (the root boundary, one repo or a folder of them), review (derived anchor + reviewed state), api (HTTP),
                         export (markdown)
 web/                    React frontend, built with bun + Vite into web/dist (see web/CLAUDE.md)
 scripts/screenshot.ts   fixture repo → seeded review → headless capture of docs/screenshot.png

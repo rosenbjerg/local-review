@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"local-review/internal/api"
+	"local-review/internal/git"
 	"local-review/internal/store"
 )
 
@@ -29,7 +30,7 @@ var embeddedWeb embed.FS
 
 func main() {
 	var (
-		rootPath  = flag.String("root", ".", "path to a folder containing one or more git repositories")
+		rootPath  = flag.String("root", ".", "path to a git repository, or to a folder containing one or more of them")
 		port      = flag.Int("port", 7777, "port to listen on")
 		retention = flag.Int("retention-days", 30, "delete draft reviews older than this many days on startup (0 or less disables pruning)")
 		noOpen    = flag.Bool("no-open", false, "do not open the browser on start")
@@ -77,7 +78,11 @@ func main() {
 		log.Fatalf("listen on %s: %v", addr, err)
 	}
 
-	log.Printf("local-review serving repositories in %s", absRoot)
+	if git.IsRepo(absRoot) {
+		log.Printf("local-review serving the repository at %s", absRoot)
+	} else {
+		log.Printf("local-review serving repositories in %s", absRoot)
+	}
 	log.Printf("db: %s", dbPath)
 	log.Printf("listening on %s", url)
 

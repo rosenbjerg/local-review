@@ -23,7 +23,8 @@ store/replies.go        Reply, replyCols/scanReply, reply queries
 store/reviewed.go       ReviewedFile, FileReviewMark, reviewed_files queries
 store/side.go           Side ↔ the two boolean columns — the only place that mapping exists
 api/api.go              Server, repoParam / reviewRepo (the two ways a request names a repo), route table
-workspace/workspace.go  the root boundary: List (repo picker) and Open (root-confined, symlink/traversal-safe)
+workspace/workspace.go  the root boundary: List (repo picker) and Open (root-confined, symlink/traversal-safe);
+                        a root that is itself a repo serves only that one
 api/handlers_git.go     read-only: repos, branches, diff, files, commits, file, blob (+ mergeBaseFrom/resolveBase)
 api/handlers_reviews.go create/resume, read, reset, summary, reviewed marks, export
 api/handlers_comments.go comments + replies
@@ -64,6 +65,13 @@ export/export.go        review → canonical markdown
   turns a name into a `git.Repo`, and it returns the same `ErrInvalidName` for a traversal attempt
   and a symlink escape, so a response never reports what exists outside the root.
   Review/comment/export endpoints work off `review_id`.
+- **A root that is itself a repo serves that one repo** (`git.IsRepo` at `workspace.New`, no flag and
+  no walking up from a subdirectory): `List` returns its basename alone and `Open` accepts only that
+  name, which is a tighter guard than the multi-repo path, not a second one. The wire is unchanged —
+  `repo` is still sent and still resolved — so nothing above `workspace` knows which shape it is, and
+  the store keys on the absolute repo path, so a repo reviewed under either shape is the same review.
+  A repo nested under the root is a submodule or a vendored tree and stays unaddressable.
+  `TestSingleRepoRoot`.
 - Repo picker order (`workspace.List`/`activityDate`): the mtime of `.git/logs/HEAD` (one stat,
   covers checkouts and pulls), falling back to `.git` itself, by calendar **date** then name — never
   by timestamp, or two repos you alternate between swap all day. `lastActivity` is `YYYY-MM-DD`.

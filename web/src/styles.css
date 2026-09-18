@@ -641,6 +641,12 @@ body {
   color: var(--muted);
   user-select: none;
 }
+/* Aligns with the pickers beside it: the combobox's own padding, minus the caret's room. */
+.crumb-static {
+  padding: 4px 8px;
+  font-size: var(--text-md);
+  font-weight: 500;
+}
 .spacer {
   flex: 1;
 }

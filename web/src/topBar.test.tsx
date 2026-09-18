@@ -294,3 +294,22 @@ test("reset is a danger icon button, disabled with nothing to reset", () => {
   fireEvent.click(screen.getByLabelText("Reset review"));
   expect(resets).toBe(1);
 });
+
+// Serving one repo — which is every run pointed straight at a repository — leaves the picker
+// nothing to pick, so the name reads as a label rather than a control that does nothing.
+test("a single repo reads as a name, not a picker", () => {
+  const one = { ...selection, repoOptions: [{ value: "proj", label: "proj" }] };
+  const { rerender } = render(<TopBar selection={one} actions={actions} status={status} />);
+  expect(screen.queryByLabelText("repository")).toBeNull();
+  expect(screen.getByText("proj")).toBeTruthy();
+
+  const two = {
+    ...selection,
+    repoOptions: [
+      { value: "proj", label: "proj" },
+      { value: "other", label: "other" },
+    ],
+  };
+  rerender(<TopBar selection={two} actions={actions} status={status} />);
+  expect(screen.getByLabelText("repository")).toBeTruthy();
+});

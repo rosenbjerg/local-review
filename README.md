@@ -100,19 +100,21 @@ bun run --cwd web build
 go build -o local-review .
 ```
 
-`./start.sh <folder-of-git-repos>` does all three and starts the server.
+`./start.sh [path]` does all three and starts the server; the path is a git repository
+or a folder of them, defaulting to the current directory.
 
 ## Usage
 
 ```sh
-local-review -root /path/to/folder-of-repos
+local-review -root /path/to/repo                # one repository
+local-review -root /path/to/folder-of-repos     # every repository in the folder
 ```
 
 Opens `http://127.0.0.1:7777`. From there:
 
-1. **Pick a repo and a branch.** The base defaults to your trunk (a local
-   `main`/`master`, else the remote's default) and the diff runs from its merge-base
-   with the branch. Override it with any ref.
+1. **Pick a branch** — and a repo first, if the root holds several. The base defaults
+   to your trunk (a local `main`/`master`, else the remote's default) and the diff runs
+   from its merge-base with the branch. Override it with any ref.
 2. **Narrow the view, if you want.** **from** starts the diff at one of the branch's
    own commits, that commit included. **uncommitted** compares against your working
    tree instead, and unticking **unstaged** compares against the index. These are view
@@ -155,7 +157,7 @@ still post replies. Either way, replies appear live in the UI.
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `-root` | `.` | Folder containing one or more git repositories |
+| `-root` | `.` | A git repository, or a folder containing one or more of them |
 | `-port` | `7777` | Listen port |
 | `-data-dir` | `~/.local-review` | Directory for the SQLite DB |
 | `-retention-days` | `30` | Prune draft reviews older than this on startup |
@@ -177,8 +179,8 @@ For a map of the codebase, see [CLAUDE.md](CLAUDE.md).
 Run the Go server and the Vite dev server side by side. Vite proxies `/api` to `:7777`:
 
 ```sh
-local-review -root /path/to/folder-of-repos -no-open   # terminal 1
-bun run --cwd web dev                                  # terminal 2 → :5173
+local-review -root /path/to/repo -no-open   # terminal 1
+bun run --cwd web dev                       # terminal 2 → :5173
 ```
 
 [CONTRIBUTING.md](CONTRIBUTING.md) covers the build order, checks and conventions.
