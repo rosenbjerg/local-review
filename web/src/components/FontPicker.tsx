@@ -3,11 +3,11 @@ import {
   SANS_FACE,
   codeLigaturesOn,
   firstFamilyOf,
+  isBundledFace,
   isFamilyAvailable,
   ligatureSetsFor,
   ligatureSetsOffOf,
   monoFace,
-  nearestFamily,
   normalizeFamily,
   offsetOf,
   resetFonts,
@@ -18,6 +18,9 @@ import {
   setFontOffset,
   useFonts,
 } from "../fonts";
+import { findFamily, nearestFamily, normalizeName } from "../fontNames";
+import { requestLocalFonts, useLocalFonts } from "../localFonts";
+import type { LocalFontsState } from "../localFonts";
 import { MAX_FONT_OFFSET, MIN_FONT_OFFSET } from "../storage";
 import { FontCombobox } from "./FontCombobox";
 import { themeOf, useTheme } from "../theme";
@@ -150,6 +153,77 @@ function installedFor(fontKey: FontFamilyKey): string[] {
   return CANDIDATES[fontKey].filter(isFamilyAvailable);
 }
 
+function Suggest({ label, onPick }: { label: string; onPick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="font-suggest"
+      // Keeps focus off this button, so the field it is about doesn't blur under the click.
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onPick}
+    >
+      {label}
+    </button>
+  );
+}
+
+// Never a word about access in a browser that can't ask for it.
+function MissingNote({
+  head,
+  fontKey,
+  local,
+  nearest,
+}: {
+  head: string;
+  fontKey: FontFamilyKey;
+  local: LocalFontsState;
+  nearest: string;
+}) {
+  const known = local.status === "granted" ? findFamily(local.families, head) : undefined;
+  if (known && known.toLowerCase() !== head.toLowerCase()) {
+    return (
+      <span className="font-missing">
+        Installed here as {known}{" \u2014 "}
+        <Suggest label="use it?" onPick={() => setFontFamily(fontKey, known)} />
+      </span>
+    );
+  }
+  if (known) {
+    return local.refused.includes(normalizeName(known)) ? (
+      <span className="font-missing">This browser wouldn&apos;t load {known}</span>
+    ) : (
+      <span className="font-pending">Loading {known}…</span>
+    );
+  }
+  // Granted but the list isn't back yet: nothing to say for a moment beats saying the wrong thing.
+  if (local.status === "granted" && local.families.length === 0) return null;
+  const use = nearest && (
+    <>
+      {" \u2014 "}
+      <Suggest label={`use ${nearest}?`} onPick={() => setFontFamily(fontKey, nearest)} />
+    </>
+  );
+  if (local.status === "granted") {
+    return (
+      <span className="font-missing">
+        {head} isn&apos;t among the fonts installed on this machine{use}
+      </span>
+    );
+  }
+  return (
+    <span className="font-missing">
+      {head} isn&apos;t available to this browser{use}
+      {local.status === "prompt" && (
+        <>
+          {" \u2014 "}
+          <Suggest label="allow access to installed fonts?" onPick={() => void requestLocalFonts()} />
+        </>
+      )}
+      {local.status === "denied" && " \u2014 this site was refused access to installed fonts (see site settings)"}
+    </span>
+  );
+}
+
 function FontField({
   fontKey,
   label,
@@ -165,12 +239,15 @@ function FontField({
   inherited: boolean;
   sample?: string;
 }) {
+  const local = useLocalFonts();
   const invalid = value.trim() !== "" && normalizeFamily(value) === "";
   const head = invalid ? "" : firstFamilyOf(value);
-  const missing = head !== "" && !isFamilyAvailable(head);
+  const missing = head !== "" && !isBundledFace(head) && !isFamilyAvailable(head);
   const installed = installedFor(fontKey);
   // A face CSS can't resolve is nearly always the right one under a name it isn't registered by.
-  const nearest = missing ? nearestFamily(head, [...BUNDLED[fontKey], ...installed]) : "";
+  const nearest = missing
+    ? nearestFamily(head, [...BUNDLED[fontKey], ...installed, ...local.families])
+    : "";
   return (
     <div className="settings-row font-row">
       <span className="settings-label">{label}</span>
@@ -189,25 +266,7 @@ function FontField({
           onChange={(v) => setFontFamily(fontKey, v)}
         />
         {invalid && <span className="font-invalid">Not a font family CSS understands</span>}
-        {missing && (
-          <span className="font-missing">
-            {head} isn&apos;t installed on this machine
-            {nearest && (
-              <>
-                {" \u2014 "}
-                <button
-                  type="button"
-                  className="font-suggest"
-                  // Keeps focus off this button, so the field it is about doesn't blur under the click.
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setFontFamily(fontKey, nearest)}
-                >
-                  use {nearest}?
-                </button>
-              </>
-            )}
-          </span>
-        )}
+        {missing && <MissingNote head={head} fontKey={fontKey} local={local} nearest={nearest} />}
       </div>
     </div>
   );

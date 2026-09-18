@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import { FACE_FEATURES } from "./fontFeatures";
+import { ensureFace, subscribeLocalFonts } from "./localFonts";
 import type { FontPrefs } from "./storage";
 import { getTheme, subscribeTheme, themeOf } from "./theme";
 import {
@@ -65,44 +66,6 @@ export function quoteFamily(name: string): string {
 // The face that actually gets used out of a stack, which is what a warning should name.
 export function firstFamilyOf(value: string): string {
   return (value.split(",")[0] ?? "").trim().replace(/^["']|["']$/g, "").trim();
-}
-
-// Spacing and punctuation are where font names go wrong: the family really is "JetBrainsMono Nerd
-// Font", not the "JetBrains Mono Nerd Font" anyone would type. Matching on this form finds it anyway.
-export function normalizeName(v: string): string {
-  return v.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function editDistance(a: string, b: string): number {
-  const row = Array.from({ length: b.length + 1 }, (_, j) => j);
-  for (let i = 1; i <= a.length; i++) {
-    let diag = row[0];
-    row[0] = i;
-    for (let j = 1; j <= b.length; j++) {
-      const above = row[j];
-      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
-      diag = above;
-    }
-  }
-  return row[b.length];
-}
-
-// The nearest face that is actually there, so a name CSS can't resolve says what would work instead.
-export function nearestFamily(typed: string, choices: readonly string[]): string {
-  const q = normalizeName(typed);
-  if (q.length < 4) return "";
-  let best = "";
-  let score = Infinity;
-  for (const choice of choices) {
-    const n = normalizeName(choice);
-    // A prefix either way is someone most of the way to the right name, not a coincidence.
-    const d = n.startsWith(q) || q.startsWith(n) ? Math.abs(n.length - q.length) / 2 : editDistance(q, n);
-    if (d < score) {
-      score = d;
-      best = choice;
-    }
-  }
-  return score <= Math.max(2, Math.floor(q.length / 3)) ? best : "";
 }
 
 const PROBE_TEXT = "mmmmmmmmmmlliWWWWWW0O";
@@ -231,6 +194,30 @@ export function monoFace(): string {
   return picked === "" ? themeOf(getTheme()).mono : picked;
 }
 
+const BUNDLED_FACES = new Set(Object.keys(FACE_FEATURES));
+
+// Never probed — the theme's other face isn't loaded until something uses it, so the probe would
+// call it missing — and never asked of localFonts, or the machine's copy would replace the shipped one.
+export function isBundledFace(name: string): boolean {
+  return BUNDLED_FACES.has(name);
+}
+
+const requested = new Set<string>();
+
+function wantFace(head: string): void {
+  if (head === "" || isBundledFace(head) || requested.has(head) || isFamilyAvailable(head)) return;
+  requested.add(head);
+  void ensureFace(head).then((ok) => {
+    if (!ok) {
+      requested.delete(head);
+      return;
+    }
+    // The verdict was taken before the face existed; the next probe measures the real thing.
+    availability.delete(head);
+    commit();
+  });
+}
+
 function paint(): void {
   const style = document.documentElement.style;
   for (const key of Object.keys(FAMILY_TOKENS) as FontFamilyKey[]) {
@@ -239,7 +226,10 @@ function paint(): void {
     // Clearing removes the property rather than writing the theme's current face back: an inline
     // copy would outlive the next theme switch and pin the old face.
     if (family === "") style.removeProperty(name);
-    else style.setProperty(name, `${family}, var(${fallback})`);
+    else {
+      style.setProperty(name, `${family}, var(${fallback})`);
+      wantFace(firstFamilyOf(family));
+    }
   }
   for (const key of Object.keys(OFFSET_TOKENS) as FontOffsetKey[]) {
     const offset = offsetOf({ own, inherited }, key);
@@ -257,6 +247,7 @@ function paint(): void {
 // With no family override the code face is the theme's, so a theme switch can change which features
 // apply. Nothing in FontState moves, so this repaints without waking the React consumers.
 subscribeTheme(paint);
+subscribeLocalFonts(paint);
 
 function commit(): void {
   state = { own, inherited };

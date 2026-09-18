@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useId, useMemo, useRef, useState } from "react";
 
-import { normalizeName, quoteFamily } from "../fonts";
+import { normalizeName } from "../fontNames";
+import { quoteFamily } from "../fonts";
 import { useAnchoredList } from "../useAnchoredList";
 import { useListNavigation } from "../useListNavigation";
 import { Chevron } from "./Chevron";

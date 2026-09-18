@@ -5,9 +5,7 @@ import {
   firstFamilyOf,
   isFamilyAvailable,
   ligatureSetsFor,
-  nearestFamily,
   normalizeFamily,
-  normalizeName,
   quoteFamily,
   resetFonts,
   saveFontsAsDefault,
@@ -18,8 +16,19 @@ import {
   setFontsRepo,
 } from "./fonts";
 import { FACE_FEATURES } from "./fontFeatures";
+import { nearestFamily, normalizeName } from "./fontNames";
 import { DEFAULT_PREF, setThemePref } from "./theme";
 import { LS, MAX_FONT_OFFSET, MIN_FONT_OFFSET } from "./storage";
+
+// The probe keeps the first context it gets for good, and painting a pick now probes it, so the
+// canvas has to be in place before the first test sets a family.
+const ctx = {
+  font: "",
+  measureText: () => ({ width: ctx.font.includes('"Fira Code"') ? 200 : 100 }),
+};
+vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+  ctx as unknown as CanvasRenderingContext2D
+);
 
 const token = (name: string) => document.documentElement.style.getPropertyValue(name);
 const mono = () => token("--font-mono");
@@ -140,14 +149,6 @@ test("a family list is split into head and quoted for the probe", () => {
 // CSS.supports only parses, so it says yes to Consolas on a Mac. Availability is whether the metrics
 // move off the generic behind the face — which is why the probe asks the canvas, not the parser.
 test("a face counts as available only when it changes the measured text", () => {
-  const ctx = {
-    font: "",
-    measureText: () => ({ width: ctx.font.includes('"Fira Code"') ? 200 : 100 }),
-  };
-  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
-    ctx as unknown as CanvasRenderingContext2D
-  );
-
   expect(isFamilyAvailable("Fira Code")).toBe(true);
   expect(isFamilyAvailable("Consolas")).toBe(false);
   expect(isFamilyAvailable("ui-monospace")).toBe(true);

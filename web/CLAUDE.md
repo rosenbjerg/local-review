@@ -48,6 +48,8 @@ src/
   fileHeight.ts          LARGE_FILE_LINES + what a LazyFile placeholder is worth
   theme.ts               theme registry + store (owns <html data-theme>)   themes/  hand-written Shiki themes
   fonts.ts               font-family override store (owns the inline --font-mono/--font-sans on <html>)
+  localFonts.ts          Local Font Access store: permission state, the machine's families, a family's files as FontFaces
+  fontNames.ts           name matching (normalizeName, nearestFamily, findFamily)   sfnt.ts  OS/2 + fvar → FontFace descriptors
   fonts/                 bundled woff2 + licences (Inter, Monaspace Neon, JetBrains Mono)
   styles.css             all CSS; the per-theme token blocks at the top
   components/
@@ -357,6 +359,24 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   theme isn't using may not be loaded yet and would read as missing. One context for every probe
   there will be, and a verdict cached per family. A typed face that isn't installed gets a warning
   under the field rather than being refused.
+- **A face the browser blocks by name can still arrive as bytes** (`localFonts.ts`). Brave lets a page
+  use only the local fonts that ship with the OS (its `brave_font_whitelist`) and Safari hides
+  user-installed fonts outright, so the probe truthfully calls SF Pro or a Nerd Font missing on a
+  machine that has it. Both take a web font unconditionally, and the Local Font Access API
+  (`queryLocalFonts`, Chromium only) hands back every installed file's bytes behind a permission
+  prompt: `ensureFace` registers a family's files as `FontFace`s from those bytes, weight, slant and
+  width read out of each file's `OS/2`/`fvar` (`sfnt.ts`) so bold and italic land on the right file.
+  Rules: nothing about it exists in a browser without the API — the note then says "isn't available
+  to this browser", which is as much as Firefox or Safari lets us know. The prompt needs a click and
+  Chromium consumes the activation, so the ask is the suggestion under the field at the moment it is
+  the answer, never a settings row; once granted no activation is needed and the list loads on its
+  own (the permission persists per origin, port included). Only the picked family is ever loaded, never the list — an 18-file family is
+  megabytes. A bundled face is never asked for, or the machine's copy would be registered over the
+  shipped one; `isBundledFace` is also why the field doesn't probe one. A no is not remembered by
+  either store, so a grant made later in site settings (`PermissionStatus.onchange`) reaches the
+  pick, and the probe's cached verdict is dropped when the face lands — the warning would otherwise
+  outlive the fix. `localFonts.test.ts`, `fontsLocal.test.ts`, `fontPicker.test.tsx`,
+  `fontPickerLocal.test.tsx`, `sfnt.test.ts`.
 - **Ligatures are one switch, and it knows the face.** `calt` is where JetBrains Mono keeps its
   ligatures (it has no `liga` table at all), as do Fira Code and the rest — but in Monaspace `calt` is
   texture healing, and its ligatures are opt-in stylistic sets. So off omits `"calt" 0` for a
@@ -376,8 +396,8 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   browser reports a font's feature table — `document.fonts` and `FontFace` give back only what you
   set — and the metric probe behind `isFamilyAvailable` has no analogue here, because canvas can't
   carry `font-feature-settings` and monospace ligatures preserve their advance width anyway. Reading
-  an installed face would take the Local Font Access API (`queryLocalFonts`, Chromium only), which
-  hands back uncompressed SFNT bytes the same parser would take.
+  an installed face would take the bytes `localFonts.ts` now gets from the Local Font Access API,
+  which the same parser would take; it isn't done.
 - **The per-group checkboxes silence `liga`, and only once one is off.** Monaspace's `liga` holds
   lookups 38-46, disjoint from every stylistic set's (48-144) and shared with none of them, so it is
   a ninth source of ligatures the sets neither contain nor suppress — left on, it goes on drawing an
