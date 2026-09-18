@@ -476,6 +476,47 @@
   color-scheme: light;
 }
 
+/* VS Code Dark+ (Shiki bundles the syntax theme; the chrome is VS Code's dark workbench defaults). Diff
+   rows are the editor's inserted/removed tints flattened onto --bg with its gutter greens and reds on
+   the edge; --accent is the status-bar blue, its hover the bar's own item hover. */
+.theme-option[data-theme="dark-plus"],
+:root[data-theme="dark-plus"] {
+  --bg: #1e1e1e;
+  --bg-elev: #252526;
+  --bg-hover: #37373d;
+  --border: #3c3c3c;
+  --text: #d4d4d4;
+  --muted: #858585;
+  --accent: #007acc;
+  --accent-hover: #1f8ad2;
+  --add-bg: #373d29;
+  --add-border: #587c0c;
+  --del-bg: #4b1818;
+  --del-border: #94151b;
+  --add-word-bg: #4b5a2a;
+  --del-word-bg: #7d1d1d;
+  --sel-bg: #264f78;
+  --occ-bg: rgba(234, 92, 0, 0.33);
+  --occ-bg-active: rgba(234, 92, 0, 0.6);
+  --danger: #f14c4c;
+  --danger-border: #cd3131;
+  --success: #89d185;
+  --success-border: #388a34;
+  --warn: #cca700;
+  --warn-border: #9e8200;
+  --info: #3794ff;
+  --info-border: #007fd4;
+  --shadow-color: rgba(0, 0, 0, 0.45);
+  --highlight-color: rgba(255, 255, 255, 0.05);
+  --on-accent: #fff;
+  --checker-bg: #1e1e1e;
+  --checker-fg: #2d2d2d;
+  --backdrop: rgba(0, 0, 0, 0.6);
+  /* VS Code's code face is whatever the platform has (Menlo, Consolas), so JetBrains Mono stands in. */
+  --font-mono: "JetBrains Mono", var(--mono-fallback);
+  color-scheme: dark;
+}
+
 
 * {
   box-sizing: border-box;

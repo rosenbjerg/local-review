@@ -13,7 +13,8 @@ export type ThemeId =
   | "webstorm-light"
   | "material-oceanic"
   | "catppuccin-mocha"
-  | "catppuccin-latte";
+  | "catppuccin-latte"
+  | "dark-plus";
 
 // The Shiki themes highlight.ts registers — Shiki's own, or a hand-written one under themes/.
 export type ShikiTheme =
@@ -27,7 +28,8 @@ export type ShikiTheme =
   // Shiki's own bundled Material Theme, under the name it registers itself with.
   | "material-theme"
   | "catppuccin-mocha"
-  | "catppuccin-latte";
+  | "catppuccin-latte"
+  | "dark-plus";
 export type MermaidTheme = NonNullable<MermaidConfig["theme"]>;
 
 // `mono` names the face the theme's --font-mono block starts with, so a font override can show what
@@ -109,6 +111,13 @@ export const THEMES: readonly Theme[] = [
     label: "Catppuccin Latte",
     shiki: "catppuccin-latte",
     mermaid: "default",
+    mono: "JetBrains Mono",
+  },
+  {
+    id: "dark-plus",
+    label: "Dark Plus",
+    shiki: "dark-plus",
+    mermaid: "dark",
     mono: "JetBrains Mono",
   },
 ];
