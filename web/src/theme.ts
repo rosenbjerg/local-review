@@ -15,6 +15,7 @@ export type ThemeId =
   | "catppuccin-mocha"
   | "catppuccin-latte"
   | "dark-plus"
+  | "light-plus"
   | "monokai";
 
 // The Shiki themes highlight.ts registers — Shiki's own, or a hand-written one under themes/.
@@ -31,6 +32,7 @@ export type ShikiTheme =
   | "catppuccin-mocha"
   | "catppuccin-latte"
   | "dark-plus"
+  | "light-plus"
   | "monokai";
 export type MermaidTheme = NonNullable<MermaidConfig["theme"]>;
 
@@ -120,6 +122,13 @@ export const THEMES: readonly Theme[] = [
     label: "Dark Plus",
     shiki: "dark-plus",
     mermaid: "dark",
+    mono: "JetBrains Mono",
+  },
+  {
+    id: "light-plus",
+    label: "Light Plus",
+    shiki: "light-plus",
+    mermaid: "default",
     mono: "JetBrains Mono",
   },
   {

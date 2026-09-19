@@ -517,6 +517,46 @@
   color-scheme: dark;
 }
 
+/* VS Code Light+, the same workbench in its light defaults. Diff rows are the editor's own tints on
+   white, so deletions are a fuller pink than GitHub's; --warn is the editor's warning yellow darkened
+   past 4.5:1 (its own sits at 3:1 on white), and --info is the text-link blue for the same reason. */
+.theme-option[data-theme="light-plus"],
+:root[data-theme="light-plus"] {
+  --bg: #ffffff;
+  --bg-elev: #f3f3f3;
+  --bg-hover: #e8e8e8;
+  --border: #cecece;
+  --text: #333333;
+  --muted: #616161;
+  --accent: #007acc;
+  --accent-hover: #0062a3;
+  --add-bg: #ebf1dd;
+  --add-border: #587c0c;
+  --del-bg: #ffcccc;
+  --del-border: #ad0707;
+  --add-word-bg: #d7e8b1;
+  --del-word-bg: #ffa3a3;
+  --sel-bg: #add6ff;
+  --occ-bg: rgba(234, 92, 0, 0.28);
+  --occ-bg-active: rgba(234, 92, 0, 0.55);
+  --danger: #a1260d;
+  --danger-border: #e51400;
+  --success: #587c0c;
+  --success-border: #388a34;
+  --warn: #8f6600;
+  --warn-border: #bf8803;
+  --info: #006ab1;
+  --info-border: #1a85ff;
+  --shadow-color: rgba(0, 0, 0, 0.16);
+  --highlight-color: rgba(255, 255, 255, 0.7);
+  --on-accent: #fff;
+  --checker-bg: #ffffff;
+  --checker-fg: #dddddd;
+  --backdrop: rgba(0, 0, 0, 0.4);
+  --font-mono: "JetBrains Mono", var(--mono-fallback);
+  color-scheme: light;
+}
+
 /* Monokai (Shiki bundles the syntax theme; the chrome is VS Code's Monokai workbench). Raised fills step
    down to the sidebar's darker olive, as the IDE draws them. The IDE's own accent is an olive grey that
    drops to 3:1 as link text, so the accent is the palette's orange with the editor background on it;
