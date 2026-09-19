@@ -23,6 +23,7 @@ go build -o local-review .
 ./local-review -root <folder> -no-open && bun run --cwd web dev   # hot reload on :5173, /api proxied to :7777
 bun scripts/screenshot.ts             # regenerate docs/screenshot.png (--no-build, --keep)
 bun scripts/fontfeatures.ts           # regenerate web/src/fontFeatures.ts from the bundled woff2 (--check)
+scripts/release.sh [ref]              # fast-forward release to origin/main (or ref) → release.yml publishes
 ```
 
 Checks: `go build ./...`, `go vet ./...`, `go test ./...`, `bun run --cwd web build`
@@ -48,17 +49,12 @@ Nothing is committed to `main` directly. Work on a branch, open a PR, and let th
 it: `verify` green, branch up to date, **rebase-merge only** — so each commit keeps its own
 subject (see Commits) and the release notes can list them one per line.
 
-A release is `main` fast-forwarded onto the `release` branch:
-
-```sh
-git fetch origin && git push origin origin/main:release
-```
-
-Push `origin/main`, not a local `main` that has fallen behind. `release.yml` then tests,
-cross-compiles and publishes a GitHub release whose notes are the application commits since the
-previous tag. `release` is always an ancestor of `main`: never commit to it or force-push it. A
-refused push means something landed on `release` that `main` lacks, and the fix is a PR to `main`.
-`git log origin/release..origin/main` is what the next release would ship.
+A release is `main` fast-forwarded onto the `release` branch: `scripts/release.sh [ref]` lists
+what is unreleased, asks, and pushes `origin/main` (or `ref`, which must be on it) to `release`.
+`release.yml` then tests, cross-compiles and publishes a GitHub release whose notes are the
+application commits since the previous tag. `release` is always an ancestor of `main`: never
+commit to it or force-push it. If the script refuses because `release` has a commit `main` lacks,
+the fix is a PR to `main`.
 
 Releases are numbered `v<MAJOR_MINOR>.<patch>`: `MAJOR_MINOR` is the `env` at the top of
 `release.yml`, the patch is one past the highest existing tag with that prefix. Starting a new
@@ -75,6 +71,7 @@ internal/               Go backend, six packages (see internal/CLAUDE.md): git (
 web/                    React frontend, built with bun + Vite into web/dist (see web/CLAUDE.md)
 scripts/screenshot.ts   fixture repo → seeded review → headless capture of docs/screenshot.png
 scripts/fontfeatures.ts WOFF2 → GSUB/name → web/src/fontFeatures.ts; CI runs it with --check
+scripts/release.sh      the release gesture: preview origin/release..origin/main, confirm, fast-forward push
 ```
 
 ## Cross-cutting rules
