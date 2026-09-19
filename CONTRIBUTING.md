@@ -85,6 +85,8 @@ how staleness is derived, the SSE multi-tab sync, syntax highlighting — in
 ## Pull requests
 
 - Keep the PR focused on one thing; describe the motivation, not just the diff.
+- PRs are rebase-merged, so each commit lands on `main` as-is: keep every commit
+  self-contained, with a subject that reads as a changelog line.
 - Confirm the checks above pass and note anything you couldn't verify.
 - By contributing, you agree your contributions are licensed under the project's
   [GPL-3.0](LICENSE) license.
