@@ -162,6 +162,7 @@ still post replies. Either way, replies appear live in the UI.
 | `-data-dir` | `~/.local-review` | Directory for the SQLite DB |
 | `-retention-days` | `30` | Prune draft reviews older than this on startup |
 | `-no-open` | `false` | Don't auto-open the browser |
+| `-version` | | Print the version and exit |
 
 ## How it works
 
