@@ -28,15 +28,25 @@ import (
 //go:embed all:web/dist
 var embeddedWeb embed.FS
 
+// Stamped by the release build with -ldflags "-X main.version=..."; a const or a rename
+// makes that a silent no-op.
+var version = "dev"
+
 func main() {
 	var (
-		rootPath  = flag.String("root", ".", "path to a git repository, or to a folder containing one or more of them")
-		port      = flag.Int("port", 7777, "port to listen on")
-		retention = flag.Int("retention-days", 30, "delete draft reviews older than this many days on startup (0 or less disables pruning)")
-		noOpen    = flag.Bool("no-open", false, "do not open the browser on start")
-		dataDir   = flag.String("data-dir", "", "directory for local-review's data (SQLite DB); defaults to ~/.local-review")
+		rootPath    = flag.String("root", ".", "path to a git repository, or to a folder containing one or more of them")
+		port        = flag.Int("port", 7777, "port to listen on")
+		retention   = flag.Int("retention-days", 30, "delete draft reviews older than this many days on startup (0 or less disables pruning)")
+		noOpen      = flag.Bool("no-open", false, "do not open the browser on start")
+		dataDir     = flag.String("data-dir", "", "directory for local-review's data (SQLite DB); defaults to ~/.local-review")
+		showVersion = flag.Bool("version", false, "print the version and exit")
 	)
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("local-review", version)
+		return
+	}
 
 	absRoot, err := filepath.Abs(*rootPath)
 	if err != nil {
@@ -79,9 +89,9 @@ func main() {
 	}
 
 	if git.IsRepo(absRoot) {
-		log.Printf("local-review serving the repository at %s", absRoot)
+		log.Printf("local-review %s serving the repository at %s", version, absRoot)
 	} else {
-		log.Printf("local-review serving repositories in %s", absRoot)
+		log.Printf("local-review %s serving repositories in %s", version, absRoot)
 	}
 	log.Printf("db: %s", dbPath)
 	log.Printf("listening on %s", url)

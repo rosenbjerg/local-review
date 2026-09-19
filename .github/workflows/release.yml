@@ -77,12 +77,14 @@ jobs:
       # Pure-Go build (modernc.org/sqlite needs no cgo), so all targets
       # cross-compile from this one Linux runner.
       - name: Build binaries
+        env:
+          VERSION: ${{ steps.version.outputs.tag }}
         run: |
           mkdir -p out
           build() {
             echo "building $3"
             CGO_ENABLED=0 GOOS=$1 GOARCH=$2 \
-              go build -trimpath -ldflags="-s -w" -o "out/$3" .
+              go build -trimpath -ldflags="-s -w -X main.version=$VERSION" -o "out/$3" .
           }
           build darwin  arm64 local-review-darwin-arm64
           build darwin  amd64 local-review-darwin-amd64
