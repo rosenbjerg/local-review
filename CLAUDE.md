@@ -42,6 +42,24 @@ or a comment's path:line reference", not "feat(ui): add copy button to FileHeade
 that only makes sense while reading the diff — the approach taken, what was renamed, why the
 old way was wrong — belongs in the body, not the subject.
 
+## Development flow
+
+Nothing is committed to `main` directly. Work on a branch, open a PR, and let the ruleset merge
+it: `verify` green, branch up to date, **rebase-merge only** — so each commit keeps its own
+subject (see Commits) and the release notes can list them one per line.
+
+A release is `main` fast-forwarded onto the `release` branch:
+
+```sh
+git fetch origin && git push origin origin/main:release
+```
+
+Push `origin/main`, not a local `main` that has fallen behind. `release.yml` then tests,
+cross-compiles and publishes a GitHub release whose notes are the application commits since the
+previous tag. `release` is always an ancestor of `main`: never commit to it or force-push it. A
+refused push means something landed on `release` that `main` lacks, and the fix is a PR to `main`.
+`git log origin/release..origin/main` is what the next release would ship.
+
 ## Layout
 
 ```
