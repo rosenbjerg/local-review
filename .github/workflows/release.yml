@@ -6,6 +6,11 @@ on:
   push:
     branches: [release]
 
+# Releases are v<MAJOR_MINOR>.<patch>; the patch is derived from the tags at
+# release time. Bump this to start a new minor or major at .0.
+env:
+  MAJOR_MINOR: "1.0"
+
 # Needed to create tags/releases and upload assets.
 permissions:
   contents: write
@@ -24,6 +29,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # One past the highest existing v<MAJOR_MINOR>.* tag, so the sequence has
+      # no gaps and doesn't depend on how many times the workflow has run.
+      - name: Next version
+        id: version
+        run: |
+          prefix="v${MAJOR_MINOR}."
+          last=$(git tag --list "${prefix}*" --sort=-v:refname | head -n1)
+          if [ -n "$last" ]; then
+            patch=$(( ${last#"$prefix"} + 1 ))
+          else
+            patch=0
+          fi
+          echo "tag=${prefix}${patch}" >> "$GITHUB_OUTPUT"
+          echo "next release: ${prefix}${patch} (previous: ${last:-none})"
 
       # Build the frontend once — web/dist is platform-agnostic and embedded
       # into every binary via go:embed.
@@ -95,8 +115,8 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.0.${{ github.run_number }}
-          name: v0.0.${{ github.run_number }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
           target_commitish: ${{ github.sha }}
           body_path: RELEASE_NOTES.md
           files: out/*

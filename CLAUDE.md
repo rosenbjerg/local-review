@@ -60,6 +60,10 @@ previous tag. `release` is always an ancestor of `main`: never commit to it or f
 refused push means something landed on `release` that `main` lacks, and the fix is a PR to `main`.
 `git log origin/release..origin/main` is what the next release would ship.
 
+Releases are numbered `v<MAJOR_MINOR>.<patch>`: `MAJOR_MINOR` is the `env` at the top of
+`release.yml`, the patch is one past the highest existing tag with that prefix. Starting a new
+minor or major is a PR that edits that one line; the next release is then `.0`.
+
 ## Layout
 
 ```
