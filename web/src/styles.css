@@ -602,6 +602,12 @@
 * {
   box-sizing: border-box;
 }
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
 
 /* Drawn here, not by the platform: a native checkbox ignores every token but color-scheme. */
 input[type="checkbox"] {
@@ -2151,7 +2157,6 @@ textarea:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 8px;
-  font-family: inherit;
   font-size: var(--text-md);
   resize: vertical;
 }
@@ -2339,7 +2344,6 @@ textarea:focus-visible {
 }
 /* Sets no background: a none here would win on source order and strip .badge's tint. */
 .badge-toggle {
-  font-family: inherit;
   cursor: pointer;
 }
 
@@ -2350,7 +2354,6 @@ textarea:focus-visible {
   gap: 6px;
 }
 .type-pill {
-  font-family: inherit;
   cursor: pointer;
   border-color: color-mix(in srgb, currentColor 35%, transparent);
 }
