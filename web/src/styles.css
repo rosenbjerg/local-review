@@ -657,6 +657,54 @@ input[type="checkbox"]:indeterminate::after {
   border-radius: 1px;
   background: var(--on-accent);
 }
+/* Keep the WebKit and Gecko pseudo-elements in separate rules: an engine drops a whole rule over one
+   it doesn't know. The thumb's margin centres it on the 4px track in WebKit; Gecko does that itself. */
+input[type="range"] {
+  appearance: none;
+  width: 100%;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--control-border);
+}
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--control-border);
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+}
+/* Without these the shared input:focus-visible rule rings the whole strip, not the thumb. */
+input[type="range"]:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px var(--accent-ring);
+}
+input[type="range"]:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px var(--accent-ring);
+}
 @media (prefers-reduced-motion: reduce) {
   input[type="checkbox"] {
     transition: none;
@@ -2647,19 +2695,18 @@ textarea:focus-visible {
   font-size: var(--text-xs);
   color: var(--muted);
 }
-.font-stepper {
+.font-slider {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
 }
-.font-stepper .btn {
-  width: 28px;
-  padding: 4px 0;
-  text-align: center;
+.font-slider input[type="range"] {
+  flex: 1;
+  min-width: 0;
 }
 .font-offset {
   min-width: 58px;
-  text-align: center;
+  text-align: right;
   font-size: var(--text-sm);
   color: var(--muted);
   font-variant-numeric: tabular-nums;

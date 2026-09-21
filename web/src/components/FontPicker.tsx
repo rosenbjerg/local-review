@@ -292,24 +292,18 @@ function OffsetField({
   return (
     <div className="settings-row font-row">
       <span className="settings-label">{label}</span>
-      <div className="font-stepper">
-        <button
-          className="btn"
-          aria-label={`Decrease ${label.toLowerCase()}`}
-          disabled={value <= MIN_FONT_OFFSET}
-          onClick={() => setFontOffset(offsetKey, value - 1)}
-        >
-          {"\u2212"}
-        </button>
+      <div className="font-slider">
+        <input
+          type="range"
+          aria-label={label}
+          aria-valuetext={formatOffset(value)}
+          min={MIN_FONT_OFFSET}
+          max={MAX_FONT_OFFSET}
+          step={1}
+          value={value}
+          onChange={(e) => setFontOffset(offsetKey, e.target.valueAsNumber)}
+        />
         <span className="font-offset">{formatOffset(value)}</span>
-        <button
-          className="btn"
-          aria-label={`Increase ${label.toLowerCase()}`}
-          disabled={value >= MAX_FONT_OFFSET}
-          onClick={() => setFontOffset(offsetKey, value + 1)}
-        >
-          +
-        </button>
       </div>
     </div>
   );
