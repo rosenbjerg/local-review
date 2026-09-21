@@ -348,6 +348,10 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   included, at `--font-size-mono - 1px`), the export textarea and preview, `.markdown-body pre code`.
   Mono-faced chrome like file paths and `kbd` sizes off the interface scale: wanting a bigger diff
   isn't wanting a bigger file tree.
+- **Form controls inherit the face globally** (`button, input, select, textarea { font-family: inherit }`
+  in `styles.css`). The UA gives them its own font, which is how the file tree — names inside a
+  `<button>` — once ignored the interface font while everything around it followed it. A control
+  wanting mono says `var(--font-mono)` itself; none needs a per-rule `inherit`.
 - An offset of 0 is a **pick**, not an absence: it means "this repo stays put though the default across
   repos moved". Reset, not a zero, is how a field goes back to inheriting — which is why the family
   fields show the repo's own pick and the size fields show the effective one.
