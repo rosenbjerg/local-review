@@ -288,7 +288,9 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
 - Either side pane collapses to a 28px `PaneRail`, never to zero. `usePanelResize` owns the open
   flags with the widths; a collapsed pane keeps its stored width and its resizer goes inert
   (`resizer-inert`, `tabIndex -1`). Both persist (`lr.leftOpen`/`lr.rightOpen`).
-- `Combobox` is a searchable select — its value is always one of its options; `rangePreview` draws
+- `Combobox` is a searchable select, and the app's only dropdown: a native `<select>` opens a
+  platform menu that ignores the theme, which is why the comments pane's sort and filters use it too
+  (`floating`, since the pane scrolls). Its value is always one of its options; `rangePreview` draws
   the from picker as a timeline. `FontCombobox` is the free-text sibling, not a flag on it: a font
   name is whatever you type, so the two disagree about what the input holds and what blur means.
   They share `useListNavigation` and `useAnchoredList`, which are the halves that generalise.

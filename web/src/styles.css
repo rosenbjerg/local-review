@@ -839,15 +839,6 @@ body {
   font-size: var(--text-sm);
   color: var(--muted);
 }
-select {
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 4px 8px;
-  font-size: var(--text-md);
-}
-
 /* Searchable combobox (repo/head/base pickers) */
 .combobox {
   position: relative;
@@ -1061,7 +1052,6 @@ select {
 .banner-dismiss:focus-visible,
 .gutter-click:focus-visible,
 input:focus-visible,
-select:focus-visible,
 textarea:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
@@ -2266,9 +2256,14 @@ textarea:focus-visible {
   gap: 8px;
   margin-bottom: 12px;
 }
-.comments-panel-header select {
+.comments-panel-header .combobox {
+  flex: none;
+  width: 140px;
+}
+.comments-panel-header .combobox-input,
+.comments-filter .combobox-input {
   font-size: var(--text-sm);
-  padding: 2px 4px;
+  padding: 2px 22px 2px 6px;
 }
 .comments-panel h2 {
   font-size: var(--text-base);
@@ -2307,9 +2302,9 @@ textarea:focus-visible {
   gap: 6px;
   margin-bottom: 12px;
 }
-.comments-filter select {
-  font-size: var(--text-sm);
-  padding: 2px 4px;
+.comments-filter .combobox {
+  flex: 1 1 0;
+  min-width: 96px;
 }
 .filter-clear {
   background: none;

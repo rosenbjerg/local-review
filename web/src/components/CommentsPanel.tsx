@@ -12,6 +12,7 @@ import { COMMENT_SORTS, sortTimestamp } from "../commentSort";
 import { turnOf } from "../commentTurn";
 import type { Comment } from "../types";
 import { effectivePath } from "../types";
+import { Combobox } from "./Combobox";
 import { CommentPreview } from "./CommentPreview";
 import { HighlightMatch } from "./HighlightMatch";
 import { IconChevronRight, IconX } from "./icons";
@@ -60,7 +61,7 @@ export function CommentsPanel({
 }: Props) {
   const narrowed = isFiltered(filter);
   const needle = queryNeedle(filter.query);
-  // A filtered-on author whose last thread went away keeps its option, or the select sits blank while hiding everything.
+  // A filtered-on author whose last thread went away keeps its option, or the picker sits blank while hiding everything.
   const authorOptions =
     filter.author === ANY || authors.includes(filter.author) ? authors : [...authors, filter.author];
   const awaitingFilter = filter.status === "awaiting-you";
@@ -96,17 +97,13 @@ export function CommentsPanel({
           )}
         </div>
         {total > 0 && (
-          <select
-            aria-label="Sort comments"
+          <Combobox
+            ariaLabel="Sort comments"
             value={sort}
-            onChange={(e) => onSortChange(e.target.value as CommentSort)}
-          >
-            {COMMENT_SORTS.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
+            options={COMMENT_SORTS}
+            onChange={(v) => onSortChange(v as CommentSort)}
+            floating
+          />
         )}
       </div>
       {total > 0 && (
@@ -121,41 +118,31 @@ export function CommentsPanel({
       )}
       {total > 0 && (
         <div className="comments-filter">
-          <select
-            aria-label="Filter by status"
+          <Combobox
+            ariaLabel="Filter by status"
             value={filter.status}
-            onChange={(e) => onFilterChange({ ...filter, status: e.target.value as CommentFilter["status"] })}
-          >
-            {STATUS_FILTERS.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Filter by type"
+            options={STATUS_FILTERS}
+            onChange={(v) => onFilterChange({ ...filter, status: v as CommentFilter["status"] })}
+            floating
+          />
+          <Combobox
+            ariaLabel="Filter by type"
             value={filter.type}
-            onChange={(e) => onFilterChange({ ...filter, type: e.target.value as TypeFilter })}
-          >
-            {TYPE_FILTERS.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
+            options={TYPE_FILTERS}
+            onChange={(v) => onFilterChange({ ...filter, type: v as TypeFilter })}
+            floating
+          />
           {authorOptions.length > 1 && (
-            <select
-              aria-label="Filter by author"
+            <Combobox
+              ariaLabel="Filter by author"
               value={filter.author}
-              onChange={(e) => onFilterChange({ ...filter, author: e.target.value })}
-            >
-              <option value={ANY}>Any author</option>
-              {authorOptions.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: ANY, label: "Any author" },
+                ...authorOptions.map((a) => ({ value: a, label: a })),
+              ]}
+              onChange={(v) => onFilterChange({ ...filter, author: v })}
+              floating
+            />
           )}
           {narrowed && (
             <button className="filter-clear" onClick={() => onFilterChange(NO_FILTER)}>
