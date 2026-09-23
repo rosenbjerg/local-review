@@ -87,9 +87,21 @@ export function CommentComposer({
   const [body, setBody] = useState(initialBody);
   const [type, setType] = useState<CommentType>(initialType);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const submittable = allowEmpty || body.trim() !== "";
+  const dirty = body.trim() !== initialBody.trim() || (!hideType && type !== initialType);
+
+  function escape() {
+    if (dirty && !confirmingDiscard) setConfirmingDiscard(true);
+    else onCancel();
+  }
+
+  function keepEditing() {
+    setConfirmingDiscard(false);
+    bodyRef.current?.focus();
+  }
 
   // Block re-entry so a second click or ⌘+Enter mid-save can't post a duplicate.
   async function submit() {
@@ -114,7 +126,7 @@ export function CommentComposer({
       e.preventDefault();
       submit();
     }
-    if (e.key === "Escape") onCancel();
+    if (e.key === "Escape") escape();
   }
 
   return (
@@ -133,21 +145,36 @@ export function CommentComposer({
         autoFocus
         value={body}
         placeholder={placeholder}
-        onChange={(e) => setBody(e.target.value)}
+        onChange={(e) => {
+          setBody(e.target.value);
+          setConfirmingDiscard(false);
+        }}
       />
-      <div className="composer-actions">
-        <span className="composer-hint">⌘/Ctrl+Enter to submit · Esc to cancel</span>
-        <button className="btn" onClick={onCancel}>
-          Cancel
-        </button>
-        <button
-          className="btn btn-primary"
-          disabled={!submittable || submitting}
-          onClick={submit}
-        >
-          {submitLabel}
-        </button>
-      </div>
+      {confirmingDiscard ? (
+        <div className="composer-actions composer-discard" role="alert">
+          <span className="composer-hint">Discard what you've written? Esc again to discard</span>
+          <button className="btn" onClick={keepEditing}>
+            Keep editing
+          </button>
+          <button className="btn danger" onClick={onCancel}>
+            Discard
+          </button>
+        </div>
+      ) : (
+        <div className="composer-actions">
+          <span className="composer-hint">⌘/Ctrl+Enter to submit · Esc to cancel</span>
+          <button className="btn" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            className="btn btn-primary"
+            disabled={!submittable || submitting}
+            onClick={submit}
+          >
+            {submitLabel}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

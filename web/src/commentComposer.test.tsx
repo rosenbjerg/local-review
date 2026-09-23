@@ -112,3 +112,50 @@ test("Escape and ⌘+Enter work from a focused pill, not just the textarea", () 
   fireEvent.keyDown(pill("bug"), { key: "Escape" });
   expect(onCancel).toHaveBeenCalled();
 });
+
+test("Escape cancels an untouched composer straight away", () => {
+  const onCancel = vi.fn();
+  render(<CommentComposer initialBody="body" onSubmit={() => {}} onCancel={onCancel} />);
+
+  fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" });
+  expect(onCancel).toHaveBeenCalledOnce();
+});
+
+test("Escape asks before throwing away what was written, and a second one discards", () => {
+  const onCancel = vi.fn();
+  render(<CommentComposer onSubmit={() => {}} onCancel={onCancel} />);
+  const box = screen.getByRole("textbox");
+  fireEvent.change(box, { target: { value: "half a thought" } });
+
+  fireEvent.keyDown(box, { key: "Escape" });
+  expect(onCancel).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert").textContent).toContain("Discard");
+
+  fireEvent.keyDown(box, { key: "Escape" });
+  expect(onCancel).toHaveBeenCalledOnce();
+});
+
+test("typing again or Keep editing withdraws the question", () => {
+  const onCancel = vi.fn();
+  render(<CommentComposer onSubmit={() => {}} onCancel={onCancel} />);
+  const box = screen.getByRole("textbox");
+  fireEvent.change(box, { target: { value: "draft" } });
+
+  fireEvent.keyDown(box, { key: "Escape" });
+  fireEvent.change(box, { target: { value: "draft, longer" } });
+  expect(screen.queryByRole("alert")).toBeNull();
+
+  fireEvent.keyDown(box, { key: "Escape" });
+  fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(onCancel).not.toHaveBeenCalled();
+});
+
+test("a changed type alone counts as something to lose", () => {
+  const onCancel = vi.fn();
+  render(<CommentComposer initialBody="body" onSubmit={() => {}} onCancel={onCancel} />);
+  fireEvent.click(pill("bug"));
+
+  fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" });
+  expect(onCancel).not.toHaveBeenCalled();
+});

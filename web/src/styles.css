@@ -2226,6 +2226,10 @@ textarea:focus-visible {
   color: var(--muted);
   font-size: var(--text-xs);
 }
+.composer-discard .composer-hint {
+  color: var(--text);
+  font-size: var(--text-sm);
+}
 
 /* Review summary */
 .review-summary {
