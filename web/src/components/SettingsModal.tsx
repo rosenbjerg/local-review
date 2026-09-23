@@ -1,6 +1,7 @@
 import { FontPicker } from "./FontPicker";
 import { Modal } from "./Modal";
 import { ThemePicker } from "./ThemePicker";
+import { MOD_KEY } from "../util";
 
 // The toolbar's non-review controls — appearance, shortcut list, repo link — behind the gear, or `?`.
 export function SettingsModal({ onClose }: { onClose: () => void }) {
@@ -95,7 +96,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 </tr>
                 <tr>
                   <td>
-                    <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>Enter</kbd>
+                    <kbd>{MOD_KEY}</kbd>+<kbd>Enter</kbd>
                   </td>
                   <td>Submit the comment</td>
                 </tr>

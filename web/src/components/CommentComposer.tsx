@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { COMMENT_TYPES, type CommentType } from "../types";
+import { MOD_KEY } from "../util";
 
 /** One-click type picker with radiogroup semantics: a single tab stop, arrows move the selection. */
 function TypePills({
@@ -162,7 +163,7 @@ export function CommentComposer({
         </div>
       ) : (
         <div className="composer-actions">
-          <span className="composer-hint">⌘/Ctrl+Enter to submit · Esc to cancel</span>
+          <span className="composer-hint">{MOD_KEY}+Enter to submit · Esc to cancel</span>
           <button className="btn" onClick={onCancel}>
             Cancel
           </button>
