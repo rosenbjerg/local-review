@@ -1,5 +1,5 @@
 import { expect, test, vi } from "vitest";
-import { render, renderHook } from "@testing-library/react";
+import { act, render, renderHook } from "@testing-library/react";
 
 // File cards mount once and never unmount, so every mounted card sits in App's
 // render output forever. Without a memo boundary they all re-render whenever
@@ -30,6 +30,7 @@ vi.mock("./components/FileHeader", () => ({
 
 import { DiffView } from "./components/DiffView";
 import { useCommentActions } from "./useCommentActions";
+import { useUndoableDelete } from "./useUndoableDelete";
 import type { Comment, FileDiff } from "./types";
 
 const file: FileDiff = {
@@ -113,9 +114,10 @@ test("a card re-renders when a non-comment prop changes", () => {
 test("the thread actions keep their identity across a re-render", () => {
   const setComments = vi.fn();
   const setError = vi.fn();
+  const onDelete = vi.fn();
   const { result, rerender } = renderHook(
     ({ side }: { side: "head" | "worktree" }) =>
-      useCommentActions({ review: null, setComments, setError, side }),
+      useCommentActions({ review: null, setComments, setError, side, onDelete }),
     { initialProps: { side: "head" as const } }
   );
   const first = result.current.commentActions;
@@ -128,9 +130,13 @@ test("the thread actions keep their identity across a re-render", () => {
   expect(result.current.commentActions).toBe(first);
 });
 
-test("delete is one implementation, shared by the pane and the card", () => {
-  const { result } = renderHook(() =>
-    useCommentActions({ review: null, setComments: vi.fn(), setError: vi.fn(), side: "head" })
-  );
-  expect(result.current.handleDelete).toBe(result.current.commentActions.onDelete);
+test("the undoable delete keeps its identity while a delete is pending", () => {
+  const setComments = vi.fn();
+  const setError = vi.fn();
+  const { result } = renderHook(() => useUndoableDelete({ setComments, setError, reviewId: 1 }));
+  const first = result.current.remove;
+
+  act(() => void result.current.remove(7));
+  expect(result.current.pending).toBe(7);
+  expect(result.current.remove).toBe(first);
 });
