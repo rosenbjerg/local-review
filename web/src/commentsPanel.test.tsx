@@ -87,3 +87,11 @@ test("Escape clears the query without reaching the window handler", () => {
     window.removeEventListener("keydown", onKeyDown);
   }
 });
+
+test("the filter pickers report the picked value", () => {
+  const onFilterChange = vi.fn();
+  panel(NO_FILTER, onFilterChange);
+  fireEvent.click(screen.getByLabelText("Filter by status"));
+  fireEvent.mouseDown(screen.getByRole("option", { name: "Resolved" }));
+  expect(onFilterChange).toHaveBeenCalledWith({ ...NO_FILTER, status: "resolved" });
+});
