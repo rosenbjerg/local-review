@@ -4,7 +4,7 @@ import { type Comment, type FileDiff, effectivePath } from "../types";
 import { Chevron } from "./Chevron";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { HighlightMatch } from "./HighlightMatch";
-import { IconChevronLeft } from "./icons";
+import { IconChevronLeft, IconPlus } from "./icons";
 import { SearchInput } from "./SearchInput";
 
 interface Props {
@@ -284,7 +284,7 @@ export function FileExplorer({
             title="Comment on a file the branch didn't change"
             aria-label="Add a file to comment on"
           >
-            +
+            <IconPlus />
           </button>
           <button
             className="btn btn-icon pane-collapse"

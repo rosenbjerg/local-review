@@ -30,6 +30,15 @@ export function IconX({ size = 14 }: { size?: number }) {
   );
 }
 
+export function IconPlus({ size = 14 }: { size?: number }) {
+  return (
+    <Icon size={size}>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </Icon>
+  );
+}
+
 export function IconChevronLeft({ size = 14 }: { size?: number }) {
   return (
     <Icon size={size}>
