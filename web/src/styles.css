@@ -1271,12 +1271,14 @@ textarea:focus-visible {
   pointer-events: none;
   cursor: default;
 }
-.pane-collapse {
+.pane-collapse,
+.explorer-add {
   padding: 3px 4px;
   background: none;
   border-color: transparent;
 }
-.pane-collapse:hover {
+.pane-collapse:hover,
+.explorer-add:hover {
   background: var(--bg-hover);
   color: var(--text);
 }
@@ -1507,11 +1509,6 @@ textarea:focus-visible {
 .explorer-head .muted {
   font-weight: 400;
   font-size: var(--text-xs);
-}
-.explorer-add {
-  padding: 0 6px;
-  font-size: var(--text-xl);
-  line-height: 1.4;
 }
 .explorer-search-row {
   padding: 6px 10px;
