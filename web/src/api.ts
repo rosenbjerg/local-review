@@ -123,7 +123,8 @@ export const api = {
       body: JSON.stringify(c),
     }),
 
-  deleteComment: (id: number) => req<void>(`/api/comments/${id}`, { method: "DELETE" }),
+  deleteComment: (id: number, opts?: { keepalive?: boolean }) =>
+    req<void>(`/api/comments/${id}`, { method: "DELETE", keepalive: opts?.keepalive }),
 
   setCommentResolved: (id: number, resolved: boolean) =>
     req<void>(`/api/comments/${id}/resolved`, {

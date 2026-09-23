@@ -9,10 +9,11 @@ interface Params {
   setError: (msg: string | null) => void;
   // The anchor side for new comments; the server captures the snippet from it.
   side: Side;
+  onDelete: (id: number) => Promise<void>;
 }
 
 // Comment/reply CRUD as optimistic mutations over the comments state.
-export function useCommentActions({ review, setComments, setError, side }: Params) {
+export function useCommentActions({ review, setComments, setError, side, onDelete }: Params) {
   async function handleAddComment(args: {
     filePath: string;
     startLine: number;
@@ -34,9 +35,9 @@ export function useCommentActions({ review, setComments, setError, side }: Param
 
   // The thread actions live inside one memo, which is doing three jobs. It reaches every
   // DiffView as `actions`, compared by identity — a fresh object each render silently
-  // disabled that memo. Its deps are the two setters, which never change, so the object
-  // holds for the life of the review. And a `use*` function that calls no hook of its own
-  // is not a hook the React Compiler will compile: this call is what opts the file in.
+  // disabled that memo. Its deps are the two setters and `onDelete`, none of which change, so
+  // the object holds for the life of the review. And a `use*` function that calls no hook of its
+  // own is not a hook the React Compiler will compile: this call is what opts the file in.
   // Nothing here reads `review` or `side` — only handleAddComment above does.
   const commentActions: CommentActions = useMemo(() => {
     function updateReplies(commentId: number, fn: (replies: Reply[]) => Reply[]) {
@@ -58,15 +59,7 @@ export function useCommentActions({ review, setComments, setError, side }: Param
         }
       },
 
-      async onDelete(id: number) {
-        setError(null);
-        try {
-          await api.deleteComment(id);
-          setComments((cs) => cs.filter((c) => c.id !== id));
-        } catch (e) {
-          setError((e as Error).message);
-        }
-      },
+      onDelete,
 
       async onAddReply(commentId: number, body: string): Promise<boolean> {
         setError(null);
@@ -113,9 +106,7 @@ export function useCommentActions({ review, setComments, setError, side }: Param
         }
       },
     };
-  }, [setComments, setError]);
+  }, [setComments, setError, onDelete]);
 
-  // The comments pane deletes without the rest of the thread actions; one implementation, so
-  // a delete from the pane and a delete from a card can't drift apart.
-  return { commentActions, handleAddComment, handleDelete: commentActions.onDelete };
+  return { commentActions, handleAddComment };
 }

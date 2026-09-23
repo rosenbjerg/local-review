@@ -13,6 +13,7 @@ import { PaneRail } from "./components/PaneRail";
 import { ResetConfirmModal } from "./components/ResetConfirmModal";
 import { ReviewSummary } from "./components/ReviewSummary";
 import { TopBar } from "./components/TopBar";
+import { UndoToast } from "./components/UndoToast";
 import { EmptyState } from "./components/EmptyState";
 import {
   IconFileDiff,
@@ -29,6 +30,7 @@ import { useKeyboardShortcuts } from "./useKeyboardShortcuts";
 import { useOccurrenceHighlight } from "./useOccurrenceHighlight";
 import { usePanelResize } from "./usePanelResize";
 import { useReview } from "./useReview";
+import { useUndoableDelete } from "./useUndoableDelete";
 import { useUnseenActivity } from "./useUnseenActivity";
 import { setFontsRepo } from "./fonts";
 import { setThemeRepo } from "./theme";
@@ -62,7 +64,7 @@ export default function App() {
     review,
     files,
     baseSha,
-    comments,
+    comments: storedComments,
     setComments,
     reviewedFiles,
     from,
@@ -86,6 +88,16 @@ export default function App() {
     toggleReviewed,
     setSummary,
   } = useReview();
+
+  const pendingDelete = useUndoableDelete({ setComments, setError, reviewId: review?.id });
+  const { hidden: hiddenComments } = pendingDelete;
+  const comments = useMemo(
+    () =>
+      hiddenComments.size === 0
+        ? storedComments
+        : storedComments.filter((c) => !hiddenComments.has(c.id)),
+    [storedComments, hiddenComments]
+  );
 
   // Files opened only to comment on. Session state: the comment-bearing ones re-derive from `comments` on reload.
   const [openedFiles, setOpenedFiles] = useState<string[]>([]);
@@ -127,11 +139,12 @@ export default function App() {
   const [showFullSignal, setShowFullSignal] = useState<{ path: string; n: number } | null>(null);
   const highlight = useOccurrenceHighlight(!!review, diffColRef);
   const refHover = useCommentRefs(jumpTo);
-  const { commentActions, handleAddComment, handleDelete } = useCommentActions({
+  const { commentActions, handleAddComment } = useCommentActions({
     review,
     setComments,
     setError,
     side,
+    onDelete: pendingDelete.remove,
   });
 
 
@@ -542,7 +555,7 @@ export default function App() {
                   onFilterChange={setCommentFilter}
                   authors={commentAuthors}
                   onJump={jumpTo}
-                  onDelete={handleDelete}
+                  onDelete={commentActions.onDelete}
                   onCollapse={toggleRight}
                 />
               </>
@@ -593,6 +606,14 @@ export default function App() {
       )}
 
       <CommentRefPopover hovered={refHover} comments={comments} />
+
+      {pendingDelete.pending !== null && (
+        <UndoToast
+          key={pendingDelete.pending}
+          message={`Deleted comment #${pendingDelete.pending}`}
+          onUndo={pendingDelete.undo}
+        />
+      )}
     </div>
   );
 }

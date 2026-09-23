@@ -29,6 +29,7 @@ src/
   useReview.ts           data layer: repo/branch/diff-scope selection, create + resume, diff and SSE refetches,
                          the reqSeq stale-response guard, reviewed marks, summary
   useCommentActions.ts   optimistic comment/reply CRUD; identity-stable handlers
+  useUndoableDelete.ts   thread deletes held for UNDO_MS behind UndoToast before they reach the API
   useJump.ts             comment/file navigation: activeComment, expand signals, jumpTo
   scrollTo.ts            the one way to scroll the diff column: re-aims every frame, lands long jumps
   useActiveFile.ts       scroll-spy over the diff column + suppress()
@@ -59,7 +60,7 @@ src/
     FileHeader  MediaView  MarkdownView  LazyFile  FindBar
     CommentThread  CommentsPanel  CommentPreview  CommentRefPopover  ReviewSummary  CommentComposer  FileComments
     Modal + ExportModal  AgentPromptsModal  AddFileModal  SettingsModal  ResetConfirmModal
-    SearchInput  Combobox  PaneRail  ViewToggle  CopyButton  ThemePicker  FontPicker  FontCombobox
+    UndoToast  SearchInput  Combobox  PaneRail  ViewToggle  CopyButton  ThemePicker  FontPicker  FontCombobox
     ErrorBoundary  EmptyState  icons
     small primitives: Chevron, CommentCount, DiffStatBadge, AnchorBadge, MetaTimestamps, HighlightMatch, Markdown
 ```
@@ -255,6 +256,14 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   spawn one.
 - `Markdown` runs markdown-it with `html: false` everywhere (comment bodies, `.md` files, the export
   preview) — bodies come from API agents, so raw HTML is never rendered.
+- **A thread delete is deferred, not reversed** (`useUndoableDelete`). One click hides the thread
+  (App filters `hidden` out of `comments`, so every count and list agrees) and `UndoToast` offers
+  Undo for `UNDO_MS`; the `DELETE` goes out when the window closes, another delete starts, the review
+  changes, or on `pagehide` (`keepalive`). Nothing on the server has to un-delete, so ids, `#<id>`
+  links, replies and anchors come back exactly as they were. The cost: other tabs and agents still
+  see the thread during the window. A 404 on commit counts as deleted (a reset got there first).
+  Replies still delete at once. `remove` is `commentActions.onDelete`, so it must keep its identity
+  — the review-change flush reads it through a ref for that reason. `useUndoableDelete.test.ts`.
 - `useUnseenActivity`: non-reviewer comments/replies arriving while hidden count into the tab title.
   Whatever is on the review at the first read is history; `seen` re-primes on `review.id`.
 
