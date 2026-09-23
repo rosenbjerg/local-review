@@ -27,6 +27,14 @@ function snippetSource(snippet: string, path: string): string {
   return `${fence}${lang}\n${snippet}\n${fence}`;
 }
 
+function SwapLabel({ shown, other }: { shown: string; other: string }) {
+  return (
+    <span className="swap-label" data-alt={other}>
+      <span>{shown}</span>
+    </span>
+  );
+}
+
 export interface CommentActions {
   onUpdate: (id: number, body: string, type: CommentType) => Promise<boolean>;
   onDelete: (id: number) => Promise<void>;
@@ -70,7 +78,7 @@ function ReplyItem({
         />
         <span className="spacer" />
         <button className="link" onClick={() => setEditing((e) => !e)}>
-          {editing ? "close" : "edit"}
+          <SwapLabel shown={editing ? "close" : "edit"} other={editing ? "edit" : "close"} />
         </button>
         <button className="link danger" onClick={onDelete}>
           delete
@@ -186,11 +194,14 @@ export function CommentThread({ comment, actions, expandSignal, commentIds }: Pr
         )}
         <span className="spacer" />
         <button className="link" onClick={handleResolve}>
-          {comment.resolved ? "reopen" : "resolve"}
+          <SwapLabel
+            shown={comment.resolved ? "reopen" : "resolve"}
+            other={comment.resolved ? "resolve" : "reopen"}
+          />
         </button>
         {!collapsed && (
           <button className="link" onClick={() => setEditing((e) => !e)}>
-            {editing ? "close" : "edit"}
+            <SwapLabel shown={editing ? "close" : "edit"} other={editing ? "edit" : "close"} />
           </button>
         )}
         <button className="link danger" onClick={() => onDelete(comment.id)}>

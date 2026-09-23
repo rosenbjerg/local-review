@@ -1130,6 +1130,18 @@ textarea:focus-visible {
 .link.danger {
   color: var(--danger);
 }
+.swap-label {
+  display: inline-grid;
+  justify-items: center;
+}
+.swap-label > span,
+.swap-label::after {
+  grid-area: 1 / 1;
+}
+.swap-label::after {
+  content: attr(data-alt);
+  visibility: hidden;
+}
 
 /* Layout */
 .main {
