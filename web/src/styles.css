@@ -2389,6 +2389,10 @@ textarea:focus-visible {
   background: var(--muted-soft);
   color: var(--muted);
 }
+.badge-general {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
 .badge-bug {
   color: var(--danger);
   background: var(--danger-soft);
@@ -2440,6 +2444,10 @@ textarea:focus-visible {
 }
 .type-pill.active {
   color: var(--on-accent);
+}
+.type-pill.badge-general.active {
+  background: var(--accent);
+  border-color: var(--accent);
 }
 .type-pill.badge-bug.active {
   background: var(--danger-border);

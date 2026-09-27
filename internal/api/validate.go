@@ -67,7 +67,7 @@ func sideOf(v string) (store.Side, error) {
 
 func validCommentType(t store.CommentType) error {
 	switch t {
-	case store.CommentBug, store.CommentSuggestion, store.CommentQuestion, store.CommentNit:
+	case store.CommentGeneral, store.CommentBug, store.CommentSuggestion, store.CommentQuestion, store.CommentNit:
 		return nil
 	}
 	return badRequest(errString("invalid comment type"))

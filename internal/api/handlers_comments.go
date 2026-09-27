@@ -46,7 +46,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) error 
 		req.EndLine = req.StartLine
 	}
 	if req.Type == "" {
-		req.Type = store.CommentSuggestion
+		req.Type = store.CommentGeneral
 	}
 	if err := validCommentType(req.Type); err != nil {
 		return err

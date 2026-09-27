@@ -77,7 +77,7 @@ interface Props {
 
 export function CommentComposer({
   initialBody = "",
-  initialType = "suggestion",
+  initialType = "general",
   onSubmit,
   onCancel,
   submitLabel = "Add comment",

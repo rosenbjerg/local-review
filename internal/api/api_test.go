@@ -44,7 +44,7 @@ func TestValidPath(t *testing.T) {
 }
 
 func TestValidCommentType(t *testing.T) {
-	for _, ok := range []store.CommentType{store.CommentBug, store.CommentSuggestion, store.CommentQuestion, store.CommentNit} {
+	for _, ok := range []store.CommentType{store.CommentGeneral, store.CommentBug, store.CommentSuggestion, store.CommentQuestion, store.CommentNit} {
 		if err := validCommentType(ok); err != nil {
 			t.Errorf("validCommentType(%q) = %v, want nil", ok, err)
 		}

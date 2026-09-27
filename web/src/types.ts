@@ -66,9 +66,9 @@ export interface FileDiff {
   hunks: Hunk[];
 }
 
-export type CommentType = "bug" | "suggestion" | "question" | "nit";
+export type CommentType = "general" | "bug" | "suggestion" | "question" | "nit";
 
-export const COMMENT_TYPES: CommentType[] = ["bug", "suggestion", "question", "nit"];
+export const COMMENT_TYPES: CommentType[] = ["general", "bug", "suggestion", "question", "nit"];
 
 export interface Reply {
   id: number;

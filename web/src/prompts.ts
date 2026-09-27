@@ -40,7 +40,7 @@ const REVIEW_API = `
 # File a comment. Anchor it to the NEW side: the file's post-change path and its
 # new-side line range (the server captures the code snippet from that range, so
 # you don't send it). Use startLine 0 and endLine 0 for a finding about the file as
-# a whole. type is one of: bug | suggestion | question | nit. Tag every write with
+# a whole. type is one of: general | bug | suggestion | question | nit. Tag every write with
 # "author": "{{author}}", so this pass's findings stay distinct from the other
 # review passes and from the coding agent that will address them.
 curl -s -X POST {{origin}}/api/reviews/{{reviewId}}/comments \\

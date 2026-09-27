@@ -15,6 +15,7 @@ const (
 type CommentType string
 
 const (
+	CommentGeneral    CommentType = "general"
 	CommentBug        CommentType = "bug"
 	CommentSuggestion CommentType = "suggestion"
 	CommentQuestion   CommentType = "question"

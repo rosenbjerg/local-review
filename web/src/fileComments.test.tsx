@@ -33,7 +33,7 @@ test("a comment that lands closes the composer", async () => {
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "about this file" } });
   fireEvent.click(screen.getByRole("button", { name: "Add comment" }));
 
-  expect(onSubmit).toHaveBeenCalledWith("about this file", "suggestion");
+  expect(onSubmit).toHaveBeenCalledWith("about this file", "general");
   await waitFor(() => expect(screen.getByRole("button", { name: "+ Add file comment" })).toBeTruthy());
   expect(screen.queryByRole("textbox")).toBeNull();
 });

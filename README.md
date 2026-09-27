@@ -30,8 +30,8 @@ One binary: Go backend with the React frontend embedded. Nothing to install but 
   see what the branch adds. Narrow it to one commit onwards, or compare against your
   working tree or index instead.
 - **Comment anywhere.** Any line or dragged range, changed or not, even in files the
-  branch never touched. Threads with replies, a type per comment (bug, suggestion,
-  question, nit), `#id` cross-references, and a summary that leads the export.
+  branch never touched. Threads with replies, a type per comment (general, bug,
+  suggestion, question, nit), `#id` cross-references, and a summary that leads the export.
 - **Anchors that follow the code.** Comments capture the code they point at and
   follow it as the branch moves, renames included, badged when it *moved* or went
   *outdated*.
