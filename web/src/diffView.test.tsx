@@ -563,3 +563,29 @@ test("a card follows the default layout until its own toggle is used", async () 
   act(() => setDefaultLayout("split"));
   expect([isSplit("a.txt"), isSplit("b.txt")]).toEqual([false, true]);
 });
+
+test("a selection started in one half of a split row can't take in the other", async () => {
+  const file: FileDiff = {
+    oldPath: "a.txt",
+    newPath: "a.txt",
+    status: "modified",
+    hunks: [
+      {
+        header: "@@ -1 +1 @@",
+        lines: [
+          { kind: "del", oldLine: 1, content: "alpha" },
+          { kind: "add", newLine: 1, content: "omega" },
+        ],
+      },
+    ],
+  };
+  vi.mocked(api.file).mockResolvedValue(content("omega"));
+  act(() => setDefaultLayout("split"));
+  const { container } = render(<DiffView {...props} file={file} headRef="main" />);
+  const table = container.querySelector<HTMLTableElement>("table.diff-split")!;
+
+  fireEvent.mouseDown(screen.getByText("alpha"));
+  expect(table.dataset.selectHalf).toBe("old");
+  fireEvent.mouseDown(screen.getByText("omega"));
+  expect(table.dataset.selectHalf).toBe("new");
+});

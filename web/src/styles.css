@@ -1912,6 +1912,11 @@ textarea:focus-visible {
 .split-old {
   border-right: 1px solid var(--border);
 }
+.diff-split[data-select-half="old"] .split-new,
+.diff-split[data-select-half="new"] .split-old {
+  -webkit-user-select: none;
+  user-select: none;
+}
 .split-empty {
   background: var(--bg-elev);
 }

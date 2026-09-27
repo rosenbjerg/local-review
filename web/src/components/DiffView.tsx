@@ -472,7 +472,7 @@ export const DiffView = memo(function DiffView({
   }
 
   function splitHalf(p: PlannedRow | null, half: "old" | "new") {
-    const edge = half === "old" ? " split-old" : "";
+    const edge = half === "old" ? " split-old" : " split-new";
     if (!p) {
       return (
         <>
@@ -551,6 +551,13 @@ export const DiffView = memo(function DiffView({
     body.push(threadRow("composer", renderComposer()));
   }
   const gutterWidth = `max(42px, calc(${String(maxLine).length}ch + 24px))`;
+
+  function pinSelectionHalf(e: ReactMouseEvent<HTMLTableElement>) {
+    const cell = (e.target as Element).closest("td");
+    const half = cell?.classList.contains("split-old") ? "old" : cell?.classList.contains("split-new") ? "new" : "";
+    if (half) e.currentTarget.dataset.selectHalf = half;
+    else delete e.currentTarget.dataset.selectHalf;
+  }
 
   function renderComposer() {
     if (!selection) return null;
@@ -642,7 +649,10 @@ export const DiffView = memo(function DiffView({
             )
           ) : (
             <>
-              <table className={`diff${split ? " diff-split" : ""}`}>
+              <table
+                className={`diff${split ? " diff-split" : ""}`}
+                onMouseDown={split ? pinSelectionHalf : undefined}
+              >
                 {split && (
                   <colgroup>
                     <col style={{ width: gutterWidth }} />

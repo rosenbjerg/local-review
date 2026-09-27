@@ -193,7 +193,9 @@ src/
   (`diffLayout.ts`, set in Settings); a card's own toggle is React state only — nothing stores it,
   so a reload drops it — and overrides the default, keeping to it when the default moves.
   `estFileHeight` takes the default, since an unmounted card can't have been toggled: in split a
-  change run costs its longer side, not both.
+  change run costs its longer side, not both. A mousedown pins the drag-selection to the half it
+  started in (`data-select-half` → `user-select: none` on the other), or a copy interleaves old and
+  new text cell by cell.
   `diffRows.test.ts`, `diffView.test.tsx`.
 - `hunkGaps.ts` derives the hidden regions from the `@@` headers, not the hunk lines (a pure deletion
   has none); one unparseable header yields no gaps at all. Each gap carries `delta`
