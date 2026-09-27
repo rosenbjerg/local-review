@@ -41,6 +41,7 @@ import { isCommentSort, sortComments } from "./commentSort";
 import { awaitingYouCount } from "./commentTurn";
 import { commentsFor, groupByPath } from "./commentsByPath";
 import { diffRowHeight, estFileHeight } from "./fileHeight";
+import { useDefaultLayout } from "./diffLayout";
 import { offsetOf, useFonts } from "./fonts";
 import { totalStat } from "./diffStats";
 import { nextUnreviewed } from "./reviewNav";
@@ -241,6 +242,7 @@ export default function App() {
   // Off the live font size, not a constant: the placeholder has to be drawn at the scale the card
   // will mount at, or every card below it jumps when it does.
   const rowH = diffRowHeight(offsetOf(fonts, "monoOffset"));
+  const layout = useDefaultLayout();
   const estHeight = (f: FileDiff) => {
     const path = f.newPath || f.oldPath;
     return estFileHeight({
@@ -248,6 +250,7 @@ export default function App() {
       reviewed: reviewedFiles.has(path),
       comments: commentsFor(commentsByPath, path),
       rowH,
+      layout,
     });
   };
 

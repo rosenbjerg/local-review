@@ -16,6 +16,7 @@ export const LS = {
   themeByRepo: "lr.themeByRepo",
   fonts: "lr.fonts",
   fontsByRepo: "lr.fontsByRepo",
+  diffLayout: "lr.diffLayout",
 } as const;
 
 export function getString(key: string, def = ""): string {

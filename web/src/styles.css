@@ -2639,6 +2639,14 @@ textarea:focus-visible {
   font-size: var(--text-md);
   text-align: right;
 }
+.settings-form .view-toggle {
+  justify-self: start;
+}
+.settings-form .settings-subhead {
+  grid-column: 1 / -1;
+  justify-self: center;
+  margin-bottom: 0;
+}
 /* The prose and the buttons belong to the controls, not to the labels. */
 .settings-form .settings-note,
 .settings-form .settings-actions {

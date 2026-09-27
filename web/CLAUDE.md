@@ -48,6 +48,7 @@ src/
   mergeFiles.ts          carries a FileDiff's identity across a refetch that didn't change it
   fileHeight.ts          LARGE_FILE_LINES + what a LazyFile placeholder is worth
   theme.ts               theme registry + store (owns <html data-theme>)   themes/  hand-written Shiki themes
+  diffLayout.ts          the default Unified/Split layout store (lr.diffLayout, every repo)
   fonts.ts               font-family override store (owns the inline --font-mono/--font-sans on <html>)
   localFonts.ts          Local Font Access store: permission state, the machine's families, a family's files as FontFaces
   fontNames.ts           name matching (normalizeName, nearestFamily, findFamily)   sfnt.ts  OS/2 + fvar → FontFace descriptors
@@ -188,7 +189,11 @@ src/
   full width below the pair. Only Changed view splits, and only a file with both sides (not
   added/deleted): Full view renders the new file alone. The add/del shade and the selection go on
   a half's **cells** (`td.row-add`, `.gutter.row-commented`), since a row holds both halves.
-  `table-layout: fixed` + a colgroup keeps the halves equal. The per-card pick is `DiffView` state.
+  `table-layout: fixed` + a colgroup keeps the halves equal. The default is global
+  (`diffLayout.ts`, set in Settings); a card's own toggle is React state only — nothing stores it,
+  so a reload drops it — and overrides the default, keeping to it when the default moves.
+  `estFileHeight` takes the default, since an unmounted card can't have been toggled: in split a
+  change run costs its longer side, not both.
   `diffRows.test.ts`, `diffView.test.tsx`.
 - `hunkGaps.ts` derives the hidden regions from the `@@` headers, not the hunk lines (a pure deletion
   has none); one unparseable header yields no gaps at all. Each gap carries `delta`
@@ -229,6 +234,9 @@ src/
 
 `LazyFile` mounts a card once and never unmounts it, so anything per-render that scales with the
 mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
+- `estFileHeight` re-runs for every file whenever comments, reviewed marks or fonts change, so its
+  split count (`splitRowCount`, O(lines)) is cached per `FileDiff` in a `WeakMap` — sound only
+  because `mergeFiles` keeps an unchanged file's identity. `fileHeight.test.ts`.
 - Per-file work in `FileExplorer` (unmemoized, re-rendered by the scroll-spy) stays behind `useMemo`.
 - `useActiveFile` scans `root.children` for `#file-<path>` anchors — never a subtree query.
 - `.file-body` carries `content-visibility: auto` — not `.file`, which would clip the sticky header.

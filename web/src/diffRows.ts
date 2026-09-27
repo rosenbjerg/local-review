@@ -1,5 +1,5 @@
 import { gapView, hunkGaps, type Gap, type Reveal } from "./hunkGaps";
-import { effectiveLines, type Comment, type Hunk, type LineKind } from "./types";
+import { effectiveLines, type Comment, type FileDiff, type Hunk, type LineKind } from "./types";
 
 // One line of the diff table. "hunk"/"gap" rows are metadata, not file text: no line numbers, and the
 // DOM keeps `row-hunk` on each so occurrence highlighting skips them.
@@ -179,6 +179,8 @@ export function planRows(args: {
 }
 
 export type Layout = "unified" | "split";
+
+export const hasTwoSides = (f: FileDiff) => f.status !== "added" && f.status !== "deleted";
 
 export interface Pair<T> {
   left: T | null;

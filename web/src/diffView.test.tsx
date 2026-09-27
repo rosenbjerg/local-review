@@ -32,6 +32,7 @@ import { api } from "./api";
 import { tokenize } from "./highlight";
 import { DEFAULT_PREF, setThemePref } from "./theme";
 import { searchCells } from "./useOccurrenceHighlight";
+import { setDefaultLayout } from "./diffLayout";
 import { DiffView } from "./components/DiffView";
 import type { FileDiff } from "./types";
 
@@ -59,7 +60,10 @@ const content = (text: string, worktree = false) => ({
 });
 
 beforeEach(() => vi.clearAllMocks());
-afterEach(() => setThemePref(DEFAULT_PREF));
+afterEach(() => {
+  setThemePref(DEFAULT_PREF);
+  act(() => setDefaultLayout("unified"));
+});
 
 // A file the branch didn't touch, opened to comment on, is synthesized with no hunks
 // and a fixed status/path — so a key built from those alone never moves, and the card
@@ -525,4 +529,37 @@ test("a split card offers each line once to occurrence search", async () => {
   const card = container.querySelector<HTMLElement>("[data-file-path]")!;
   const texts = searchCells(card).map((c) => c.textContent?.trim());
   expect(texts.filter(Boolean).sort()).toEqual(["+extra", "+omega", "-alpha", "kept"]);
+});
+
+test("a card follows the default layout until its own toggle is used", async () => {
+  const file = (path: string): FileDiff => ({
+    oldPath: path,
+    newPath: path,
+    status: "modified",
+    hunks: [
+      {
+        header: "@@ -1 +1 @@",
+        lines: [
+          { kind: "del", oldLine: 1, content: `old ${path}` },
+          { kind: "add", newLine: 1, content: `new ${path}` },
+        ],
+      },
+    ],
+  });
+  vi.mocked(api.file).mockResolvedValue(content("x"));
+  const { container } = render(
+    <>
+      <DiffView {...props} file={file("a.txt")} headRef="main" />
+      <DiffView {...props} file={file("b.txt")} headRef="main" />
+    </>
+  );
+  const isSplit = (path: string) => !!container.querySelector(`[data-file-path="${path}"] table.diff-split`);
+
+  act(() => setDefaultLayout("split"));
+  expect([isSplit("a.txt"), isSplit("b.txt")]).toEqual([true, true]);
+
+  fireEvent.click(screen.getAllByRole("button", { name: "Unified" })[0]);
+  act(() => setDefaultLayout("unified"));
+  act(() => setDefaultLayout("split"));
+  expect([isSplit("a.txt"), isSplit("b.txt")]).toEqual([false, true]);
 });

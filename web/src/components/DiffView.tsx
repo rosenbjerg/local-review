@@ -2,7 +2,8 @@ import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMou
 import { ApiError, api } from "../api";
 import { sameComments } from "../commentsByPath";
 import { fileStat } from "../diffStats";
-import { buildRows, pairRows, planRows, type Layout, type PlannedRow, type Row } from "../diffRows";
+import { buildRows, hasTwoSides, pairRows, planRows, type Layout, type PlannedRow, type Row } from "../diffRows";
+import { useDefaultLayout } from "../diffLayout";
 import { EXPAND_STEP, type Gap, type Reveal } from "../hunkGaps";
 import { hunkWordRanges, splitPieces, type Segment } from "../wordDiff";
 import { langForPath, tokenize, type Token } from "../highlight";
@@ -124,6 +125,7 @@ export const DiffView = memo(function DiffView({
   const lang = langForPath(path);
   // Tokens carry resolved colors, so both tokenize effects re-run on a theme switch.
   const theme = useTheme();
+  const defaultLayout = useDefaultLayout();
   const openCount = comments.filter((c) => !c.resolved).length;
 
   const svg = isSvg(path);
@@ -134,8 +136,8 @@ export const DiffView = memo(function DiffView({
   const docView = markdown && mdRendered && !missing;
   const canToggleMode = !mediaView && !docView && file.newPath !== "" && !unchanged;
   const sideLabel = labelForSide(side, headRef);
-  const canSplit = canToggleMode && file.status !== "added" && file.status !== "deleted";
-  const layout: Layout = canSplit && mode === "changed" ? (layoutPick ?? "unified") : "unified";
+  const canSplit = canToggleMode && hasTwoSides(file);
+  const layout: Layout = canSplit && mode === "changed" ? (layoutPick ?? defaultLayout) : "unified";
   const split = layout === "split";
 
   useEffect(() => {

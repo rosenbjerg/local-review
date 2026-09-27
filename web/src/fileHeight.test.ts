@@ -1,14 +1,21 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import {
   MONO_BASE_PX,
   MONO_LINE_RATIO,
   diffRowHeight,
   estFileHeight,
   LARGE_FILE_LINES,
+  splitRowCount,
 } from "./fileHeight";
+import { pairRows } from "./diffRows";
 import type { Comment, FileDiff } from "./types";
+
+vi.mock("./diffRows", async (orig) => {
+  const mod = await orig<typeof import("./diffRows")>();
+  return { ...mod, pairRows: vi.fn(mod.pairRows) };
+});
 
 const file = (o: Partial<FileDiff>): FileDiff =>
   ({ oldPath: "a.go", newPath: "a.go", status: "modified", hunks: [], ...o }) as FileDiff;
@@ -22,7 +29,7 @@ const comment = (o: Partial<Comment>): Comment =>
   ({ id: 1, resolved: false, replies: [], ...o }) as Comment;
 
 const est = (f: FileDiff, o: Partial<Parameters<typeof estFileHeight>[0]> = {}) =>
-  estFileHeight({ file: f, reviewed: false, comments: [], rowH: 19, ...o });
+  estFileHeight({ file: f, reviewed: false, comments: [], rowH: 19, layout: "unified", ...o });
 
 // The row height is derived from the code font size, which the user sets. Read it off styles.css
 // rather than trusting the copy here: a placeholder sized at the wrong scale shifts every card
@@ -67,4 +74,31 @@ test("open threads are counted, resolved ones barely", () => {
 // otherwise every card below it jumps when this one mounts at a fraction of the reserved height.
 test("a generated file is a collapsed header", () => {
   expect(est(file({ hunks: [hunk(10)], generated: true }))).toBe(44);
+});
+
+test("split counts a change run once, at its longer side, except on a one-sided file", () => {
+  const replaced = {
+    header: "@@ -1,3 +1,2 @@",
+    lines: [
+      { kind: "del" as const, content: "a" },
+      { kind: "del" as const, content: "b" },
+      { kind: "del" as const, content: "c" },
+      { kind: "add" as const, content: "A" },
+      { kind: "add" as const, content: "B" },
+    ],
+  };
+  expect(est(file({ hunks: [replaced] }), { layout: "split" })).toBe((3 + 2) * 19 + 44);
+  expect(est(file({ hunks: [replaced] }), { layout: "unified" })).toBe((5 + 2) * 19 + 44);
+  expect(est(file({ status: "added", hunks: [replaced] }), { layout: "split" })).toBe((5 + 2) * 19 + 44);
+});
+
+test("a file's split count is paired once per file object", () => {
+  const hunks = [hunk(3), hunk(2)];
+  const f = file({ hunks });
+  vi.mocked(pairRows).mockClear();
+  expect(splitRowCount(f)).toBe(5);
+  expect(splitRowCount(f)).toBe(5);
+  expect(pairRows).toHaveBeenCalledTimes(2);
+  splitRowCount(file({ hunks }));
+  expect(pairRows).toHaveBeenCalledTimes(4);
 });

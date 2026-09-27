@@ -1,3 +1,4 @@
+import { hasTwoSides, pairRows, type Layout } from "./diffRows";
 import type { Comment, FileDiff } from "./types";
 
 // How tall a file card is — the threshold that starts one collapsed, and what an unmounted one is
@@ -28,13 +29,25 @@ const THREAD_REPLY = 90;
 
 export const changedLineCount = (f: FileDiff) => f.hunks.reduce((n, h) => n + h.lines.length, 0);
 
+const splitRows = new WeakMap<FileDiff, number>();
+
+export function splitRowCount(f: FileDiff): number {
+  let n = splitRows.get(f);
+  if (n === undefined) {
+    n = f.hunks.reduce((sum, h) => sum + pairRows(h.lines, (l) => l.kind).length, 0);
+    splitRows.set(f, n);
+  }
+  return n;
+}
+
 export function estFileHeight(args: {
   file: FileDiff;
   reviewed: boolean;
   comments: readonly Comment[];
   rowH: number;
+  layout: Layout;
 }): number {
-  const { file, reviewed, comments, rowH } = args;
+  const { file, reviewed, comments, rowH, layout } = args;
   const lines = changedLineCount(file);
   if (reviewed || file.generated || lines > LARGE_FILE_LINES) return CARD_CHROME;
   if (file.binary) return BINARY;
@@ -43,7 +56,8 @@ export function estFileHeight(args: {
   if (file.hunks.length === 0) return NOTE_CARD;
   // One metadata row per hunk — the gap bar carries the `@@` header, so the two never stack — plus
   // the trailing gap after the last one.
-  const rows = lines + file.hunks.length + 1;
+  const shown = layout === "split" && hasTwoSides(file) ? splitRowCount(file) : lines;
+  const rows = shown + file.hunks.length + 1;
   const threads = comments.reduce(
     (n, c) => n + (c.resolved ? THREAD_SHUT : THREAD_OPEN + c.replies.length * THREAD_REPLY),
     0

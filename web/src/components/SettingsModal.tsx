@@ -1,10 +1,13 @@
+import { setDefaultLayout, useDefaultLayout } from "../diffLayout";
 import { FontPicker } from "./FontPicker";
 import { Modal } from "./Modal";
 import { ThemePicker } from "./ThemePicker";
+import { ViewToggle } from "./ViewToggle";
 import { MOD_KEY } from "../util";
 
 // The toolbar's non-review controls — appearance, shortcut list, repo link — behind the gear, or `?`.
 export function SettingsModal({ onClose }: { onClose: () => void }) {
+  const layout = useDefaultLayout();
   return (
     <Modal onClose={onClose} title="Settings" close="autofocus" className="modal-settings">
       <div className="settings-body">
@@ -17,6 +20,20 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <ThemePicker />
           </div>
           <FontPicker />
+          <h3 className="settings-subhead">Diffs in every repo</h3>
+          <div className="settings-row">
+            <span className="settings-label">Layout</span>
+            <ViewToggle
+              ariaLabel="Default diff layout"
+              value={layout}
+              onChange={setDefaultLayout}
+              options={[
+                { value: "unified", label: "Unified" },
+                { value: "split", label: "Split" },
+              ]}
+            />
+          </div>
+          <p className="settings-note">A file's own Unified/Split toggle overrides this for that file.</p>
         </div>
 
         <div className="settings-cols">
