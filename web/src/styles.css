@@ -1383,7 +1383,6 @@ textarea:focus-visible {
   font-size: var(--text-sm);
 }
 .file-path {
-  font-family: var(--font-mono);
   font-size: var(--text-md);
   min-width: 0;
   overflow: hidden;
