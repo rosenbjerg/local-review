@@ -177,3 +177,37 @@ export function planRows(args: {
     trailingComposer: placeable && !composerPlaced,
   };
 }
+
+export type Layout = "unified" | "split";
+
+export interface Pair<T> {
+  left: T | null;
+  right: T | null;
+}
+
+export function pairRows<T>(items: readonly T[], kindOf: (item: T) => Row["kind"]): Pair<T>[] {
+  const out: Pair<T>[] = [];
+  let dels: T[] = [];
+  let adds: T[] = [];
+  const flush = () => {
+    for (let i = 0; i < Math.max(dels.length, adds.length); i++) {
+      out.push({ left: dels[i] ?? null, right: adds[i] ?? null });
+    }
+    dels = [];
+    adds = [];
+  };
+  for (const item of items) {
+    const kind = kindOf(item);
+    if (kind === "del") {
+      if (adds.length > 0) flush();
+      dels.push(item);
+    } else if (kind === "add") {
+      adds.push(item);
+    } else {
+      flush();
+      out.push({ left: item, right: item });
+    }
+  }
+  flush();
+  return out;
+}

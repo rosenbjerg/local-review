@@ -31,6 +31,7 @@ vi.mock("./mermaid", () => ({ renderMermaid: vi.fn(async () => null) }));
 import { api } from "./api";
 import { tokenize } from "./highlight";
 import { DEFAULT_PREF, setThemePref } from "./theme";
+import { searchCells } from "./useOccurrenceHighlight";
 import { DiffView } from "./components/DiffView";
 import type { FileDiff } from "./types";
 
@@ -451,4 +452,77 @@ test("an ordinary file of the same shape opens", async () => {
 
   expect(screen.queryByText("generated")).toBeNull();
   await waitFor(() => expect(screen.getByText("dep")).toBeTruthy());
+});
+
+test("Split lays a change run out side by side, and Full view takes it back to unified", async () => {
+  const file: FileDiff = {
+    oldPath: "a.txt",
+    newPath: "a.txt",
+    status: "modified",
+    hunks: [
+      {
+        header: "@@ -1,2 +1,3 @@",
+        lines: [
+          { kind: "context", oldLine: 1, newLine: 1, content: "same" },
+          { kind: "del", oldLine: 2, content: "before" },
+          { kind: "add", newLine: 2, content: "after" },
+          { kind: "add", newLine: 3, content: "extra" },
+        ],
+      },
+    ],
+  };
+  vi.mocked(api.file).mockResolvedValue(content("same\nafter\nextra"));
+  const { container } = render(<DiffView {...props} file={file} headRef="main" />);
+  await waitFor(() => expect(api.file).toHaveBeenCalled());
+
+  fireEvent.click(screen.getByRole("button", { name: "Split" }));
+  const cells = (text: string) =>
+    [...screen.getByText(text).closest("tr")!.querySelectorAll("td")].map((td) => td.textContent);
+
+  expect(container.querySelector("table.diff-split")).toBeTruthy();
+  expect(cells("before")).toEqual(["2", "-before", "2", "+after"]);
+  expect(cells("extra")).toEqual(["", "", "3", "+extra"]);
+  expect(screen.getAllByText("same")).toHaveLength(2);
+
+  fireEvent.click(screen.getByRole("button", { name: "Full" }));
+  await waitFor(() => expect(container.querySelector("table.diff-split")).toBeNull());
+  expect((screen.getByRole("button", { name: "Split" }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+test("a one-sided file offers no split", async () => {
+  const file: FileDiff = {
+    oldPath: "",
+    newPath: "a.txt",
+    status: "added",
+    hunks: [{ header: "@@ -0,0 +1 @@", lines: [{ kind: "add", newLine: 1, content: "new" }] }],
+  };
+  vi.mocked(api.file).mockResolvedValue(content("new"));
+  render(<DiffView {...props} file={file} headRef="main" />);
+  await waitFor(() => expect(api.file).toHaveBeenCalled());
+  expect(screen.queryByRole("button", { name: "Split" })).toBeNull();
+});
+
+test("a split card offers each line once to occurrence search", async () => {
+  const file: FileDiff = {
+    oldPath: "a.txt",
+    newPath: "a.txt",
+    status: "modified",
+    hunks: [
+      {
+        header: "@@ -1,2 +1,2 @@",
+        lines: [
+          { kind: "context", oldLine: 1, newLine: 1, content: "kept" },
+          { kind: "del", oldLine: 2, content: "alpha" },
+          { kind: "add", newLine: 2, content: "omega" },
+          { kind: "add", newLine: 3, content: "extra" },
+        ],
+      },
+    ],
+  };
+  vi.mocked(api.file).mockResolvedValue(content("kept\nomega\nextra"));
+  const { container } = render(<DiffView {...props} file={file} headRef="main" />);
+  fireEvent.click(screen.getByRole("button", { name: "Split" }));
+  const card = container.querySelector<HTMLElement>("[data-file-path]")!;
+  const texts = searchCells(card).map((c) => c.textContent?.trim());
+  expect(texts.filter(Boolean).sort()).toEqual(["+extra", "+omega", "-alpha", "kept"]);
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRows, planRows, type Row } from "./diffRows";
+import { buildRows, pairRows, planRows, type Row } from "./diffRows";
 import type { Comment, DiffLine, Hunk } from "./types";
 
 const ctx = (oldLine: number, newLine: number, content = `l${newLine}`): DiffLine => ({
@@ -248,5 +248,50 @@ describe("planRows", () => {
     const row = plan.rows.find((p) => p.threads.length > 0);
     expect(row?.threads.map((c) => c.id)).toEqual([1, 2]);
     expect(plan.leftover).toEqual([]);
+  });
+});
+
+describe("pairRows", () => {
+  const pairs = (items: DiffLine[]) =>
+    pairRows(items, (l) => l.kind).map(({ left, right }) => [left?.content ?? null, right?.content ?? null]);
+
+  it("puts a change run's deletions left and additions right, padding the shorter side", () => {
+    expect(pairs([ctx(1, 1), del(2), del(3), add(2), ctx(4, 3)])).toEqual([
+      ["l1", "l1"],
+      ["-2", "+2"],
+      ["-3", null],
+      ["l3", "l3"],
+    ]);
+  });
+
+  it("pads the left when a run adds more than it deletes", () => {
+    expect(pairs([del(1), add(1), add(2), add(3)])).toEqual([
+      ["-1", "+1"],
+      [null, "+2"],
+      [null, "+3"],
+    ]);
+  });
+
+  it("starts a new run when a deletion follows an addition", () => {
+    expect(pairs([del(1), add(1), del(2), add(2)])).toEqual([
+      ["-1", "+1"],
+      ["-2", "+2"],
+    ]);
+    expect(pairs([add(1), del(1)])).toEqual([
+      [null, "+1"],
+      ["-1", null],
+    ]);
+  });
+
+  it("keeps hunk and gap rows whole, closing the run before them", () => {
+    const rows = buildRows({ mode: "changed", source, hunks: oneHunk, revealed: {} });
+    const paired = pairRows(rows, (r) => r.kind);
+    expect(paired.map((p) => [p.left?.kind ?? null, p.right?.kind ?? null])).toEqual([
+      ["gap", "gap"],
+      ["context", "context"],
+      ["del", "add"],
+      ["context", "context"],
+      ["gap", "gap"],
+    ]);
   });
 });

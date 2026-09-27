@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMou
 import { ApiError, api } from "../api";
 import { sameComments } from "../commentsByPath";
 import { fileStat } from "../diffStats";
-import { buildRows, planRows, type PlannedRow, type Row } from "../diffRows";
+import { buildRows, pairRows, planRows, type Layout, type PlannedRow, type Row } from "../diffRows";
 import { EXPAND_STEP, type Gap, type Reveal } from "../hunkGaps";
 import { hunkWordRanges, splitPieces, type Segment } from "../wordDiff";
 import { langForPath, tokenize, type Token } from "../highlight";
@@ -105,6 +105,7 @@ export const DiffView = memo(function DiffView({
   // A synthetic "unchanged" card has no hunks, so it lives in full mode.
   const unchanged = file.status === "unchanged";
   const [mode, setMode] = useState<"changed" | "full">(unchanged ? "full" : "changed");
+  const [layoutPick, setLayoutPick] = useState<Layout | null>(null);
   const [source, setSource] = useState<string[] | null>(null);
   const [collapsed, setCollapsed] = useState(reviewed || isLarge || generated);
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
@@ -133,6 +134,9 @@ export const DiffView = memo(function DiffView({
   const docView = markdown && mdRendered && !missing;
   const canToggleMode = !mediaView && !docView && file.newPath !== "" && !unchanged;
   const sideLabel = labelForSide(side, headRef);
+  const canSplit = canToggleMode && file.status !== "added" && file.status !== "deleted";
+  const layout: Layout = canSplit && mode === "changed" ? (layoutPick ?? "unified") : "unified";
+  const split = layout === "split";
 
   useEffect(() => {
     setCollapsed(reviewed || isLarge || generated);
@@ -366,7 +370,7 @@ export const DiffView = memo(function DiffView({
     const showDown = stepped && gap.hunkIndex < file.hunks.length;
     return (
       <tr key={r.key} className="row-hunk row-gap">
-        <td className="gutter gap-gutter" colSpan={2}>
+        <td className="gutter gap-gutter" colSpan={split ? 1 : 2}>
           {showUp && (
             <button
               className="gap-btn"
@@ -388,7 +392,7 @@ export const DiffView = memo(function DiffView({
             </button>
           )}
         </td>
-        <td className="line-content">
+        <td className="line-content" colSpan={split ? 3 : 1}>
           <button className="gap-all" onClick={() => expandAll(gap)}>
             {hidden === 1 ? "Show 1 hidden line" : `Show all ${hidden} hidden lines`}
           </button>
@@ -401,8 +405,10 @@ export const DiffView = memo(function DiffView({
   function threadRow(key: string, children: ReactNode) {
     return (
       <tr key={key} className="thread-row">
-        <td className="gutter thread-gutter" colSpan={2} />
-        <td className="thread-cell">{children}</td>
+        <td className="gutter thread-gutter" colSpan={split ? 1 : 2} />
+        <td className="thread-cell" colSpan={split ? 3 : 1}>
+          {children}
+        </td>
       </tr>
     );
   }
@@ -417,28 +423,124 @@ export const DiffView = memo(function DiffView({
     />
   );
 
-  const body: ReactNode[] = [];
-  for (const p of plan.rows) {
+  function hunkRow(r: Row) {
+    return (
+      <tr key={r.key} className="row-hunk">
+        <td className="gutter" />
+        {!split && <td className="gutter" />}
+        <td className="line-content" colSpan={split ? 3 : 1}>
+          {r.content}
+        </td>
+      </tr>
+    );
+  }
+
+  function gutterEvents(p: PlannedRow) {
+    const n = p.row.newLine!;
+    return {
+      onMouseDown: (e: ReactMouseEvent) => p.commentable && onGutterMouseDown(n, e.shiftKey, e),
+      onMouseEnter: () => p.commentable && onGutterMouseEnter(n),
+      title: p.commentable ? "Click, drag, or shift-click to select line(s)" : "",
+    };
+  }
+
+  const sign = (kind: LineKind) => (
+    <span className="sign">{kind === "add" ? "+" : kind === "del" ? "-" : " "}</span>
+  );
+
+  function lineRow(p: PlannedRow, kind: LineKind) {
     const r = p.row;
-    if (r.kind === "gap") {
-      body.push(gapRow(r));
-      continue;
-    }
-    if (r.kind === "hunk") {
-      body.push(
-        <tr key={r.key} className="row-hunk">
-          <td className="gutter" />
-          <td className="gutter" />
-          <td className="line-content">{r.content}</td>
-        </tr>
+    return (
+      <tr
+        key={r.key}
+        className={`row-${kind}${p.selected ? " row-selected" : ""}${
+          p.commented ? " row-commented" : ""
+        }${p.active ? " row-comment-active" : ""}`}
+      >
+        <td className="gutter">{r.oldLine ?? ""}</td>
+        <td className={`gutter${p.commentable ? " gutter-click" : ""}`} {...gutterEvents(p)}>
+          {r.newLine ?? ""}
+        </td>
+        <td className="line-content">
+          {sign(kind)}
+          {renderContent(kind, r.oldLine, r.newLine, r.content)}
+        </td>
+      </tr>
+    );
+  }
+
+  function splitHalf(p: PlannedRow | null, half: "old" | "new") {
+    const edge = half === "old" ? " split-old" : "";
+    if (!p) {
+      return (
+        <>
+          <td className="gutter split-empty" />
+          <td className={`line-content split-empty${edge}`} />
+        </>
       );
-      continue;
     }
-    body.push(lineRow(p, r.kind));
+    const r = p.row;
+    const kind = r.kind as LineKind;
+    const isNew = half === "new";
+    const shade = `${kind === "context" ? "" : ` row-${kind}`}${
+      isNew && p.selected ? " row-selected" : ""
+    }${isNew && p.active ? " row-comment-active" : ""}`;
+    return (
+      <>
+        {isNew ? (
+          <td
+            className={`gutter${shade}${p.commented ? " row-commented" : ""}${
+              p.commentable ? " gutter-click" : ""
+            }`}
+            {...gutterEvents(p)}
+          >
+            {r.newLine ?? ""}
+          </td>
+        ) : (
+          <td className={`gutter${shade}`}>{r.oldLine ?? ""}</td>
+        )}
+        <td className={`line-content${shade}${edge}`}>
+          {sign(kind)}
+          {renderContent(kind, r.oldLine, r.newLine, r.content)}
+        </td>
+      </>
+    );
+  }
+
+  const body: ReactNode[] = [];
+  const pushThreads = (p: PlannedRow) => {
     if (p.threads.length > 0) {
-      body.push(threadRow(`t${r.newLine}`, p.threads.map(renderThread)));
+      body.push(threadRow(`t${p.row.newLine}`, p.threads.map(renderThread)));
     }
     if (p.composer) body.push(threadRow("composer", renderComposer()));
+  };
+  let maxLine = 0;
+  if (split) {
+    for (const { left, right } of pairRows(plan.rows, (p) => p.row.kind)) {
+      const r = (left ?? right)!.row;
+      if (r.kind === "gap") body.push(gapRow(r));
+      else if (r.kind === "hunk") body.push(hunkRow(r));
+      else {
+        maxLine = Math.max(maxLine, left?.row.oldLine ?? 0, right?.row.newLine ?? 0);
+        body.push(
+          <tr key={r.key}>
+            {splitHalf(left, "old")}
+            {splitHalf(right, "new")}
+          </tr>
+        );
+        if (right) pushThreads(right);
+      }
+    }
+  } else {
+    for (const p of plan.rows) {
+      const r = p.row;
+      if (r.kind === "gap") body.push(gapRow(r));
+      else if (r.kind === "hunk") body.push(hunkRow(r));
+      else {
+        body.push(lineRow(p, r.kind));
+        pushThreads(p);
+      }
+    }
   }
   if (plan.leftover.length > 0) {
     body.push(threadRow("leftover", plan.leftover.map(renderThread)));
@@ -446,34 +548,7 @@ export const DiffView = memo(function DiffView({
   if (plan.trailingComposer) {
     body.push(threadRow("composer", renderComposer()));
   }
-
-  function lineRow(
-    { row: r, commentable, selected, commented, active }: PlannedRow,
-    kind: LineKind
-  ) {
-    return (
-      <tr
-        key={r.key}
-        className={`row-${kind}${selected ? " row-selected" : ""}${
-          commented ? " row-commented" : ""
-        }${active ? " row-comment-active" : ""}`}
-      >
-        <td className="gutter">{r.oldLine ?? ""}</td>
-        <td
-          className={`gutter${commentable ? " gutter-click" : ""}`}
-          onMouseDown={(e) => commentable && onGutterMouseDown(r.newLine!, e.shiftKey, e)}
-          onMouseEnter={() => commentable && onGutterMouseEnter(r.newLine!)}
-          title={commentable ? "Click, drag, or shift-click to select line(s)" : ""}
-        >
-          {r.newLine ?? ""}
-        </td>
-        <td className="line-content">
-          <span className="sign">{kind === "add" ? "+" : kind === "del" ? "-" : " "}</span>
-          {renderContent(kind, r.oldLine, r.newLine, r.content)}
-        </td>
-      </tr>
-    );
-  }
+  const gutterWidth = `max(42px, calc(${String(maxLine).length}ch + 24px))`;
 
   function renderComposer() {
     if (!selection) return null;
@@ -517,6 +592,9 @@ export const DiffView = memo(function DiffView({
         showModeToggle={canToggleMode}
         mode={mode}
         onSwitchMode={switchMode}
+        showLayoutToggle={canSplit}
+        layout={layout}
+        onLayout={setLayoutPick}
       />
 
       {!collapsed && (
@@ -562,7 +640,15 @@ export const DiffView = memo(function DiffView({
             )
           ) : (
             <>
-              <table className="diff">
+              <table className={`diff${split ? " diff-split" : ""}`}>
+                {split && (
+                  <colgroup>
+                    <col style={{ width: gutterWidth }} />
+                    <col />
+                    <col style={{ width: gutterWidth }} />
+                    <col />
+                  </colgroup>
+                )}
                 <tbody>{body}</tbody>
               </table>
               {/* File-level comments: a deleted file has no new-side line to click. */}

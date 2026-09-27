@@ -44,7 +44,7 @@ src/
   prompts.ts             agent prompt templates ({{placeholder}}) + renderPrompt
   commentSort.ts  commentFilter.ts  commentTurn.ts  commentsByPath.ts  commentRef.ts  reviewNav.ts
   wordDiff.ts            intra-line diff        hunkGaps.ts  expandable hidden regions
-  diffRows.ts            the diff table as data: buildRows + planRows       diffStats.ts  occurrences.ts
+  diffRows.ts            the diff table as data: buildRows + planRows + pairRows (split)   diffStats.ts  occurrences.ts
   mergeFiles.ts          carries a FileDiff's identity across a refetch that didn't change it
   fileHeight.ts          LARGE_FILE_LINES + what a LazyFile placeholder is worth
   theme.ts               theme registry + store (owns <html data-theme>)   themes/  hand-written Shiki themes
@@ -182,6 +182,14 @@ src/
   only draws. Threads hang by **effective end** line; `leftover` is what the walk didn't render;
   composer inline vs trailing are mutually exclusive; the composer waits for `dragging`.
   `diffRows.test.ts`.
+- **Split is a pairing of the planned rows, not a second plan.** `pairRows` puts each change run's
+  deletions left and additions right, in order, padded with blanks; context, hunk and gap rows sit
+  on both sides. Threads and the composer still hang off the right-hand planned row, and span the
+  full width below the pair. Only Changed view splits, and only a file with both sides (not
+  added/deleted): Full view renders the new file alone. The add/del shade and the selection go on
+  a half's **cells** (`td.row-add`, `.gutter.row-commented`), since a row holds both halves.
+  `table-layout: fixed` + a colgroup keeps the halves equal. The per-card pick is `DiffView` state.
+  `diffRows.test.ts`, `diffView.test.tsx`.
 - `hunkGaps.ts` derives the hidden regions from the `@@` headers, not the hunk lines (a pure deletion
   has none); one unparseable header yields no gaps at all. Each gap carries `delta`
   (`oldLine = newLine + delta`). git writes a zero-length side as the line **before** the change.
@@ -211,7 +219,9 @@ src/
   the selection must start and end in one `tr:not(.row-hunk) > td.line-content`; `.sign` is excluded
   from the text-node walk; triple-click ignored. **The `MutationObserver` repaint is load-bearing**
   (Shiki swaps text nodes for spans). Exits: click away, origin card scrolled out, Escape — which must
-  `removeAllRanges()`. `FindBar` sits **below** the scroller (above would jump the diff) and every
+  `removeAllRanges()`. Split view draws an unchanged line twice, so `searchCells` searches the left
+  half for deletions only; a word selected in the left copy starts the count at its right twin.
+  `FindBar` sits **below** the scroller (above would jump the diff) and every
   control `preventDefault`s mousedown, or the click collapses the selection it acts on. Changed view
   offers "Search full file" via `data-view-mode` + `showFullSignal`.
 

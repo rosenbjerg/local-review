@@ -1833,10 +1833,12 @@ textarea:focus-visible {
 }
 /* The change bar: the 1px border it recolors, not wider (2px read as a stripe down the diff).
    On the right edge — .row-commented / .row-comment-active own the left. */
-.row-add .gutter {
+.row-add .gutter,
+.gutter.row-add {
   border-right-color: var(--add-border);
 }
-.row-del .gutter {
+.row-del .gutter,
+.gutter.row-del {
   border-right-color: var(--del-border);
 }
 .row-hunk {
@@ -1887,15 +1889,31 @@ textarea:focus-visible {
 .row-selected {
   background: var(--sel-bg) !important;
 }
-.row-commented .gutter {
+.row-commented .gutter,
+.gutter.row-commented {
   border-left: 2px solid var(--accent);
 }
 /* !important to beat the add/del row shades, like .row-selected. */
 .row-comment-active {
   background: var(--sel-bg) !important;
 }
-.row-comment-active .gutter {
+.row-comment-active .gutter,
+.gutter.row-comment-active {
   border-left: 3px solid var(--accent);
+}
+.diff-split {
+  table-layout: fixed;
+}
+.diff-split .gutter,
+.diff-split .line-content {
+  width: auto;
+  min-width: 0;
+}
+.split-old {
+  border-right: 1px solid var(--border);
+}
+.split-empty {
+  background: var(--bg-elev);
 }
 ::highlight(occ) {
   background-color: var(--occ-bg);

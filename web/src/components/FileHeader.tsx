@@ -1,4 +1,5 @@
 import type { DiffStat } from "../diffStats";
+import type { Layout } from "../diffRows";
 import type { FileStatus } from "../types";
 import { Chevron } from "./Chevron";
 import { CommentCount } from "./CommentCount";
@@ -25,6 +26,9 @@ interface Props {
   showModeToggle: boolean;
   mode: "changed" | "full";
   onSwitchMode: (mode: "changed" | "full") => void;
+  showLayoutToggle: boolean;
+  layout: Layout;
+  onLayout: (layout: Layout) => void;
 }
 
 // The file card's header row: collapse, status + path, counts, reviewed checkbox, and the view toggles.
@@ -47,6 +51,9 @@ export function FileHeader({
   showModeToggle,
   mode,
   onSwitchMode,
+  showLayoutToggle,
+  layout,
+  onLayout,
 }: Props) {
   return (
     <div className="file-header">
@@ -100,6 +107,22 @@ export function FileHeader({
           options={[
             { value: "code", label: "Code" },
             { value: "rendered", label: "Rendered" },
+          ]}
+        />
+      )}
+      {showLayoutToggle && (
+        <ViewToggle
+          ariaLabel="Diff layout"
+          value={layout}
+          onChange={onLayout}
+          options={[
+            { value: "unified", label: "Unified" },
+            {
+              value: "split",
+              label: "Split",
+              disabled: mode === "full",
+              title: mode === "full" ? "Full view shows the new file only" : undefined,
+            },
           ]}
         />
       )}

@@ -173,7 +173,10 @@ function indexOfSelection(ranges: Range[]): number {
   if (!sel || sel.rangeCount === 0) return 0;
   const at = sel.getRangeAt(0);
   const i = ranges.findIndex((r) => r.compareBoundaryPoints(Range.START_TO_START, at) === 0);
-  return i < 0 ? 0 : i;
+  if (i >= 0) return i;
+  const row = cellOf(at.startContainer)?.closest("tr");
+  const j = row ? ranges.findIndex((r) => r.startContainer.parentElement?.closest("tr") === row) : -1;
+  return j < 0 ? 0 : j;
 }
 
 function cellOf(node: Node | null): HTMLElement | null {
@@ -181,9 +184,15 @@ function cellOf(node: Node | null): HTMLElement | null {
   return el?.closest<HTMLElement>(LINE_CELL) ?? null;
 }
 
+export function searchCells(card: HTMLElement): HTMLElement[] {
+  return [...card.querySelectorAll<HTMLElement>(LINE_CELL)].filter(
+    (c) => !c.classList.contains("split-old") || c.classList.contains("row-del")
+  );
+}
+
 function buildRanges(card: HTMLElement, term: string): Range[] {
   const out: Range[] = [];
-  for (const cell of card.querySelectorAll(LINE_CELL)) {
+  for (const cell of searchCells(card)) {
     const nodes = textNodesIn(cell);
     if (nodes.length === 0) continue;
     const spans = matchSpans(nodes.map((t) => t.data).join(""), term);
