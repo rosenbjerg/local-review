@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 
 // An unposted comment lives in the drafts store, not in the composer, so it outlives whatever
 // unmounts the composer — a collapsed card or thread — and only a post or a cancel ends it.
@@ -19,7 +19,7 @@ import { CommentComposer } from "./components/CommentComposer";
 import { CommentThread, type CommentActions } from "./components/CommentThread";
 import { DiffView } from "./components/DiffView";
 import { FileComments } from "./components/FileComments";
-import { type DraftRef, clearDrafts, getDraft, getDrafts } from "./drafts";
+import { type DraftRef, clearDrafts, getDraft, getDrafts, putDraft, useLeaveWarning } from "./drafts";
 import type { Comment, FileDiff } from "./types";
 
 afterEach(() => act(() => clearDrafts()));
@@ -236,4 +236,16 @@ test("collapsing a thread keeps a reply draft open, and drops an empty reply box
   fireEvent.click(screen.getByTitle("Collapse thread"));
   fireEvent.click(screen.getAllByTitle("Expand thread")[0]);
   expect((screen.getByPlaceholderText("Reply…") as HTMLTextAreaElement).value).toBe("on it");
+});
+
+test("leaving the page asks first only while a draft exists", () => {
+  renderHook(() => useLeaveWarning());
+  const leave = () => {
+    const e = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(e);
+    return e.defaultPrevented;
+  };
+  expect(leave()).toBe(false);
+  act(() => putDraft({ ...ref, body: "unsent", type: "general" }));
+  expect(leave()).toBe(true);
 });
