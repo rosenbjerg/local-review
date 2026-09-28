@@ -2182,6 +2182,28 @@ textarea:focus-visible {
 .comment-nav:hover {
   background: var(--bg-hover);
 }
+/* Before .comment-nav-awaiting, whose left edge has to win over this border. */
+.draft-nav,
+.comment-nav-editing {
+  border-style: dashed;
+  border-color: var(--accent);
+}
+.draft-list {
+  margin-bottom: 16px;
+}
+.draft-list h2 {
+  margin-bottom: 8px;
+}
+.draft-nav {
+  padding-right: 10px;
+}
+.draft-preview {
+  white-space: nowrap;
+}
+.comment-editing {
+  font-size: var(--text-xs);
+  color: var(--accent);
+}
 .comment-nav-delete {
   position: absolute;
   top: 5px;
@@ -2285,14 +2307,15 @@ textarea:focus-visible {
 }
 .comments-panel-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px 8px;
   margin-bottom: 12px;
 }
 .comments-panel-header .combobox {
-  flex: none;
-  width: 140px;
+  flex: 0 1 140px;
+  min-width: 96px;
 }
 .comments-panel-header .combobox-input,
 .comments-filter .combobox-input {
@@ -2303,7 +2326,10 @@ textarea:focus-visible {
   font-size: var(--text-base);
   margin: 0;
 }
+/* Don't let the title shrink: it wraps, leaving the collapse chevron on a line of its own. */
 .comments-title {
+  flex: none;
+  max-width: 100%;
   display: flex;
   align-items: center;
   flex-wrap: wrap;

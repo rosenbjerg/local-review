@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { type DraftRef, dropDraft, getDraft, putDraft } from "../drafts";
+import { type DraftRef, draftDomId, dropDraft, getDraft, putDraft } from "../drafts";
 import { COMMENT_TYPES, type CommentType } from "../types";
 import { MOD_KEY } from "../util";
 
@@ -159,7 +159,7 @@ export function CommentComposer({
   }
 
   return (
-    <div className="composer" onKeyDown={onKeyDown}>
+    <div className="composer" id={draft && draftDomId(draft.key)} onKeyDown={onKeyDown}>
       {!hideType && (
         <div className="composer-row">
           <TypePills

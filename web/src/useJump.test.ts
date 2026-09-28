@@ -194,3 +194,39 @@ test("a comment absent from the list is still reachable if its thread is mounted
 
   act(() => result.current.resetJump());
 });
+
+// A draft has no thread to aim at until its card (and, for a reply, its thread) expands; the
+// card stands in, then the composer takes the aim and its box takes focus.
+test("jumping to a draft expands its card, lands on its composer and focuses it", () => {
+  const { root, ref } = column();
+  const setSelectedFile = vi.fn();
+  const { result } = renderHook(() =>
+    useJump({ comments: [], setSelectedFile, rootRef: ref })
+  );
+  fileAnchor(root, "a.go", 9000);
+
+  act(() =>
+    result.current.jumpToDraft({
+      key: "reply:4",
+      target: { kind: "reply", path: "a.go", commentId: 4 },
+      body: "on it",
+      type: "general",
+    })
+  );
+  expect(result.current.expandTarget).toMatchObject({ path: "a.go" });
+  expect(result.current.expandComment).toMatchObject({ id: 4 });
+  expect(setSelectedFile).toHaveBeenCalledWith("a.go");
+
+  const composer = document.createElement("div");
+  composer.id = "draft-reply:4";
+  const box = document.createElement("textarea");
+  composer.appendChild(box);
+  root.appendChild(composer);
+  composer.getBoundingClientRect = () => ({ top: 12000 - root.scrollTop, height: 100 }) as DOMRect;
+  act(() => vi.advanceTimersByTime(1200));
+
+  expect(root.scrollTop).toBe(12000 - 200);
+  expect(document.activeElement).toBe(box);
+
+  act(() => result.current.resetJump());
+});
