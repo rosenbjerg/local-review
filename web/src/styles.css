@@ -2282,6 +2282,9 @@ textarea:focus-visible {
   gap: 8px;
   margin-bottom: 8px;
 }
+.review-summary-head:last-child {
+  margin-bottom: 0;
+}
 .review-summary-head h2 {
   font-size: var(--text-base);
   margin: 0;
@@ -2323,7 +2326,7 @@ textarea:focus-visible {
   font-size: var(--text-base);
   margin: 0;
 }
-/* Don't let the title shrink: it wraps, leaving the collapse chevron on a line of its own. */
+/* Don't let the title shrink: it would wrap its awaiting toggle before the sort gives way. */
 .comments-title {
   flex: none;
   max-width: 100%;

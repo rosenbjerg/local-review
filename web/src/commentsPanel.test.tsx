@@ -42,7 +42,6 @@ function panel(filter: CommentFilter, onFilterChange = () => {}) {
       onJumpToDraft={() => {}}
       fileOrder={[]}
       onDelete={() => {}}
-      onCollapse={() => {}}
     />
   );
 }
@@ -127,7 +126,6 @@ test("lists line, file and reply drafts above a filtered list, and jumps to one"
       onJumpToDraft={onJumpToDraft}
       fileOrder={["b.go", "a.go"]}
       onDelete={() => {}}
-      onCollapse={() => {}}
     />
   );
 
@@ -175,7 +173,6 @@ test("groups drafts under their file, in file order, top to bottom", () => {
       onJumpToDraft={() => {}}
       fileOrder={["b.go", "a.go"]}
       onDelete={() => {}}
-      onCollapse={() => {}}
     />
   );
   const groups = [...container.querySelectorAll(".draft-list .comment-file-group")];

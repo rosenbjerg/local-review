@@ -17,7 +17,7 @@ import { Combobox } from "./Combobox";
 import { CommentPreview } from "./CommentPreview";
 import { DraftList } from "./DraftList";
 import { HighlightMatch } from "./HighlightMatch";
-import { IconChevronRight, IconX } from "./icons";
+import { IconX } from "./icons";
 import { SearchInput } from "./SearchInput";
 
 interface Props {
@@ -36,7 +36,6 @@ interface Props {
   // The file list's order, which the drafts follow; the comments come already sorted.
   fileOrder: string[];
   onDelete: (id: number) => void;
-  onCollapse: () => void;
 }
 
 // `comments` arrives sorted with each file's comments contiguous, so the groups are runs of one path.
@@ -64,7 +63,6 @@ export function CommentsPanel({
   onJumpToDraft,
   fileOrder,
   onDelete,
-  onCollapse,
 }: Props) {
   const edited = useEditedCommentIds();
   const narrowed = isFiltered(filter);
@@ -78,15 +76,6 @@ export function CommentsPanel({
       <DraftList fileOrder={fileOrder} onJump={onJumpToDraft} />
       <div className="comments-panel-header">
         <div className="comments-title">
-          <button
-            className="btn btn-icon pane-collapse"
-            onClick={onCollapse}
-            title="Hide the comments panel ( ] )"
-            aria-label="Hide the comments panel"
-            aria-expanded
-          >
-            <IconChevronRight />
-          </button>
           <h2>
             Comments{" "}
             <span className="muted">({narrowed ? `${comments.length} of ${total}` : total})</span>
