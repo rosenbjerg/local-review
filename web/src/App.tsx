@@ -32,7 +32,7 @@ import { usePanelResize } from "./usePanelResize";
 import { useReview } from "./useReview";
 import { useUndoableDelete } from "./useUndoableDelete";
 import { useUnseenActivity } from "./useUnseenActivity";
-import { clearDrafts } from "./drafts";
+import { clearDrafts, useLeaveWarning } from "./drafts";
 import { setFontsRepo } from "./fonts";
 import { setThemeRepo } from "./theme";
 import type { CommentFilter } from "./commentFilter";
@@ -159,6 +159,7 @@ export default function App() {
 
 
   const unseen = useUnseenActivity(comments, review?.id);
+  useLeaveWarning();
 
   useEffect(() => {
     const badge = unseen > 0 ? `(${unseen}) ` : "";

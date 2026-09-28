@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import type { CommentType } from "./types";
 
 export type DraftTarget =
@@ -114,4 +114,17 @@ export function useDrafts(): ReadonlyMap<string, Draft> {
 
 export function useEditedCommentIds(): ReadonlySet<number> {
   return useSyncExternalStore(subscribe, getEditedCommentIds);
+}
+
+export function useLeaveWarning(): void {
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (drafts.size === 0) return;
+      e.preventDefault();
+      // Older browsers ignore preventDefault and prompt only for a non-empty returnValue.
+      e.returnValue = "unposted";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
 }

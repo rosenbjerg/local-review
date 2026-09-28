@@ -300,7 +300,8 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   entry exists only while the text is worth keeping: non-blank for a new comment or reply, differing
   from the saved text for an edit. Cancel, Discard, an edit's `close` and a save that lands drop it;
   `onSubmit` resolving to `false` keeps it. Nothing is persisted, not even to localStorage: a reload
-  or another review (`App` clears on `review.id`) ends every draft. Only the composer writes the store,
+  or another review (`App` clears on `review.id`) ends every draft, which is why `useLeaveWarning`
+  has the browser ask before a reload or close while any exists. Only the composer writes the store,
   so no `DiffView` prop changes on a keystroke. `drafts.test.tsx`.
 - **Drafts head the comments pane** (`DraftList`): line, file and reply drafts, above the header,
   outside every filter and count and out of `n`/`p` — nothing about them is posted yet. They group
