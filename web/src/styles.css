@@ -2382,7 +2382,12 @@ textarea:focus-visible {
   font-size: var(--text-sm);
   color: var(--muted);
   margin-bottom: 6px;
-  overflow-wrap: anywhere;
+  /* Cut at the start, where a long path is least telling; the inner [dir="ltr"] keeps its order. */
+  direction: rtl;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .comment-meta {
   display: flex;
