@@ -555,7 +555,11 @@ export default function App() {
             )}
             {rightOpen && (
               <>
-                <ReviewSummary summary={review.summary} onSave={setSummary} />
+                <ReviewSummary
+                  summary={review.summary}
+                  onSave={setSummary}
+                  onCollapse={toggleRight}
+                />
                 <CommentsPanel
                   comments={sortedComments}
                   total={comments.length}
@@ -572,7 +576,6 @@ export default function App() {
                   onJumpToDraft={jumpToDraft}
                   fileOrder={orderedFilePaths}
                   onDelete={commentActions.onDelete}
-                  onCollapse={toggleRight}
                 />
               </>
             )}

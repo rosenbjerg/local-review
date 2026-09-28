@@ -1,19 +1,29 @@
 import { useState } from "react";
 import { CommentComposer } from "./CommentComposer";
+import { IconChevronRight } from "./icons";
 import { Markdown } from "./Markdown";
 
 interface Props {
   summary: string;
   onSave: (summary: string) => void;
+  onCollapse: () => void;
 }
 
 // The review's overall note: what the export leads with.
-export function ReviewSummary({ summary, onSave }: Props) {
+export function ReviewSummary({ summary, onSave, onCollapse }: Props) {
   const [editing, setEditing] = useState(false);
 
-  function open() {
-    setEditing(true);
-  }
+  const collapse = (
+    <button
+      className="btn btn-icon pane-collapse"
+      onClick={onCollapse}
+      title="Hide the comments panel ( ] )"
+      aria-label="Hide the comments panel"
+      aria-expanded
+    >
+      <IconChevronRight />
+    </button>
+  );
 
   // The composer's `.composer` root is what the global shortcuts stand down for; it only
   // mounts while editing, so reopening always starts from the saved summary.
@@ -21,6 +31,7 @@ export function ReviewSummary({ summary, onSave }: Props) {
     return (
       <div className="review-summary">
         <div className="review-summary-head">
+          {collapse}
           <h2>Summary</h2>
         </div>
         <CommentComposer
@@ -43,9 +54,12 @@ export function ReviewSummary({ summary, onSave }: Props) {
   if (!summary) {
     return (
       <div className="review-summary">
-        <button className="link review-summary-add" onClick={open}>
-          + Add a review summary
-        </button>
+        <div className="review-summary-head">
+          {collapse}
+          <button className="link review-summary-add" onClick={() => setEditing(true)}>
+            + Add a review summary
+          </button>
+        </div>
       </div>
     );
   }
@@ -53,9 +67,10 @@ export function ReviewSummary({ summary, onSave }: Props) {
   return (
     <div className="review-summary">
       <div className="review-summary-head">
+        {collapse}
         <h2>Summary</h2>
         <span className="spacer" />
-        <button className="link" onClick={open}>
+        <button className="link" onClick={() => setEditing(true)}>
           edit
         </button>
       </div>

@@ -338,7 +338,10 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   modal is open (`modalOpen`).
 - Either side pane collapses to a 28px `PaneRail`, never to zero. `usePanelResize` owns the open
   flags with the widths; a collapsed pane keeps its stored width and its resizer goes inert
-  (`resizer-inert`, `tabIndex -1`). Both persist (`lr.leftOpen`/`lr.rightOpen`).
+  (`resizer-inert`, `tabIndex -1`). Both persist (`lr.leftOpen`/`lr.rightOpen`). Each pane's
+  collapse button sits in its top row at the edge facing the diff: the explorer header's end, and
+  the start of `ReviewSummary`'s head row (beside the add link or the Summary heading), not in
+  `CommentsPanel`, which the Drafts section no longer heads.
 - `Combobox` is a searchable select, and the app's only dropdown: a native `<select>` opens a
   platform menu that ignores the theme, which is why the comments pane's sort and filters use it too
   (`floating`, since the pane scrolls). Its value is always one of its options; `rangePreview` draws
