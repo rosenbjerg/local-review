@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { type DraftRef, dropDraft, getDraft, putDraft } from "../drafts";
 import { COMMENT_TYPES, type CommentType } from "../types";
 import { MOD_KEY } from "../util";
 
@@ -66,8 +67,10 @@ function TypePills({
 interface Props {
   initialBody?: string;
   initialType?: CommentType;
-  onSubmit: (body: string, type: CommentType) => void | Promise<unknown>;
+  // Resolving to false means the save failed: the composer stays open and the draft is kept.
+  onSubmit: (body: string, type: CommentType) => boolean | void | Promise<boolean | void>;
   onCancel: () => void;
+  draft?: DraftRef;
   submitLabel?: string;
   hideType?: boolean;
   placeholder?: string;
@@ -84,19 +87,42 @@ export function CommentComposer({
   hideType = false,
   placeholder = "Leave a comment for the agent…",
   allowEmpty = false,
+  draft,
 }: Props) {
-  const [body, setBody] = useState(initialBody);
-  const [type, setType] = useState<CommentType>(initialType);
+  const [body, setBody] = useState(() => (draft && getDraft(draft.key)?.body) ?? initialBody);
+  const [type, setType] = useState<CommentType>(
+    () => (draft && getDraft(draft.key)?.type) ?? initialType
+  );
   const [submitting, setSubmitting] = useState(false);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const ended = useRef(false);
 
   const submittable = allowEmpty || body.trim() !== "";
   const dirty = body.trim() !== initialBody.trim() || (!hideType && type !== initialType);
+  const unposted = dirty && (body.trim() !== "" || initialBody.trim() !== "");
+
+  // Don't drop the `ended` check: the host closes this with a normal update while dropDraft
+  // re-renders it at sync priority first, and that render would put the posted draft back.
+  useEffect(() => {
+    if (!draft || ended.current) return;
+    if (unposted) putDraft({ ...draft, body, type });
+    else dropDraft(draft.key);
+  }, [draft, unposted, body, type]);
+
+  function endDraft() {
+    ended.current = true;
+    if (draft) dropDraft(draft.key);
+  }
+
+  function cancel() {
+    endDraft();
+    onCancel();
+  }
 
   function escape() {
     if (dirty && !confirmingDiscard) setConfirmingDiscard(true);
-    else onCancel();
+    else cancel();
   }
 
   function keepEditing() {
@@ -112,11 +138,13 @@ export function CommentComposer({
     // Was a try/finally, which the compiler can't lower. onSubmit reports failure by
     // returning false rather than throwing, so the catch is belt-and-braces — but either
     // way the composer has to stop blocking re-entry, so the reset sits after both.
+    let saved = false;
     try {
-      await onSubmit(trimmed, type);
+      saved = (await onSubmit(trimmed, type)) !== false;
     } catch {
       // fall through — the caller surfaces the error
     }
+    if (saved) endDraft();
     setSubmitting(false);
   }
 
@@ -136,7 +164,10 @@ export function CommentComposer({
         <div className="composer-row">
           <TypePills
             value={type}
-            onChange={setType}
+            onChange={(t) => {
+              ended.current = false;
+              setType(t);
+            }}
             onPick={() => bodyRef.current?.focus()}
           />
         </div>
@@ -147,6 +178,7 @@ export function CommentComposer({
         value={body}
         placeholder={placeholder}
         onChange={(e) => {
+          ended.current = false;
           setBody(e.target.value);
           setConfirmingDiscard(false);
         }}
@@ -157,14 +189,14 @@ export function CommentComposer({
           <button className="btn" onClick={keepEditing}>
             Keep editing
           </button>
-          <button className="btn danger" onClick={onCancel}>
+          <button className="btn danger" onClick={cancel}>
             Discard
           </button>
         </div>
       ) : (
         <div className="composer-actions">
           <span className="composer-hint">{MOD_KEY}+Enter to submit · Esc to cancel</span>
-          <button className="btn" onClick={onCancel}>
+          <button className="btn" onClick={cancel}>
             Cancel
           </button>
           <button

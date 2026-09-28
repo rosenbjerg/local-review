@@ -1,8 +1,10 @@
 import { useState, type ReactNode } from "react";
+import { draftKey, getDraft } from "../drafts";
 import type { Comment, CommentType } from "../types";
 import { CommentComposer } from "./CommentComposer";
 
 interface Props {
+  path: string;
   // Line-0 comments under a diff table; every comment on the file in the media and markdown views.
   comments: Comment[];
   renderThread: (c: Comment) => ReactNode;
@@ -11,11 +13,14 @@ interface Props {
 }
 
 // A file's own comments plus the control to add one; owns the composer's open state so no view has to.
-export function FileComments({ comments, renderThread, onSubmit }: Props) {
-  const [composing, setComposing] = useState(false);
+export function FileComments({ path, comments, renderThread, onSubmit }: Props) {
+  const key = draftKey.file(path);
+  const [composing, setComposing] = useState(() => !!getDraft(key));
 
   async function submit(body: string, type: CommentType) {
-    if (await onSubmit(body, type)) setComposing(false);
+    const ok = await onSubmit(body, type);
+    if (ok) setComposing(false);
+    return ok;
   }
 
   return (
@@ -23,6 +28,7 @@ export function FileComments({ comments, renderThread, onSubmit }: Props) {
       {comments.map(renderThread)}
       {composing ? (
         <CommentComposer
+          draft={{ key, target: { kind: "file", path } }}
           submitLabel="Add comment"
           onSubmit={submit}
           onCancel={() => setComposing(false)}

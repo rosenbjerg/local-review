@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { draftKey, dropDraft, getDraft } from "../drafts";
 import type { Comment, CommentType, Reply } from "../types";
-import { commentRef, lineLabel } from "../types";
+import { commentRef, effectivePath, lineLabel } from "../types";
 import { langForPath } from "../highlight";
 import { Chevron } from "./Chevron";
 import { CommentComposer } from "./CommentComposer";
@@ -54,16 +55,26 @@ interface Props {
 
 function ReplyItem({
   reply,
+  path,
+  commentId,
   onUpdate,
   onDelete,
   commentIds,
 }: {
   reply: Reply;
+  path: string;
+  commentId: number;
   onUpdate: (body: string) => Promise<boolean>;
   onDelete: () => void;
   commentIds: Set<number>;
 }) {
-  const [editing, setEditing] = useState(false);
+  const editKey = draftKey.editReply(reply.id);
+  const [editing, setEditing] = useState(() => !!getDraft(editKey));
+
+  function toggleEditing() {
+    if (editing) dropDraft(editKey);
+    setEditing(!editing);
+  }
 
   return (
     <div className="reply" id={`reply-${reply.id}`}>
@@ -77,7 +88,7 @@ function ReplyItem({
           updatedAt={reply.updatedAt}
         />
         <span className="spacer" />
-        <button className="link" onClick={() => setEditing((e) => !e)}>
+        <button className="link" onClick={toggleEditing}>
           <SwapLabel shown={editing ? "close" : "edit"} other={editing ? "edit" : "close"} />
         </button>
         <button className="link danger" onClick={onDelete}>
@@ -87,12 +98,15 @@ function ReplyItem({
       {editing ? (
         <CommentComposer
           hideType
+          draft={{ key: editKey, target: { kind: "edit", path, commentId } }}
           initialBody={reply.body}
           submitLabel="Save"
           placeholder="Reply…"
           onCancel={() => setEditing(false)}
           onSubmit={async (body) => {
-            if (await onUpdate(body)) setEditing(false);
+            const ok = await onUpdate(body);
+            if (ok) setEditing(false);
+            return ok;
           }}
         />
       ) : (
@@ -104,8 +118,11 @@ function ReplyItem({
 
 export function CommentThread({ comment, actions, expandSignal, commentIds }: Props) {
   const { onUpdate, onDelete, onAddReply, onUpdateReply, onDeleteReply, onResolve } = actions;
-  const [editing, setEditing] = useState(false);
-  const [replying, setReplying] = useState(false);
+  const path = effectivePath(comment);
+  const editKey = draftKey.editComment(comment.id);
+  const replyKey = draftKey.reply(comment.id);
+  const [editing, setEditing] = useState(() => !!getDraft(editKey));
+  const [replying, setReplying] = useState(() => !!getDraft(replyKey));
   const [collapsed, setCollapsed] = useState(comment.resolved);
   const replies = comment.replies ?? [];
 
@@ -113,6 +130,16 @@ export function CommentThread({ comment, actions, expandSignal, commentIds }: Pr
   useEffect(() => {
     if (expandSignal && expandSignal.id === comment.id) setCollapsed(false);
   }, [expandSignal, comment.id]);
+
+  function closeComposersWithoutDrafts() {
+    setEditing(!!getDraft(editKey));
+    setReplying(!!getDraft(replyKey));
+  }
+
+  function toggleEditing() {
+    if (editing) dropDraft(editKey);
+    setEditing(!editing);
+  }
 
   const outdated = comment.anchorStatus === "outdated";
   // The outdated badge toggles the captured snippet, hidden by default.
@@ -125,11 +152,7 @@ export function CommentThread({ comment, actions, expandSignal, commentIds }: Pr
 
   function toggle() {
     setCollapsed((c) => {
-      if (!c) {
-        // Collapsing: drop any open composer so it can't linger hidden.
-        setEditing(false);
-        setReplying(false);
-      }
+      if (!c) closeComposersWithoutDrafts();
       return !c;
     });
   }
@@ -138,10 +161,7 @@ export function CommentThread({ comment, actions, expandSignal, commentIds }: Pr
     const next = !comment.resolved;
     onResolve(comment.id, next);
     setCollapsed(next);
-    if (next) {
-      setEditing(false);
-      setReplying(false);
-    }
+    if (next) closeComposersWithoutDrafts();
   }
 
   const preview = comment.body.replace(/\s+/g, " ").trim();
@@ -200,7 +220,7 @@ export function CommentThread({ comment, actions, expandSignal, commentIds }: Pr
           />
         </button>
         {!collapsed && (
-          <button className="link" onClick={() => setEditing((e) => !e)}>
+          <button className="link" onClick={toggleEditing}>
             <SwapLabel shown={editing ? "close" : "edit"} other={editing ? "edit" : "close"} />
           </button>
         )}
@@ -224,12 +244,15 @@ export function CommentThread({ comment, actions, expandSignal, commentIds }: Pr
         <>
           {editing ? (
             <CommentComposer
+              draft={{ key: editKey, target: { kind: "edit", path, commentId: comment.id } }}
               initialBody={comment.body}
               initialType={comment.type}
               submitLabel="Save"
               onCancel={() => setEditing(false)}
               onSubmit={async (body, type) => {
-                if (await onUpdate(comment.id, body, type)) setEditing(false);
+                const ok = await onUpdate(comment.id, body, type);
+                if (ok) setEditing(false);
+                return ok;
               }}
             />
           ) : (
@@ -242,6 +265,8 @@ export function CommentThread({ comment, actions, expandSignal, commentIds }: Pr
                 <ReplyItem
                   key={r.id}
                   reply={r}
+                  path={path}
+                  commentId={comment.id}
                   onUpdate={(body) => onUpdateReply(comment.id, r.id, body)}
                   onDelete={() => onDeleteReply(comment.id, r.id)}
                   commentIds={commentIds}
@@ -254,11 +279,14 @@ export function CommentThread({ comment, actions, expandSignal, commentIds }: Pr
             <div className="thread-reply-composer">
               <CommentComposer
                 hideType
+                draft={{ key: replyKey, target: { kind: "reply", path, commentId: comment.id } }}
                 submitLabel="Reply"
                 placeholder="Reply…"
                 onCancel={() => setReplying(false)}
                 onSubmit={async (body) => {
-                  if (await onAddReply(comment.id, body)) setReplying(false);
+                  const ok = await onAddReply(comment.id, body);
+                  if (ok) setReplying(false);
+                  return ok;
                 }}
               />
             </div>

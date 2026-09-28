@@ -2,8 +2,18 @@ import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMou
 import { ApiError, api } from "../api";
 import { sameComments } from "../commentsByPath";
 import { fileStat } from "../diffStats";
-import { buildRows, hasTwoSides, pairRows, planRows, type Layout, type PlannedRow, type Row } from "../diffRows";
+import {
+  buildRows,
+  hasTwoSides,
+  pairRows,
+  planRows,
+  type Layout,
+  type LineRange,
+  type PlannedRow,
+  type Row,
+} from "../diffRows";
 import { useDefaultLayout } from "../diffLayout";
+import { type DraftRef, draftKey, useLineDraftRanges } from "../drafts";
 import { EXPAND_STEP, type Gap, type Reveal } from "../hunkGaps";
 import { hunkWordRanges, splitPieces, type Segment } from "../wordDiff";
 import { langForPath, tokenize, type Token } from "../highlight";
@@ -109,7 +119,7 @@ export const DiffView = memo(function DiffView({
   const [layoutPick, setLayoutPick] = useState<Layout | null>(null);
   const [source, setSource] = useState<string[] | null>(null);
   const [collapsed, setCollapsed] = useState(reviewed || isLarge || generated);
-  const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
+  const [selection, setSelection] = useState<LineRange | null>(null);
   const [dragAnchor, setDragAnchor] = useState<number | null>(null);
   const [newTokens, setNewTokens] = useState<Map<number, Token[]> | null>(null);
   const [delTokens, setDelTokens] = useState<Map<string, Token[]> | null>(null);
@@ -122,6 +132,7 @@ export const DiffView = memo(function DiffView({
   const [substituted, setSubstituted] = useState(false);
 
   const path = file.newPath || file.oldPath;
+  const draftRanges = useLineDraftRanges(path);
   const lang = langForPath(path);
   // Tokens carry resolved colors, so both tokenize effects re-run on a theme switch.
   const theme = useTheme();
@@ -250,8 +261,16 @@ export const DiffView = memo(function DiffView({
 
   // Every non-rendering decision lives in diffRows.ts, so the rules are testable.
   const plan = useMemo(
-    () => planRows({ rows, comments, selection, dragging: dragAnchor !== null, activeComment }),
-    [rows, comments, selection, dragAnchor, activeComment]
+    () =>
+      planRows({
+        rows,
+        comments,
+        selection,
+        dragging: dragAnchor !== null,
+        activeComment,
+        drafts: draftRanges,
+      }),
+    [rows, comments, selection, dragAnchor, activeComment, draftRanges]
   );
 
   function expand(gap: Gap, side: "head" | "tail", amount: number) {
@@ -294,7 +313,11 @@ export const DiffView = memo(function DiffView({
 
   function onGutterMouseDown(newLine: number, shift: boolean, e: ReactMouseEvent) {
     e.preventDefault(); // avoid starting a native text selection while dragging
-    if (shift && selection) {
+    // A drafted range is anchored; shift-click starts a new selection rather than moving it.
+    const extendable =
+      selection !== null &&
+      !draftRanges.some((d) => d.start === selection.start && d.end === selection.end);
+    if (shift && selection && extendable) {
       setDragAnchor(selection.start);
       setSelection({
         start: Math.min(selection.start, newLine),
@@ -314,16 +337,24 @@ export const DiffView = memo(function DiffView({
     });
   }
 
-  async function submit(body: string, type: CommentType) {
-    if (!selection) return;
+  function openSelection(range: LineRange) {
+    setSelection((s) => (s && s.start === range.start && s.end === range.end ? s : range));
+  }
+
+  function closeSelection(range: LineRange) {
+    setSelection((s) => (s && s.start === range.start && s.end === range.end ? null : s));
+  }
+
+  async function submit(range: LineRange, body: string, type: CommentType) {
     const ok = await onAddComment({
       filePath: file.newPath,
-      startLine: selection.start,
-      endLine: selection.end,
+      startLine: range.start,
+      endLine: range.end,
       body,
       type,
     });
-    if (ok) setSelection(null); // keep the composer open (with the text) on failure
+    if (ok) closeSelection(range); // keep the composer open (with the text) on failure
+    return ok;
   }
 
   // FileComments closes its own composer on success, so this only has to report it.
@@ -514,7 +545,7 @@ export const DiffView = memo(function DiffView({
     if (p.threads.length > 0) {
       body.push(threadRow(`t${p.row.newLine}`, p.threads.map(renderThread)));
     }
-    if (p.composer) body.push(threadRow("composer", renderComposer()));
+    for (const range of p.composers) body.push(composerRow(range));
   };
   let maxLine = 0;
   if (split) {
@@ -547,9 +578,7 @@ export const DiffView = memo(function DiffView({
   if (plan.leftover.length > 0) {
     body.push(threadRow("leftover", plan.leftover.map(renderThread)));
   }
-  if (plan.trailingComposer) {
-    body.push(threadRow("composer", renderComposer()));
-  }
+  for (const range of plan.trailingComposers) body.push(composerRow(range));
   const gutterWidth = `max(42px, calc(${String(maxLine).length}ch + 24px))`;
 
   function pinSelectionHalf(e: ReactMouseEvent<HTMLTableElement>) {
@@ -559,19 +588,27 @@ export const DiffView = memo(function DiffView({
     else delete e.currentTarget.dataset.selectHalf;
   }
 
-  function renderComposer() {
-    if (!selection) return null;
-    return (
-      <div className="thread">
+  // Keyed by range, so the selection's composer survives becoming a draft without a remount.
+  function composerRow(range: LineRange) {
+    const draft: DraftRef = {
+      key: draftKey.line(path, range.start, range.end),
+      target: { kind: "line", path, startLine: range.start, endLine: range.end },
+    };
+    return threadRow(
+      `composer-${range.start}-${range.end}`,
+      // The box being typed in is the selection, so clearing its text doesn't take the box away.
+      <div className="thread" onFocus={() => openSelection(range)}>
         <div className="thread-meta">
           <span className="muted">
             New comment ·{" "}
-            {selection.start === selection.end
-              ? `L${selection.start}`
-              : `L${selection.start}–${selection.end}`}
+            {range.start === range.end ? `L${range.start}` : `L${range.start}–${range.end}`}
           </span>
         </div>
-        <CommentComposer onSubmit={submit} onCancel={() => setSelection(null)} />
+        <CommentComposer
+          draft={draft}
+          onSubmit={(body, type) => submit(range, body, type)}
+          onCancel={() => closeSelection(range)}
+        />
       </div>
     );
   }
@@ -639,6 +676,7 @@ export const DiffView = memo(function DiffView({
           ) : docView ? (
             source ? (
               <MarkdownView
+                path={path}
                 source={source.join("\n")}
                 comments={comments}
                 renderThread={renderThread}
@@ -665,6 +703,7 @@ export const DiffView = memo(function DiffView({
               </table>
               {/* File-level comments: a deleted file has no new-side line to click. */}
               <FileComments
+                path={path}
                 comments={plan.fileComments}
                 renderThread={renderThread}
                 onSubmit={submitFileComment}

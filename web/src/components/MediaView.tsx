@@ -84,7 +84,12 @@ export function MediaView({
       ) : (
         <div className="binary-note">Binary file — no preview</div>
       )}
-      <FileComments comments={comments} renderThread={renderThread} onSubmit={onSubmitFileComment} />
+      <FileComments
+        path={file.newPath || file.oldPath}
+        comments={comments}
+        renderThread={renderThread}
+        onSubmit={onSubmitFileComment}
+      />
     </div>
   );
 }
