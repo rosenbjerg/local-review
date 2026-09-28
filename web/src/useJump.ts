@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { commentAim, fileAim, scrollToAim, MAX_WAIT, SCROLL_MS } from "./scrollTo";
+import { type Draft, draftDomId } from "./drafts";
+import { commentAim, draftAim, fileAim, scrollToAim, MAX_WAIT, SCROLL_MS } from "./scrollTo";
 import { type Comment, effectivePath } from "./types";
 
 interface Params {
@@ -80,6 +81,40 @@ export function useJump({ comments, setSelectedFile, rootRef, onProgrammaticScro
     cancelScroll.current = scrollToAim(rootRef.current, () => fileAim(path));
   }
 
+  function jumpToDraft(draft: Draft) {
+    stopAll(cancelScroll, flashPoll);
+    onProgrammaticScroll?.(SCROLL_MS);
+    const { path } = draft.target;
+    const commentId = "commentId" in draft.target ? draft.target.commentId : null;
+    setExpandTarget({ path, n: ++expandN.current });
+    if (commentId !== null) setExpandComment({ id: commentId, n: ++expandCommentN.current });
+    setSelectedFile(path);
+    cancelScroll.current = scrollToAim(
+      rootRef.current,
+      () =>
+        draftAim(draft.key) ??
+        (commentId !== null ? commentAim(commentId) : null) ??
+        fileAim(path, true),
+      { onTarget: (ms) => onProgrammaticScroll?.(ms) }
+    );
+    const focus = () => {
+      const box = document.getElementById(draftDomId(draft.key))?.querySelector("textarea");
+      if (!box) return false;
+      // preventScroll: a focus scroll would fight the aim, which is still gliding.
+      box.focus({ preventScroll: true });
+      return true;
+    };
+    const until = performance.now() + MAX_WAIT;
+    const poll = () => {
+      if (focus() || performance.now() > until) {
+        flashPoll.current = null;
+        return;
+      }
+      flashPoll.current = setTimeout(poll, 100);
+    };
+    poll();
+  }
+
   function resetJump() {
     stopAll(cancelScroll, flashPoll);
     setActiveComment(null);
@@ -87,7 +122,7 @@ export function useJump({ comments, setSelectedFile, rootRef, onProgrammaticScro
     setExpandComment(null);
   }
 
-  return { activeComment, expandTarget, expandComment, jumpTo, jumpToFile, resetJump };
+  return { activeComment, expandTarget, expandComment, jumpTo, jumpToFile, jumpToDraft, resetJump };
 }
 
 function stopAll(

@@ -10,10 +10,12 @@ import {
 import type { CommentSort } from "../commentSort";
 import { COMMENT_SORTS, sortTimestamp } from "../commentSort";
 import { turnOf } from "../commentTurn";
+import { type Draft, useEditedCommentIds } from "../drafts";
 import type { Comment } from "../types";
 import { effectivePath } from "../types";
 import { Combobox } from "./Combobox";
 import { CommentPreview } from "./CommentPreview";
+import { DraftList } from "./DraftList";
 import { HighlightMatch } from "./HighlightMatch";
 import { IconChevronRight, IconX } from "./icons";
 import { SearchInput } from "./SearchInput";
@@ -30,6 +32,9 @@ interface Props {
   onFilterChange: (filter: CommentFilter) => void;
   authors: string[];
   onJump: (id: number) => void;
+  onJumpToDraft: (draft: Draft) => void;
+  // The file list's order, which the drafts follow; the comments come already sorted.
+  fileOrder: string[];
   onDelete: (id: number) => void;
   onCollapse: () => void;
 }
@@ -56,9 +61,12 @@ export function CommentsPanel({
   onFilterChange,
   authors,
   onJump,
+  onJumpToDraft,
+  fileOrder,
   onDelete,
   onCollapse,
 }: Props) {
+  const edited = useEditedCommentIds();
   const narrowed = isFiltered(filter);
   const needle = queryNeedle(filter.query);
   // A filtered-on author whose last thread went away keeps its option, or the picker sits blank while hiding everything.
@@ -67,6 +75,7 @@ export function CommentsPanel({
   const awaitingFilter = filter.status === "awaiting-you";
   return (
     <div className="comments-panel">
+      <DraftList fileOrder={fileOrder} onJump={onJumpToDraft} />
       <div className="comments-panel-header">
         <div className="comments-title">
           <button
@@ -166,10 +175,17 @@ export function CommentsPanel({
               <button
                 className={`comment-nav${c.resolved ? " comment-nav-resolved" : ""}${
                   c.anchorStatus === "outdated" ? " comment-nav-outdated" : ""
-                }${turnOf(c) === "you" ? " comment-nav-awaiting" : ""}`}
+                }${turnOf(c) === "you" ? " comment-nav-awaiting" : ""}${
+                  edited.has(c.id) ? " comment-nav-editing" : ""
+                }`}
                 onClick={() => onJump(c.id)}
               >
-                <CommentPreview comment={c} inline stamp={sortTimestamp(c, sort)} />
+                <CommentPreview
+                  comment={c}
+                  inline
+                  stamp={sortTimestamp(c, sort)}
+                  editing={edited.has(c.id)}
+                />
               </button>
               <button
                 className="comment-nav-delete"

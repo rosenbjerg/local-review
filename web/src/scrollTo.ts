@@ -1,3 +1,5 @@
+import { draftDomId } from "./drafts";
+
 // Scrolling the diff column means aiming at a moving target. Cards mount lazily as they near the
 // viewport and each one grows again once its source arrives and the gap rows appear, so the offset
 // `scrollIntoView` computes is already stale before its own animation ends — and the further the
@@ -165,5 +167,11 @@ export function fileAim(path: string, provisional = false): Aim | null {
 // The thread for a comment, which only exists once its card has mounted and expanded.
 export function commentAim(id: number): Aim | null {
   const el = document.getElementById(`comment-${id}`);
+  return el ? { el, block: "center" } : null;
+}
+
+// An unposted comment's composer, which only exists while its card and thread are expanded.
+export function draftAim(key: string): Aim | null {
+  const el = document.getElementById(draftDomId(key));
   return el ? { el, block: "center" } : null;
 }

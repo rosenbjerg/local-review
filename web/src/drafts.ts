@@ -87,6 +87,22 @@ export function clearDrafts(): void {
   if (drafts.size > 0) commit(new Map());
 }
 
+export function draftDomId(key: string): string {
+  return `draft-${key}`;
+}
+
+let edited: { key: string; ids: ReadonlySet<number> } = { key: "", ids: new Set() };
+
+// Must return the same Set while the ids hold, or useSyncExternalStore re-renders forever.
+function getEditedCommentIds(): ReadonlySet<number> {
+  const ids = [...drafts.values()]
+    .flatMap((d) => (d.target.kind === "edit" ? [d.target.commentId] : []))
+    .sort((a, b) => a - b);
+  const key = [...new Set(ids)].join(",");
+  if (key !== edited.key) edited = { key, ids: new Set(ids) };
+  return edited.ids;
+}
+
 function subscribe(l: () => void): () => void {
   listeners.add(l);
   return () => listeners.delete(l);
@@ -94,4 +110,8 @@ function subscribe(l: () => void): () => void {
 
 export function useDrafts(): ReadonlyMap<string, Draft> {
   return useSyncExternalStore(subscribe, getDrafts);
+}
+
+export function useEditedCommentIds(): ReadonlySet<number> {
+  return useSyncExternalStore(subscribe, getEditedCommentIds);
 }

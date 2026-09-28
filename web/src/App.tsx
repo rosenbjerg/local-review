@@ -132,7 +132,15 @@ export default function App() {
   } = usePanelResize();
   const fonts = useFonts();
   const { suppress: suppressActiveFile } = useActiveFile(diffColRef, setSelectedFile, review?.id);
-  const { activeComment, expandTarget, expandComment, jumpTo, jumpToFile, resetJump } = useJump({
+  const {
+    activeComment,
+    expandTarget,
+    expandComment,
+    jumpTo,
+    jumpToFile,
+    jumpToDraft,
+    resetJump,
+  } = useJump({
     comments,
     setSelectedFile,
     rootRef: diffColRef,
@@ -560,6 +568,8 @@ export default function App() {
                   onFilterChange={setCommentFilter}
                   authors={commentAuthors}
                   onJump={jumpTo}
+                  onJumpToDraft={jumpToDraft}
+                  fileOrder={orderedFilePaths}
                   onDelete={commentActions.onDelete}
                   onCollapse={toggleRight}
                 />

@@ -60,7 +60,7 @@ src/
     FileExplorer         file tree, collapse, reviewed toggles, +/- counts, progress bar
     DiffView             per-file diff: fetches source, tokenizes, owns view/selection/reveal state, draws planRows
     FileHeader  MediaView  MarkdownView  LazyFile  FindBar
-    CommentThread  CommentsPanel  CommentPreview  CommentRefPopover  ReviewSummary  CommentComposer  FileComments
+    CommentThread  CommentsPanel  CommentPreview  CommentRefPopover  ReviewSummary  CommentComposer  FileComments  DraftList
     Modal + ExportModal  AgentPromptsModal  AddFileModal  SettingsModal  ResetConfirmModal
     UndoToast  SearchInput  Combobox  PaneRail  ViewToggle  CopyButton  ThemePicker  FontPicker  FontCombobox
     ErrorBoundary  EmptyState  icons
@@ -302,6 +302,15 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   `onSubmit` resolving to `false` keeps it. Nothing is persisted, not even to localStorage: a reload
   or another review (`App` clears on `review.id`) ends every draft. Only the composer writes the store,
   so no `DiffView` prop changes on a keystroke. `drafts.test.tsx`.
+- **Drafts head the comments pane** (`DraftList`): line, file and reply drafts, above the header,
+  outside every filter and count and out of `n`/`p` — nothing about them is posted yet. They group
+  like the comments, a path heading per file outside the items, files in the explorer's order
+  (`fileOrder`) and each file's drafts top to bottom (file comment, lines, replies). An edit is
+  not listed; its comment's row is marked `editing` instead (`useEditedCommentIds`, whose snapshot
+  keeps one `Set` per id list, so typing doesn't re-render the list). A click is `useJump`'s
+  `jumpToDraft`: expand the card (and, for a reply, the thread, whose composer reopens from the
+  store), aim at `#draft-<key>` with the card standing in, then focus the box with `preventScroll`.
+  `commentsPanel.test.tsx`, `useJump.test.ts`.
 - `useUnseenActivity`: non-reviewer comments/replies arriving while hidden count into the tab title.
   Whatever is on the review at the first read is history; `seen` re-primes on `review.id`.
 

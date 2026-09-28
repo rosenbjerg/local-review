@@ -12,11 +12,13 @@ export function CommentPreview({
   comment,
   inline = false,
   stamp,
+  editing = false,
 }: {
   comment: Comment;
   inline?: boolean;
   // The timestamp the pane is sorted on, so the order explains itself; empty under the file sort.
   stamp?: string;
+  editing?: boolean;
 }) {
   return (
     <>
@@ -29,6 +31,11 @@ export function CommentPreview({
             <IconCheck />
           </span>}
         {(comment.replies?.length ?? 0) > 0 && <CommentCount n={comment.replies.length} label="reply" />}
+        {editing && (
+          <span className="comment-editing" title="An edit to this thread hasn't been saved">
+            editing
+          </span>
+        )}
         {stamp && (
           <span className="muted comment-nav-time" title={absoluteTime(stamp)}>
             {relativeTime(stamp)}
