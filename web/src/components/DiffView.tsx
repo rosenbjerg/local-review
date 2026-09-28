@@ -13,7 +13,7 @@ import {
   type Row,
 } from "../diffRows";
 import { useDefaultLayout } from "../diffLayout";
-import { type DraftRef, draftKey, useLineDraftRanges } from "../drafts";
+import { type DraftRef, draftKey, onDraftDiscarded, useLineDraftRanges } from "../drafts";
 import { EXPAND_STEP, type Gap, type Reveal } from "../hunkGaps";
 import { hunkWordRanges, splitPieces, type Segment } from "../wordDiff";
 import { langForPath, tokenize, type Token } from "../highlight";
@@ -133,6 +133,15 @@ export const DiffView = memo(function DiffView({
 
   const path = file.newPath || file.oldPath;
   const draftRanges = useLineDraftRanges(path);
+
+  useEffect(
+    () =>
+      onDraftDiscarded(({ target: t }) => {
+        if (t.kind !== "line" || t.path !== path) return;
+        setSelection((s) => (s && s.start === t.startLine && s.end === t.endLine ? null : s));
+      }),
+    [path]
+  );
   const lang = langForPath(path);
   // Tokens carry resolved colors, so both tokenize effects re-run on a theme switch.
   const theme = useTheme();

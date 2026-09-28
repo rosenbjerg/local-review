@@ -2194,9 +2194,6 @@ textarea:focus-visible {
 .draft-list h2 {
   margin-bottom: 8px;
 }
-.draft-nav {
-  padding-right: 10px;
-}
 .draft-preview {
   white-space: nowrap;
 }
