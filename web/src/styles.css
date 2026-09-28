@@ -1853,24 +1853,6 @@ textarea:focus-visible {
   -webkit-user-select: none;
   user-select: none;
 }
-.gap-gutter {
-  text-align: center;
-  padding: 0 2px;
-}
-.gap-btn {
-  background: none;
-  border: none;
-  color: var(--muted);
-  font: inherit;
-  line-height: 1;
-  padding: 2px 5px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-.gap-btn:hover {
-  background: var(--accent);
-  color: var(--on-accent);
-}
 .gap-all {
   background: none;
   border: none;
@@ -1878,6 +1860,10 @@ textarea:focus-visible {
   font: inherit;
   color: var(--accent);
   cursor: pointer;
+  white-space: nowrap;
+}
+.gap-all + .gap-all {
+  margin-left: 12px;
 }
 .gap-all:hover {
   text-decoration: underline;
