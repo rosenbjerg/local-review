@@ -4,6 +4,8 @@ import type { Hunk } from "./types";
 
 export const EXPAND_STEP = 20;
 
+export const offersStep = (hidden: number) => hidden > 2 * EXPAND_STEP;
+
 // `@@ -oldStart,oldCount +newStart,newCount @@ …`; a count of 1 is written as a bare start.
 const HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 

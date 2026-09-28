@@ -14,7 +14,7 @@ import {
 } from "../diffRows";
 import { useDefaultLayout } from "../diffLayout";
 import { type DraftRef, draftKey, onDraftDiscarded, useLineDraftRanges } from "../drafts";
-import { EXPAND_STEP, type Gap, type Reveal } from "../hunkGaps";
+import { EXPAND_STEP, offersStep, type Gap, type Reveal } from "../hunkGaps";
 import { hunkWordRanges, splitPieces, type Segment } from "../wordDiff";
 import { langForPath, tokenize, type Token } from "../highlight";
 import { LARGE_FILE_LINES, changedLineCount } from "../fileHeight";
@@ -405,39 +405,35 @@ export const DiffView = memo(function DiffView({
   function gapRow(r: Row) {
     const gap = r.gap!;
     const hidden = r.hidden ?? 0;
-    const step = Math.min(EXPAND_STEP, hidden);
     // At the file's own ends only the hunk-adjacent direction is offered; the other would strand lines.
-    const stepped = hidden > EXPAND_STEP;
-    const showUp = stepped && gap.hunkIndex > 0;
-    const showDown = stepped && gap.hunkIndex < file.hunks.length;
+    const stepped = offersStep(hidden);
+    const showDown = stepped && gap.hunkIndex > 0;
+    const showUp = stepped && gap.hunkIndex < file.hunks.length;
     return (
       <tr key={r.key} className="row-hunk row-gap">
-        <td className="gutter gap-gutter" colSpan={split ? 1 : 2}>
-          {showUp && (
-            <button
-              className="gap-btn"
-              title={`Show ${step} more lines above`}
-              aria-label={`Show ${step} more lines above`}
-              onClick={() => expand(gap, "head", step)}
-            >
-              ↑
-            </button>
-          )}
+        <td className="gutter" colSpan={split ? 1 : 2} />
+        <td className="line-content" colSpan={split ? 3 : 1}>
           {showDown && (
             <button
-              className="gap-btn"
-              title={`Show ${step} more lines below`}
-              aria-label={`Show ${step} more lines below`}
-              onClick={() => expand(gap, "tail", step)}
+              className="gap-all"
+              title={`Show ${EXPAND_STEP} lines after the change above`}
+              onClick={() => expand(gap, "head", EXPAND_STEP)}
             >
-              ↓
+              ↓ {EXPAND_STEP} more
             </button>
           )}
-        </td>
-        <td className="line-content" colSpan={split ? 3 : 1}>
           <button className="gap-all" onClick={() => expandAll(gap)}>
             {hidden === 1 ? "Show 1 hidden line" : `Show all ${hidden} hidden lines`}
           </button>
+          {showUp && (
+            <button
+              className="gap-all"
+              title={`Show ${EXPAND_STEP} lines before the change below`}
+              onClick={() => expand(gap, "tail", EXPAND_STEP)}
+            >
+              ↑ {EXPAND_STEP} more
+            </button>
+          )}
           {r.content && <span className="gap-header">{r.content}</span>}
         </td>
       </tr>

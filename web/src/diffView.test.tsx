@@ -194,18 +194,17 @@ const modifiedAt = (line: number): FileDiff => ({
 test("a hidden region expands a step at a time, from the end nearest its hunk", async () => {
   vi.mocked(api.file).mockResolvedValue(content(numbered(100)));
 
-  render(<DiffView {...props} file={modifiedAt(40)} headRef="main" />);
-  await waitFor(() => expect(screen.getByText("Show all 39 hidden lines")).toBeTruthy());
-  expect(screen.queryByText("L39")).toBeNull();
+  render(<DiffView {...props} file={modifiedAt(60)} headRef="main" />);
+  await waitFor(() => expect(screen.getByText("Show all 59 hidden lines")).toBeTruthy());
+  expect(screen.getByText("Show all 40 hidden lines")).toBeTruthy(); // too short to step
+  // The file's top edge bounds the region above the hunk, so it only grows up out of the hunk.
+  expect(screen.queryByText("↓ 20 more")).toBeNull();
+  fireEvent.click(screen.getByText("↑ 20 more"));
 
-  // The region above the hunk can only grow downward — the file's top edge is the
-  // other side of it, so it offers one direction.
-  expect(screen.queryByLabelText("Show 20 more lines above")).toBeTruthy(); // the region below
-  fireEvent.click(screen.getByLabelText("Show 20 more lines below"));
-
-  expect(screen.getByText("L39")).toBeTruthy(); // revealed up against the hunk
-  expect(screen.queryByText("L19")).toBeNull(); // still hidden, further from it
-  expect(screen.getByText("Show all 19 hidden lines")).toBeTruthy();
+  expect(screen.getByText("L59")).toBeTruthy(); // revealed up against the hunk
+  expect(screen.queryByText("L39")).toBeNull(); // still hidden, further from it
+  expect(screen.getByText("Show all 39 hidden lines")).toBeTruthy();
+  expect(screen.queryByText("↑ 20 more")).toBeNull();
 });
 
 test("a fully revealed region drops its bar and the hunk header with it", async () => {
@@ -241,8 +240,8 @@ test("a revealed line carries the old-side number its region runs at", async () 
   vi.mocked(api.file).mockResolvedValue(content(numbered(100)));
 
   const { container } = render(<DiffView {...props} file={added} headRef="main" />);
-  await waitFor(() => expect(screen.getByLabelText("Show 20 more lines above")).toBeTruthy());
-  fireEvent.click(screen.getByLabelText("Show 20 more lines above"));
+  await waitFor(() => expect(screen.getByText("↓ 20 more")).toBeTruthy());
+  fireEvent.click(screen.getByText("↓ 20 more"));
 
   const row = [...container.querySelectorAll("tr")].find(
     (tr) => tr.querySelector(".line-content")?.textContent?.trim() === "L13"
