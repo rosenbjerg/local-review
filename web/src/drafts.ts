@@ -83,6 +83,22 @@ export function dropDraft(key: string): void {
   commit(next);
 }
 
+const discardListeners = new Set<(draft: Draft) => void>();
+
+// Unlike dropDraft, tells the composer's host to close it: an open composer would otherwise
+// keep the text and put the draft straight back on its next render.
+export function discardDraft(key: string): void {
+  const draft = drafts.get(key);
+  if (!draft) return;
+  dropDraft(key);
+  for (const l of discardListeners) l(draft);
+}
+
+export function onDraftDiscarded(l: (draft: Draft) => void): () => void {
+  discardListeners.add(l);
+  return () => discardListeners.delete(l);
+}
+
 export function clearDrafts(): void {
   if (drafts.size > 0) commit(new Map());
 }

@@ -19,7 +19,15 @@ import { CommentComposer } from "./components/CommentComposer";
 import { CommentThread, type CommentActions } from "./components/CommentThread";
 import { DiffView } from "./components/DiffView";
 import { FileComments } from "./components/FileComments";
-import { type DraftRef, clearDrafts, getDraft, getDrafts, putDraft, useLeaveWarning } from "./drafts";
+import {
+  type DraftRef,
+  clearDrafts,
+  discardDraft,
+  getDraft,
+  getDrafts,
+  putDraft,
+  useLeaveWarning,
+} from "./drafts";
 import type { Comment, FileDiff } from "./types";
 
 afterEach(() => act(() => clearDrafts()));
@@ -248,4 +256,29 @@ test("leaving the page asks first only while a draft exists", () => {
   expect(leave()).toBe(false);
   act(() => putDraft({ ...ref, body: "unsent", type: "general" }));
   expect(leave()).toBe(true);
+});
+
+// Discarding from the panel has to close the box too: left open, it still holds the text and
+// would put the draft back on its next render.
+test("discarding a draft closes its box, the selection's included", async () => {
+  const { container } = renderCard();
+  await selectLine(container, 1);
+  fireEvent.change(boxes()[0], { target: { value: "first" } });
+  await selectLine(container, 3);
+  fireEvent.change(boxes()[1], { target: { value: "second" } });
+
+  act(() => discardDraft("line:1-1:a.txt"));
+  expect(boxes().map((b) => b.value)).toEqual(["second"]);
+  act(() => discardDraft("line:3-3:a.txt"));
+  expect(boxes()).toHaveLength(0);
+  expect(getDrafts().size).toBe(0);
+});
+
+test("discarding a file comment's draft closes its composer", () => {
+  render(<FileComments path="a.txt" comments={[]} renderThread={() => null} onSubmit={async () => true} />);
+  fireEvent.click(screen.getByRole("button", { name: "+ Add file comment" }));
+  type("about the file");
+  act(() => discardDraft("file:a.txt"));
+  expect(screen.queryByRole("textbox")).toBeNull();
+  expect(screen.getByRole("button", { name: "+ Add file comment" })).toBeTruthy();
 });

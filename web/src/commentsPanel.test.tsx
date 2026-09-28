@@ -190,6 +190,16 @@ test("groups drafts under their file, in file order, top to bottom", () => {
   act(() => clearDrafts());
 });
 
+test("a draft's cross discards it", () => {
+  act(() =>
+    putDraft({ key: "file:a.go", target: { kind: "file", path: "a.go" }, body: "gone soon", type: "general" })
+  );
+  panel(NO_FILTER);
+  fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
+  expect(screen.queryByText("gone soon")).toBeNull();
+  expect(screen.queryByRole("region", { name: "Unposted comments" })).toBeNull();
+});
+
 test("a comment with an unsaved edit is marked editing", () => {
   act(() =>
     putDraft({ key: "edit:1", target: { kind: "edit", path: "a.go", commentId: 1 }, body: "x", type: "bug" })

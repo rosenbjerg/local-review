@@ -306,7 +306,10 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
 - **Drafts head the comments pane** (`DraftList`): line, file and reply drafts, above the header,
   outside every filter and count and out of `n`/`p` — nothing about them is posted yet. They group
   like the comments, a path heading per file outside the items, files in the explorer's order
-  (`fileOrder`) and each file's drafts top to bottom (file comment, lines, replies). An edit is
+  (`fileOrder`) and each file's drafts top to bottom (file comment, lines, replies). A draft's hover
+  cross is `discardDraft`, not `dropDraft`: it also tells the host holding the composer open
+  (`onDraftDiscarded` in `DiffView`, `FileComments`, `CommentThread`) to close it, since an open
+  composer still has the text and would put the draft back on its next render. An edit is
   not listed; its comment's row is marked `editing` instead (`useEditedCommentIds`, whose snapshot
   keeps one `Set` per id list, so typing doesn't re-render the list). A click is `useJump`'s
   `jumpToDraft`: expand the card (and, for a reply, the thread, whose composer reopens from the

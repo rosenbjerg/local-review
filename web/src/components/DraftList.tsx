@@ -1,4 +1,5 @@
-import { type Draft, type DraftTarget, useDrafts } from "../drafts";
+import { type Draft, type DraftTarget, discardDraft, useDrafts } from "../drafts";
+import { IconX } from "./icons";
 
 function where(t: DraftTarget): string {
   switch (t.kind) {
@@ -81,6 +82,14 @@ export function DraftList({
                 <div className="comment-preview draft-preview">
                   {d.body.replace(/\s+/g, " ").trim()}
                 </div>
+              </button>
+              <button
+                className="comment-nav-delete"
+                title="Discard draft"
+                aria-label="Discard draft"
+                onClick={() => discardDraft(d.key)}
+              >
+                <IconX />
               </button>
             </div>
           ))}

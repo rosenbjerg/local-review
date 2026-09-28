@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { draftKey, getDraft } from "../drafts";
+import { useEffect, useState, type ReactNode } from "react";
+import { draftKey, getDraft, onDraftDiscarded } from "../drafts";
 import type { Comment, CommentType } from "../types";
 import { CommentComposer } from "./CommentComposer";
 
@@ -16,6 +16,14 @@ interface Props {
 export function FileComments({ path, comments, renderThread, onSubmit }: Props) {
   const key = draftKey.file(path);
   const [composing, setComposing] = useState(() => !!getDraft(key));
+
+  useEffect(
+    () =>
+      onDraftDiscarded((d) => {
+        if (d.key === key) setComposing(false);
+      }),
+    [key]
+  );
 
   async function submit(body: string, type: CommentType) {
     const ok = await onSubmit(body, type);

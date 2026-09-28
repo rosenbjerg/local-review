@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { draftKey, dropDraft, getDraft } from "../drafts";
+import { draftKey, dropDraft, getDraft, onDraftDiscarded } from "../drafts";
 import type { Comment, CommentType, Reply } from "../types";
 import { commentRef, effectivePath, lineLabel } from "../types";
 import { langForPath } from "../highlight";
@@ -125,6 +125,15 @@ export function CommentThread({ comment, actions, expandSignal, commentIds }: Pr
   const [replying, setReplying] = useState(() => !!getDraft(replyKey));
   const [collapsed, setCollapsed] = useState(comment.resolved);
   const replies = comment.replies ?? [];
+
+  useEffect(
+    () =>
+      onDraftDiscarded((d) => {
+        if (d.key === replyKey) setReplying(false);
+        if (d.key === editKey) setEditing(false);
+      }),
+    [replyKey, editKey]
+  );
 
   // Keyed on the signal's nonce, so a manual re-collapse sticks until the next jump.
   useEffect(() => {
