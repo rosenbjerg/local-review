@@ -65,7 +65,9 @@ export function DraftList({
       </h2>
       {byFile(drafts, fileOrder).map((group) => (
         <div key={group.path} className="comment-file-group">
-          <div className="comment-file-name">{group.path}</div>
+          <div className="comment-file-name" title={group.path}>
+            <span dir="ltr">{group.path}</span>
+          </div>
           {group.items.map((d) => (
             <div key={d.key} className="comment-nav-item">
               <button

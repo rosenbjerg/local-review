@@ -166,8 +166,10 @@ export function CommentsPanel({
       )}
       {fileRuns(comments).map((run) => (
         <div key={run.path} className="comment-file-group">
-          <div className="comment-file-name">
-            <HighlightMatch text={run.path} needle={needle} />
+          <div className="comment-file-name" title={run.path}>
+            <span dir="ltr">
+              <HighlightMatch text={run.path} needle={needle} />
+            </span>
           </div>
           {run.items.map((c) => (
             // a <button> can't nest in another, so the delete button is a sibling

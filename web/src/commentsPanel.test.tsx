@@ -200,6 +200,14 @@ test("a draft's cross discards it", () => {
   expect(screen.queryByRole("region", { name: "Unposted comments" })).toBeNull();
 });
 
+// The heading is cut to one line in CSS, so the title is the only place the whole path is.
+test("a file heading carries its full path as a title", () => {
+  const { container } = panel(NO_FILTER);
+  expect(container.querySelector(".comment-file-name")!.getAttribute("title")).toBe(
+    "internal/api/side.go"
+  );
+});
+
 test("a comment with an unsaved edit is marked editing", () => {
   act(() =>
     putDraft({ key: "edit:1", target: { kind: "edit", path: "a.go", commentId: 1 }, body: "x", type: "bug" })
