@@ -30,6 +30,7 @@ src/
                          the reqSeq stale-response guard, reviewed marks, summary
   useCommentActions.ts   optimistic comment/reply CRUD; identity-stable handlers
   useUndoableDelete.ts   thread deletes held for UNDO_MS behind UndoToast before they reach the API
+  drafts.ts              unposted comment text, in memory only (never storage): one module store every composer writes
   useJump.ts             comment/file navigation: activeComment, expand signals, jumpTo
   scrollTo.ts            the one way to scroll the diff column: re-aims every frame, lands long jumps
   useActiveFile.ts       scroll-spy over the diff column + suppress()
@@ -284,6 +285,23 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   see the thread during the window. A 404 on commit counts as deleted (a reset got there first).
   Replies still delete at once. `remove` is `commentActions.onDelete`, so it must keep its identity
   — the review-change flush reads it through a ref for that reason. `useUndoableDelete.test.ts`.
+- **An unposted comment lives in `drafts.ts`, not in its composer.** A composer given a `draft`
+  (`DraftRef`: a key plus what it targets) starts from the stored body and type and writes back on
+  every change, so the text outlives whatever unmounts it: a collapsed card (by hand, or by marking it
+  reviewed), a collapsed or resolved thread, a card leaving and re-entering the file list. A host's
+  open state starts from the store too (`FileComments`' `composing`, a thread's `replying`/`editing`),
+  and hiding a thread closes only the composers without a draft. **A line draft is anchored to its
+  range** (the key names it): `DiffView` subscribes to its path's ranges (`useLineDraftRanges`, one
+  cached array per path, so typing doesn't re-render the card) and `planRows` hangs a composer under
+  each, plus one for the selection unless it already is a draft. A new selection opens another
+  composer rather than moving one; shift-click extends only a selection with no text. Focusing a
+  composer makes its range the selection, so clearing its text (which drops the draft) doesn't take the
+  box away mid-edit. Composer rows are keyed by range, so the selection's survives becoming a draft. An
+  entry exists only while the text is worth keeping: non-blank for a new comment or reply, differing
+  from the saved text for an edit. Cancel, Discard, an edit's `close` and a save that lands drop it;
+  `onSubmit` resolving to `false` keeps it. Nothing is persisted, not even to localStorage: a reload
+  or another review (`App` clears on `review.id`) ends every draft. Only the composer writes the store,
+  so no `DiffView` prop changes on a keystroke. `drafts.test.tsx`.
 - `useUnseenActivity`: non-reviewer comments/replies arriving while hidden count into the tab title.
   Whatever is on the review at the first read is history; `seen` re-primes on `review.id`.
 

@@ -200,8 +200,8 @@ describe("planRows", () => {
       activeComment: null,
     });
     expect(plan.rows.filter((p) => p.selected).map((p) => p.row.newLine)).toEqual([10, 11, 12]);
-    expect(plan.rows.filter((p) => p.composer).map((p) => p.row.newLine)).toEqual([12]);
-    expect(plan.trailingComposer).toBe(false);
+    expect(plan.rows.filter((p) => p.composers.length > 0).map((p) => p.row.newLine)).toEqual([12]);
+    expect(plan.trailingComposers).toEqual([]);
   });
 
   // While the mouse is down the selection is still growing, so a composer would
@@ -214,12 +214,12 @@ describe("planRows", () => {
       dragging: true,
       activeComment: null,
     });
-    expect(plan.rows.some((p) => p.composer)).toBe(false);
-    expect(plan.trailingComposer).toBe(false);
+    expect(plan.rows.some((p) => p.composers.length > 0)).toBe(false);
+    expect(plan.trailingComposers).toEqual([]);
     expect(plan.rows.filter((p) => p.selected).map((p) => p.row.newLine)).toEqual([10, 11, 12]);
   });
 
-  // The two composer positions are mutually exclusive: exactly one, or none.
+  // The two composer positions are mutually exclusive: each composer is in exactly one.
   it("falls back to a trailing composer when the selection's end isn't rendered", () => {
     const plan = planRows({
       rows: changed(),
@@ -228,8 +228,48 @@ describe("planRows", () => {
       dragging: false,
       activeComment: null,
     });
-    expect(plan.rows.some((p) => p.composer)).toBe(false);
-    expect(plan.trailingComposer).toBe(true);
+    expect(plan.rows.some((p) => p.composers.length > 0)).toBe(false);
+    expect(plan.trailingComposers).toEqual([{ start: 30, end: 30 }]);
+  });
+
+  // A draft is anchored where it was written: selecting elsewhere opens a second composer
+  // instead of moving the first, and a drag in progress doesn't hide the drafts already there.
+  it("keeps a composer under each draft beside the selection's", () => {
+    const plan = planRows({
+      rows: changed(),
+      comments: [],
+      selection: { start: 12, end: 12 },
+      dragging: false,
+      activeComment: null,
+      drafts: [{ start: 10, end: 11 }, { start: 30, end: 30 }],
+    });
+    const at = (n: number) => plan.rows.find((p) => p.row.newLine === n)!.composers;
+    expect(at(11)).toEqual([{ start: 10, end: 11 }]);
+    expect(at(12)).toEqual([{ start: 12, end: 12 }]);
+    expect(plan.trailingComposers).toEqual([{ start: 30, end: 30 }]);
+    expect(plan.rows.filter((p) => p.selected).map((p) => p.row.newLine)).toEqual([10, 11, 12]);
+
+    const dragging = planRows({
+      rows: changed(),
+      comments: [],
+      selection: { start: 12, end: 12 },
+      dragging: true,
+      activeComment: null,
+      drafts: [{ start: 10, end: 11 }],
+    });
+    expect(dragging.rows.filter((p) => p.composers.length > 0).map((p) => p.row.newLine)).toEqual([11]);
+  });
+
+  it("gives the selection no second composer once it is a draft", () => {
+    const plan = planRows({
+      rows: changed(),
+      comments: [],
+      selection: { start: 10, end: 11 },
+      dragging: false,
+      activeComment: null,
+      drafts: [{ start: 10, end: 11 }],
+    });
+    expect(plan.rows.flatMap((p) => p.composers)).toEqual([{ start: 10, end: 11 }]);
   });
 
   it("lights the active thread's rows and ignores one from another file", () => {

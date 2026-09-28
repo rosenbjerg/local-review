@@ -32,6 +32,7 @@ import { usePanelResize } from "./usePanelResize";
 import { useReview } from "./useReview";
 import { useUndoableDelete } from "./useUndoableDelete";
 import { useUnseenActivity } from "./useUnseenActivity";
+import { clearDrafts } from "./drafts";
 import { setFontsRepo } from "./fonts";
 import { setThemeRepo } from "./theme";
 import type { CommentFilter } from "./commentFilter";
@@ -161,6 +162,7 @@ export default function App() {
   // A filter carried into another review would silently hide its comments.
   useEffect(() => {
     setCommentFilter(NO_FILTER);
+    clearDrafts();
   }, [review?.id]);
 
   // Both stores ignore the empty repo the first render carries, having seeded from the remembered one.

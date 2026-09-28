@@ -1,21 +1,25 @@
-import { expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, expect, test, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 // FileComments owns its composer's open state, which the three views that render
 // it used to each hold for it. That makes the open/close rule its contract: a
 // comment that landed closes the composer, and one that failed must leave it open
 // *with the text still in it*, or a failed submit silently discards what was typed.
 import { FileComments } from "./components/FileComments";
+import { clearDrafts } from "./drafts";
 import type { Comment } from "./types";
 
 const comment = (id: number, body: string): Comment =>
   ({ id, body, type: "suggestion", author: "reviewer", resolved: false, replies: [] }) as Comment;
+
+afterEach(() => act(() => clearDrafts()));
 
 const openComposer = () => fireEvent.click(screen.getByRole("button", { name: "+ Add file comment" }));
 
 test("renders the file's threads through the given renderer", () => {
   render(
     <FileComments
+      path="a.txt"
       comments={[comment(1, "first"), comment(2, "second")]}
       renderThread={(c) => <div key={c.id}>thread:{c.body}</div>}
       onSubmit={async () => true}
@@ -27,7 +31,7 @@ test("renders the file's threads through the given renderer", () => {
 
 test("a comment that lands closes the composer", async () => {
   const onSubmit = vi.fn(async () => true);
-  render(<FileComments comments={[]} renderThread={() => null} onSubmit={onSubmit} />);
+  render(<FileComments path="a.txt" comments={[]} renderThread={() => null} onSubmit={onSubmit} />);
 
   openComposer();
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "about this file" } });
@@ -40,7 +44,7 @@ test("a comment that lands closes the composer", async () => {
 
 test("a comment that failed keeps the composer open with the text", async () => {
   const onSubmit = vi.fn(async () => false);
-  render(<FileComments comments={[]} renderThread={() => null} onSubmit={onSubmit} />);
+  render(<FileComments path="a.txt" comments={[]} renderThread={() => null} onSubmit={onSubmit} />);
 
   openComposer();
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "worth retrying" } });
@@ -52,7 +56,7 @@ test("a comment that failed keeps the composer open with the text", async () => 
 
 test("cancel closes the composer without submitting", () => {
   const onSubmit = vi.fn(async () => true);
-  render(<FileComments comments={[]} renderThread={() => null} onSubmit={onSubmit} />);
+  render(<FileComments path="a.txt" comments={[]} renderThread={() => null} onSubmit={onSubmit} />);
 
   openComposer();
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
