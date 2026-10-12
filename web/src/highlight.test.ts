@@ -17,6 +17,7 @@ test("an alias resolves to the language it stands in for", () => {
   expect(langForPath("docs/logo.svg")).toBe("xml");
   expect(langForPath("src/Api.csproj")).toBe("xml");
   expect(langForPath("events.ndjson")).toBe("jsonl");
+  expect(langForPath("specs/login.feature")).toBe("gherkin");
 });
 
 test("the extension is taken case-insensitively, and only the last one", () => {

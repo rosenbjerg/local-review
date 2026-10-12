@@ -54,6 +54,7 @@ export const EXT_EXTRA: Record<string, string> = {
   hpp: "cpp",
   hh: "cpp",
   htm: "html",
+  feature: "gherkin",
 
   xcstrings: "json",
   webmanifest: "json",
