@@ -248,8 +248,10 @@ export function useReview() {
       // Started before the try, which holds the await and nothing else — the compiler bails on a
       // conditional inside a try, and a bailed-out useReview hands unmemoized callbacks to DiffView.
       const revP = api.getReview(id);
+      // The committed side is two resolved refs, so a worktree-only `diff` ping cannot move it.
+      const diffMoved = withRefs || (withDiff && p.opts.uncommitted);
       const diffP =
-        withDiff && p.repo && p.headRef
+        diffMoved && p.repo && p.headRef
           ? api.diff(p.repo, p.headRef, p.opts).catch(() => null)
           : Promise.resolve(null);
       const branchesP = withRefs && p.repo ? api.branches(p.repo).catch(() => null) : Promise.resolve(null);
