@@ -2,7 +2,10 @@ package git
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -42,8 +45,14 @@ type FileDiff struct {
 	Status    FileStatus `json:"status"`
 	Binary    bool       `json:"binary,omitempty"`
 	Generated bool       `json:"generated,omitempty"`
+	TooLarge  bool       `json:"tooLarge,omitempty"`
 	Hunks     []Hunk     `json:"hunks"`
 }
+
+const (
+	untrackedMaxBytes = 1 << 20
+	binarySniffBytes  = 8000
+)
 
 // diffArgs pins the output shape the parser relies on: verbatim non-ASCII paths and the
 // a/ b/ prefixes, regardless of the user's diff.*prefix config.
@@ -121,11 +130,30 @@ func (r *Repo) untrackedFiles() ([]string, error) {
 }
 
 func (r *Repo) newFileDiff(path string) (FileDiff, bool) {
-	content, err := r.WorktreeFile(path)
+	full, err := r.worktreePath(path)
 	if err != nil {
 		return FileDiff{}, false // vanished or unreadable since ls-files listed it
 	}
+	// A FIFO or socket would block the read below forever.
+	info, err := os.Stat(full)
+	if err != nil || !info.Mode().IsRegular() {
+		return FileDiff{}, false
+	}
 	fd := FileDiff{Status: FileAdded, NewPath: path, Hunks: []Hunk{}}
+	if info.Size() > untrackedMaxBytes {
+		head, err := readHead(full, binarySniffBytes)
+		if err != nil {
+			return FileDiff{}, false
+		}
+		fd.Binary = bytes.IndexByte(head, 0) >= 0
+		fd.TooLarge = !fd.Binary
+		return fd, true
+	}
+	b, err := os.ReadFile(full)
+	if err != nil {
+		return FileDiff{}, false
+	}
+	content := string(b)
 	if strings.IndexByte(content, 0) >= 0 {
 		fd.Binary = true
 		return fd, true
@@ -140,6 +168,20 @@ func (r *Repo) newFileDiff(path string) (FileDiff, bool) {
 	}
 	fd.Hunks = []Hunk{hunk}
 	return fd, true
+}
+
+func readHead(path string, n int) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	buf := make([]byte, n)
+	read, err := io.ReadFull(f, buf)
+	if err != nil && err != io.ErrUnexpectedEOF {
+		return nil, err
+	}
+	return buf[:read], nil
 }
 
 func parseDiff(text string) ([]FileDiff, error) {

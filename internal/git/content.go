@@ -129,6 +129,18 @@ func (r *Repo) ListFiles(ref string) ([]string, error) {
 
 // WorktreeFile reads path from the on-disk working tree, confined to the repo and kept out of .git.
 func (r *Repo) WorktreeFile(path string) (string, error) {
+	resolved, err := r.worktreePath(path)
+	if err != nil {
+		return "", err
+	}
+	b, err := os.ReadFile(resolved)
+	if err != nil {
+		return "", notFoundIfAbsent(err)
+	}
+	return string(b), nil
+}
+
+func (r *Repo) worktreePath(path string) (string, error) {
 	sep := string(filepath.Separator)
 	clean := filepath.Clean(path)
 	// A case-insensitive FS resolves ".GIT" to the real .git, so reject every case variant.
@@ -153,11 +165,7 @@ func (r *Repo) WorktreeFile(path string) (string, error) {
 	if lower := strings.ToLower(rel); lower == ".git" || strings.HasPrefix(lower, ".git"+sep) {
 		return "", fmt.Errorf("invalid path %q", path)
 	}
-	b, err := os.ReadFile(resolved)
-	if err != nil {
-		return "", notFoundIfAbsent(err)
-	}
-	return string(b), nil
+	return resolved, nil
 }
 
 func notFoundIfAbsent(err error) error {

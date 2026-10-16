@@ -63,6 +63,7 @@ export interface FileDiff {
   status: FileStatus;
   binary?: boolean;
   generated?: boolean;
+  tooLarge?: boolean;
   hunks: Hunk[];
 }
 
