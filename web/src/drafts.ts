@@ -99,7 +99,21 @@ export function onDraftDiscarded(l: (draft: Draft) => void): () => void {
   return () => discardListeners.delete(l);
 }
 
+let shownReview: number | null = null;
+const parked = new Map<number, ReadonlyMap<string, Draft>>();
+
+export function showDraftsFor(reviewId: number | null): void {
+  if (reviewId === shownReview) return;
+  if (shownReview !== null && drafts.size > 0) parked.set(shownReview, drafts);
+  shownReview = reviewId;
+  const restored = reviewId === null ? undefined : parked.get(reviewId);
+  if (reviewId !== null) parked.delete(reviewId);
+  if (restored || drafts.size > 0) commit(restored ?? new Map());
+}
+
 export function clearDrafts(): void {
+  shownReview = null;
+  parked.clear();
   if (drafts.size > 0) commit(new Map());
 }
 
@@ -135,7 +149,7 @@ export function useEditedCommentIds(): ReadonlySet<number> {
 export function useLeaveWarning(): void {
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
-      if (drafts.size === 0) return;
+      if (drafts.size === 0 && parked.size === 0) return;
       e.preventDefault();
       // Older browsers ignore preventDefault and prompt only for a non-empty returnValue.
       e.returnValue = "unposted";
