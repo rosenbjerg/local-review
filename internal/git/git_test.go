@@ -99,6 +99,32 @@ func TestNewFileDiff(t *testing.T) {
 	}
 }
 
+// An untracked file over the cap is never read whole: a text one is a hunkless stub flagged
+// tooLarge, a binary one stays binary.
+func TestNewFileDiffOverCap(t *testing.T) {
+	dir := t.TempDir()
+	big := strings.Repeat("line\n", untrackedMaxBytes/5+1)
+	mustWrite(t, dir, "big.log", big)
+	if err := os.WriteFile(filepath.Join(dir, "big.bin"), append([]byte{0}, big...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, dir, "at-cap.txt", strings.Repeat("x", untrackedMaxBytes))
+	r := New(dir)
+
+	fd, ok := r.newFileDiff("big.log")
+	if !ok || !fd.TooLarge || fd.Binary || len(fd.Hunks) != 0 {
+		t.Errorf("big text: got ok=%v tooLarge=%v binary=%v hunks=%d", ok, fd.TooLarge, fd.Binary, len(fd.Hunks))
+	}
+	fd, ok = r.newFileDiff("big.bin")
+	if !ok || fd.TooLarge || !fd.Binary {
+		t.Errorf("big binary: got ok=%v tooLarge=%v binary=%v", ok, fd.TooLarge, fd.Binary)
+	}
+	fd, ok = r.newFileDiff("at-cap.txt")
+	if !ok || fd.TooLarge || len(fd.Hunks) != 1 {
+		t.Errorf("at the cap: got ok=%v tooLarge=%v hunks=%d", ok, fd.TooLarge, len(fd.Hunks))
+	}
+}
+
 func mustWrite(t *testing.T, dir, name, content string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {

@@ -77,8 +77,9 @@ function samePropsExceptComments(a: Props, b: Props): boolean {
 }
 
 // A touched file can still have no hunks (pure rename, mode change, empty file); Changed view would render blank.
-function noHunksNote(status: FileDiff["status"]): string {
-  switch (status) {
+function noHunksNote(file: FileDiff): string {
+  if (file.tooLarge) return "Untracked and over 1 MiB, so its content isn't shown.";
+  switch (file.status) {
     case "renamed":
       return "Renamed with no content changes.";
     case "added":
@@ -149,10 +150,10 @@ export const DiffView = memo(function DiffView({
   const svg = isSvg(path);
   const asImage = isRasterImage(path) || (svg && svgAsImage);
   const mediaView = asImage || (!!file.binary && !svg);
-  const markdown = isMarkdown(path) && file.status !== "deleted" && file.newPath !== "";
+  const markdown = isMarkdown(path) && file.status !== "deleted" && file.newPath !== "" && !file.tooLarge;
   // A gone file falls back to the diff table, whose leftover row still shows the stranded comments.
   const docView = markdown && mdRendered && !missing;
-  const canToggleMode = !mediaView && !docView && file.newPath !== "" && !unchanged;
+  const canToggleMode = !mediaView && !docView && file.newPath !== "" && !unchanged && !file.tooLarge;
   const sideLabel = labelForSide(side, headRef);
   const canSplit = canToggleMode && hasTwoSides(file);
   const layout: Layout = canSplit && mode === "changed" ? (layoutPick ?? defaultLayout) : "unified";
@@ -189,7 +190,7 @@ export const DiffView = memo(function DiffView({
   }, [contentKey]);
 
   useEffect(() => {
-    if (collapsed || source || file.status === "deleted" || !file.newPath || mediaView) return;
+    if (collapsed || source || file.status === "deleted" || !file.newPath || mediaView || file.tooLarge) return;
     let cancelled = false;
     api
       .file(repo, file.newPath, headRef, side)
@@ -663,7 +664,7 @@ export const DiffView = memo(function DiffView({
             </div>
           )}
           {!mediaView && !docView && !unchanged && !missing && mode === "changed" && file.hunks.length === 0 && (
-            <div className="binary-note media-body">{noHunksNote(file.status)}</div>
+            <div className="binary-note media-body">{noHunksNote(file)}</div>
           )}
           {mediaView ? (
             <MediaView

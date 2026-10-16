@@ -617,3 +617,13 @@ test("a collapsed card tokenizes nothing until it is opened, and re-tokenizes a 
     expect(vi.mocked(tokenize)).toHaveBeenCalledWith("const a = 1;", "typescript", "github-light")
   );
 });
+
+test("an untracked file too large to diff says so and never fetches its content", async () => {
+  const file: FileDiff = { oldPath: "", newPath: "dump.md", status: "added", tooLarge: true, hunks: [] };
+  render(<DiffView {...props} headRef="feature" side="worktree" file={file} />);
+  expect(await screen.findByText(/over 1 MiB/)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /full/i })).toBeNull();
+  expect(screen.queryByRole("button", { name: /rendered/i })).toBeNull();
+  await new Promise((r) => setTimeout(r, 0));
+  expect(vi.mocked(api.file)).not.toHaveBeenCalled();
+});

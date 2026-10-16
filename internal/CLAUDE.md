@@ -106,6 +106,11 @@ export/export.go        review → canonical markdown
   (`--cached`, staged only). The response `base` is the resolved before ref. `GET /api/commits` is
   `git log base..head`.
 - `parseDiff` flags binaries (`Binary`), including untracked ones. Renames pair via `--find-renames`.
+- **An untracked file over `untrackedMaxBytes` (1 MiB) is never read whole** — `DiffWorktree` runs on
+  every `diff` ping, and an agent's stray log was megabytes of hunks per ping per tab. It is a hunkless
+  stub: `Binary` if its first `binarySniffBytes` hold a NUL, else `TooLarge`, which the card renders as
+  a note with no source fetch and no Full or Rendered view. Only regular files are read, or a FIFO
+  would block the diff.
 - **The `generated` flag is `/api/diff`'s alone.** `MarkGenerated` is called by the handler, never by
   `Diff`/`DiffWorktree`/`DiffStaged`: `internal/review` reads those on every SSE ping to re-anchor and
   has no use for the flag, and `DiffCache` would be caching it pointlessly. It is one batched
