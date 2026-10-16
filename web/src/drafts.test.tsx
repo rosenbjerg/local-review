@@ -25,6 +25,7 @@ import {
   discardDraft,
   getDraft,
   getDrafts,
+  pruneDrafts,
   putDraft,
   showDraftsFor,
   useLeaveWarning,
@@ -278,6 +279,33 @@ test("switching reviews parks the drafts and switching back restores them", () =
   expect(getDraft(ref.key)?.body).toBe("for review 1");
   act(() => showDraftsFor(2));
   expect(getDraft(ref.key)?.body).toBe("for review 2");
+});
+
+test("a reply or edit draft goes when its comment or reply does, not when a read predates it", () => {
+  const live = (...ids: [number, number[]][]) =>
+    ids.map(([id, replies]) => ({ id, replies: replies.map((r) => ({ id: r })) }) as unknown as Comment);
+  const reply = (commentId: number): DraftRef => ({
+    key: `reply:${commentId}`,
+    target: { kind: "reply", path: "a.txt", commentId },
+  });
+  const editReply: DraftRef = {
+    key: "edit-reply:21",
+    target: { kind: "edit", path: "a.txt", commentId: 1, replyId: 21 },
+  };
+  act(() => showDraftsFor(5));
+  act(() => pruneDrafts(5, live([1, [20, 21]], [2, []])));
+  act(() => {
+    putDraft({ ...reply(1), body: "keep", type: "general" });
+    putDraft({ ...reply(2), body: "thread deleted", type: "general" });
+    putDraft({ ...reply(3), body: "comment newer than the read", type: "general" });
+    putDraft({ ...editReply, body: "reply deleted", type: "general" });
+  });
+
+  act(() => pruneDrafts(5, live([1, [20]])));
+  expect([...getDrafts().keys()].sort()).toEqual(["reply:1", "reply:3"]);
+
+  act(() => pruneDrafts(4, []));
+  expect(getDrafts().size).toBe(2);
 });
 
 // Discarding from the panel has to close the box too: left open, it still holds the text and

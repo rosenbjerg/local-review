@@ -1,11 +1,11 @@
 import { useEffect, useSyncExternalStore } from "react";
-import type { CommentType } from "./types";
+import type { Comment, CommentType } from "./types";
 
 export type FileDraftTarget =
   | { kind: "line"; path: string; startLine: number; endLine: number }
   | { kind: "file"; path: string }
   | { kind: "reply"; path: string; commentId: number }
-  | { kind: "edit"; path: string; commentId: number };
+  | { kind: "edit"; path: string; commentId: number; replyId?: number };
 
 export type DraftTarget = FileDraftTarget | { kind: "summary" };
 
@@ -110,6 +110,13 @@ export function onDraftDiscarded(l: (draft: Draft) => void): () => void {
   return () => discardListeners.delete(l);
 }
 
+interface LiveIds {
+  roots: Set<number>;
+  replies: Set<number>;
+}
+
+let lastSeen: LiveIds | null = null;
+
 let shownReview: number | null = null;
 const parked = new Map<number, ReadonlyMap<string, Draft>>();
 
@@ -117,13 +124,41 @@ export function showDraftsFor(reviewId: number | null): void {
   if (reviewId === shownReview) return;
   if (shownReview !== null && drafts.size > 0) parked.set(shownReview, drafts);
   shownReview = reviewId;
+  lastSeen = null;
   const restored = reviewId === null ? undefined : parked.get(reviewId);
   if (reviewId !== null) parked.delete(reviewId);
   if (restored || drafts.size > 0) commit(restored ?? new Map());
 }
 
+function vanished(id: number, now: Set<number>, before: Set<number> | undefined): boolean {
+  return !now.has(id) && (!before || before.has(id));
+}
+
+function targetsGone(t: DraftTarget, now: LiveIds, before: LiveIds | null): boolean {
+  if (t.kind !== "reply" && t.kind !== "edit") return false;
+  if (vanished(t.commentId, now.roots, before?.roots)) return true;
+  return t.kind === "edit" && t.replyId !== undefined && vanished(t.replyId, now.replies, before?.replies);
+}
+
+// Only an id the previous read had counts as gone: a read begun before a comment was posted would
+// otherwise drop the reply already being typed under it.
+export function pruneDrafts(reviewId: number, comments: readonly Comment[]): void {
+  if (reviewId !== shownReview) return;
+  const now: LiveIds = {
+    roots: new Set(comments.map((c) => c.id)),
+    replies: new Set(comments.flatMap((c) => c.replies.map((r) => r.id))),
+  };
+  const next = new Map(drafts);
+  for (const [key, d] of drafts) {
+    if (targetsGone(d.target, now, lastSeen)) next.delete(key);
+  }
+  lastSeen = now;
+  if (next.size !== drafts.size) commit(next);
+}
+
 export function clearDrafts(): void {
   shownReview = null;
+  lastSeen = null;
   parked.clear();
   if (drafts.size > 0) commit(new Map());
 }
