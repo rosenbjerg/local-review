@@ -10,7 +10,7 @@ import {
 import type { CommentSort } from "../commentSort";
 import { COMMENT_SORTS, sortTimestamp } from "../commentSort";
 import { turnOf } from "../commentTurn";
-import { type Draft, useEditedCommentIds } from "../drafts";
+import { type FileDraft, useEditedCommentIds } from "../drafts";
 import type { Comment } from "../types";
 import { effectivePath } from "../types";
 import { Combobox } from "./Combobox";
@@ -32,7 +32,7 @@ interface Props {
   onFilterChange: (filter: CommentFilter) => void;
   authors: string[];
   onJump: (id: number) => void;
-  onJumpToDraft: (draft: Draft) => void;
+  onJumpToDraft: (draft: FileDraft) => void;
   // The file list's order, which the drafts follow; the comments come already sorted.
   fileOrder: string[];
   onDelete: (id: number) => void;

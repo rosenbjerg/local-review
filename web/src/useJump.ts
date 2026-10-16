@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { type Draft, draftDomId } from "./drafts";
+import { type FileDraft, draftDomId } from "./drafts";
 import { commentAim, draftAim, fileAim, scrollToAim, MAX_WAIT, SCROLL_MS } from "./scrollTo";
 import { type Comment, effectivePath } from "./types";
 
@@ -81,7 +81,7 @@ export function useJump({ comments, setSelectedFile, rootRef, onProgrammaticScro
     cancelScroll.current = scrollToAim(rootRef.current, () => fileAim(path));
   }
 
-  function jumpToDraft(draft: Draft) {
+  function jumpToDraft(draft: FileDraft) {
     stopAll(cancelScroll, flashPoll);
     onProgrammaticScroll?.(SCROLL_MS);
     const { path } = draft.target;

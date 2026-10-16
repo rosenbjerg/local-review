@@ -1,7 +1,7 @@
-import { type Draft, type DraftTarget, discardDraft, useDrafts } from "../drafts";
+import { type FileDraft, type FileDraftTarget, discardDraft, isListedDraft, useDrafts } from "../drafts";
 import { IconX } from "./icons";
 
-function where(t: DraftTarget): string {
+function where(t: FileDraftTarget): string {
   switch (t.kind) {
     case "line":
       return t.startLine === t.endLine ? `L${t.startLine}` : `L${t.startLine}–${t.endLine}`;
@@ -15,7 +15,7 @@ function where(t: DraftTarget): string {
 }
 
 // File comments, then line comments top to bottom, then replies.
-function rank(t: DraftTarget): [number, number, number] {
+function rank(t: FileDraftTarget): [number, number, number] {
   switch (t.kind) {
     case "file":
       return [0, 0, 0];
@@ -26,8 +26,8 @@ function rank(t: DraftTarget): [number, number, number] {
   }
 }
 
-function byFile(drafts: Draft[], fileOrder: string[]): { path: string; items: Draft[] }[] {
-  const groups = new Map<string, Draft[]>();
+function byFile(drafts: FileDraft[], fileOrder: string[]): { path: string; items: FileDraft[] }[] {
+  const groups = new Map<string, FileDraft[]>();
   for (const d of drafts) {
     const at = groups.get(d.target.path);
     if (at) at.push(d);
@@ -54,9 +54,9 @@ export function DraftList({
   onJump,
 }: {
   fileOrder: string[];
-  onJump: (draft: Draft) => void;
+  onJump: (draft: FileDraft) => void;
 }) {
-  const drafts = [...useDrafts().values()].filter((d) => d.target.kind !== "edit");
+  const drafts = [...useDrafts().values()].filter(isListedDraft);
   if (drafts.length === 0) return null;
   return (
     <section className="draft-list" aria-label="Unposted comments">
