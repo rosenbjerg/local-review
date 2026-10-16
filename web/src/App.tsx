@@ -32,7 +32,7 @@ import { usePanelResize } from "./usePanelResize";
 import { useReview } from "./useReview";
 import { useUndoableDelete } from "./useUndoableDelete";
 import { useUnseenActivity } from "./useUnseenActivity";
-import { showDraftsFor, useLeaveWarning } from "./drafts";
+import { pruneDrafts, showDraftsFor, useLeaveWarning } from "./drafts";
 import { setFontsRepo } from "./fonts";
 import { setThemeRepo } from "./theme";
 import type { CommentFilter } from "./commentFilter";
@@ -176,6 +176,11 @@ export default function App() {
     setCommentFilter(NO_FILTER);
     showDraftsFor(reviewId);
   }, [reviewId]);
+
+  // After showDraftsFor: pruning checks the review it is handed is the one whose drafts are shown.
+  useEffect(() => {
+    if (review) pruneDrafts(review.id, review.comments ?? []);
+  }, [review]);
 
   // Both stores ignore the empty repo the first render carries, having seeded from the remembered one.
   useEffect(() => {

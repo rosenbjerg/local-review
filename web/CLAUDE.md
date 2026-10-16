@@ -317,7 +317,11 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   ends every draft, which is why `useLeaveWarning` has the browser ask before a reload or close while
   any exists, parked ones included. Another review only parks them: `App` calls `showDraftsFor` on
   `review.id`, which sets the shown review's drafts aside and brings back any parked for the one
-  switched to. Only the composer writes the store,
+  switched to. A reply or edit draft goes when its comment or reply does — deleted, reset, or removed
+  by an agent — via `pruneDrafts` on each `review` read, but only for an id the previous read held:
+  a read begun before a comment was posted would otherwise drop the reply being typed under it. It
+  reads the server's `review.comments`, not App's `comments`, so a thread hidden for undo keeps its
+  drafts. Only the composer writes the store,
   so no `DiffView` prop changes on a keystroke. `drafts.test.tsx`.
 - **Drafts head the comments pane** (`DraftList`): line, file and reply drafts, above the header,
   outside every filter and count and out of `n`/`p` — nothing about them is posted yet. They group

@@ -95,7 +95,7 @@ function ReplyItem({
       {editing ? (
         <CommentComposer
           hideType
-          draft={{ key: editKey, target: { kind: "edit", path, commentId } }}
+          draft={{ key: editKey, target: { kind: "edit", path, commentId, replyId: reply.id } }}
           initialBody={reply.body}
           submitLabel="Save"
           placeholder="Reply…"
