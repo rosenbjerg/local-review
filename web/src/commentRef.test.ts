@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import MarkdownIt from "markdown-it";
-import { commentRefPlugin } from "./commentRef";
+import { commentRefPlugin, knownRefs } from "./commentRef";
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true }).use(commentRefPlugin);
 const ids = new Set([42, 43]);
@@ -56,4 +56,9 @@ test("a ref inside a link or a linkified URL does not nest anchors", () => {
   const d = render("[#42](https://x) and bare #42");
   expect(refs(d)).toBe(1);
   expect(d).toContain('href="https://x"');
+});
+
+test("knownRefs names only the existing ids a body mentions, in a stable order", () => {
+  expect(knownRefs("see #43, then #42 and #99, #42 again", ids)).toBe("42,43");
+  expect(knownRefs("nothing here", ids)).toBe("");
 });

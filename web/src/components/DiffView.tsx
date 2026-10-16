@@ -60,7 +60,6 @@ interface Props {
   expandComment: { id: number; n: number } | null;
   showFullSignal: { path: string; n: number } | null;
   activeComment: number | null;
-  commentIds: Set<number>;
 }
 
 const HIGHLIGHT_MAX_LINES = 2000;
@@ -106,7 +105,6 @@ export const DiffView = memo(function DiffView({
   expandComment,
   showFullSignal,
   activeComment,
-  commentIds,
 }: Props) {
   const changedLines = useMemo(() => changedLineCount(file), [file]);
   const stat = useMemo(() => fileStat(file), [file]);
@@ -457,7 +455,6 @@ export const DiffView = memo(function DiffView({
       comment={c}
       actions={actions}
       expandSignal={expandComment}
-      commentIds={commentIds}
     />
   );
 

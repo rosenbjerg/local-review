@@ -146,7 +146,6 @@ function renderCard() {
       expandComment={null}
       showFullSignal={null}
       activeComment={null}
-      commentIds={new Set()}
     />
   );
 }
@@ -232,7 +231,7 @@ test("collapsing a thread keeps a reply draft open, and drops an empty reply box
     anchorStatus: "current",
   } as unknown as Comment;
   const actions = { onAddReply: vi.fn(async () => true) } as unknown as CommentActions;
-  render(<CommentThread comment={comment} actions={actions} commentIds={new Set()} />);
+  render(<CommentThread comment={comment} actions={actions} />);
 
   fireEvent.click(screen.getByRole("button", { name: "Reply" }));
   fireEvent.click(screen.getByTitle("Collapse thread"));

@@ -50,7 +50,6 @@ interface Props {
   actions: CommentActions;
   // Bumped by a jump-to; expands this thread when it targets this comment.
   expandSignal?: { id: number; n: number } | null;
-  commentIds: Set<number>;
 }
 
 function ReplyItem({
@@ -59,14 +58,12 @@ function ReplyItem({
   commentId,
   onUpdate,
   onDelete,
-  commentIds,
 }: {
   reply: Reply;
   path: string;
   commentId: number;
   onUpdate: (body: string) => Promise<boolean>;
   onDelete: () => void;
-  commentIds: Set<number>;
 }) {
   const editKey = draftKey.editReply(reply.id);
   const [editing, setEditing] = useState(() => !!getDraft(editKey));
@@ -110,13 +107,13 @@ function ReplyItem({
           }}
         />
       ) : (
-        <Markdown className="reply-body md-body" source={reply.body} commentIds={commentIds} />
+        <Markdown className="reply-body md-body" source={reply.body} commentRefs />
       )}
     </div>
   );
 }
 
-export function CommentThread({ comment, actions, expandSignal, commentIds }: Props) {
+export function CommentThread({ comment, actions, expandSignal }: Props) {
   const { onUpdate, onDelete, onAddReply, onUpdateReply, onDeleteReply, onResolve } = actions;
   const path = effectivePath(comment);
   const editKey = draftKey.editComment(comment.id);
@@ -265,7 +262,7 @@ export function CommentThread({ comment, actions, expandSignal, commentIds }: Pr
               }}
             />
           ) : (
-            <Markdown className="thread-body md-body" source={comment.body} commentIds={commentIds} />
+            <Markdown className="thread-body md-body" source={comment.body} commentRefs />
           )}
 
           {replies.length > 0 && (
@@ -278,7 +275,6 @@ export function CommentThread({ comment, actions, expandSignal, commentIds }: Pr
                   commentId={comment.id}
                   onUpdate={(body) => onUpdateReply(comment.id, r.id, body)}
                   onDelete={() => onDeleteReply(comment.id, r.id)}
-                  commentIds={commentIds}
                 />
               ))}
             </div>
