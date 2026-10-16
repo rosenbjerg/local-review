@@ -549,6 +549,26 @@ test("a meta ping refetches nothing git-derived", async () => {
   expect(vi.mocked(api.commits).mock.calls.length).toBe(before.commits);
 });
 
+test("a diff ping leaves the committed side's diff alone, a refs ping still refetches it", async () => {
+  vi.mocked(api.branches).mockResolvedValue(onFeature);
+  const { result } = renderHook(() => useReview());
+  await waitFor(() => expect(result.current.review).not.toBeNull());
+  expect(result.current.side).toBe("head");
+  const reads = vi.mocked(api.getReview).mock.calls.length;
+  const diffs = vi.mocked(api.diff).mock.calls.length;
+
+  await act(async () => {
+    lastEventSource()?.onmessage?.({ data: "diff" });
+  });
+  await waitFor(() => expect(vi.mocked(api.getReview).mock.calls.length).toBe(reads + 1));
+  expect(vi.mocked(api.diff).mock.calls.length).toBe(diffs);
+
+  await act(async () => {
+    lastEventSource()?.onmessage?.({ data: "refs" });
+  });
+  await waitFor(() => expect(vi.mocked(api.diff).mock.calls.length).toBe(diffs + 1));
+});
+
 function setVisibility(state: "visible" | "hidden") {
   Object.defineProperty(document, "visibilityState", { value: state, configurable: true });
   document.dispatchEvent(new Event("visibilitychange"));

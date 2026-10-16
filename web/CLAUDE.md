@@ -96,8 +96,10 @@ src/
   array itself when they all were. Keyed on **both** paths: a rename's old path is routinely another
   file's new path. That identity is exact (same object ⟺ equal content), which is what keeps
   `DiffView`'s `contentKey` invariant below honest. `mergeFiles.test.ts`, `useReview.test.ts`.
-- SSE: the three ping kinds nest. Refetch the review on any ping; the diff on `diff` **or** `refs`;
-  branches and commits on `refs` alone — the pickers read refs, a plain edit moves none, and
+- SSE: the three ping kinds nest. Refetch the review on any ping; the diff on `refs`, and on `diff`
+  only while an uncommitted side shows — the committed side is two resolved refs, so a worktree edit
+  can't move it, and refetching it on every agent save was megabytes per ping per tab; branches and
+  commits on `refs` alone — the pickers read refs, a plain edit moves none, and
   refetching them on every ping cost five git processes only for `keepIfSame` to discard both.
   Refetch params come from a ref (the effect is keyed on `review.id`). Git-derived results are gated
   on the shared `reqSeq`; the review half is **not** (fetched by id). A hidden tab takes the review
