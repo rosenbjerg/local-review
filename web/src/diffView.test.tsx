@@ -587,3 +587,33 @@ test("a selection started in one half of a split row can't take in the other", a
   fireEvent.mouseDown(screen.getByText("omega"));
   expect(table.dataset.selectHalf).toBe("new");
 });
+
+test("a collapsed card tokenizes nothing until it is opened, and re-tokenizes a theme it missed", async () => {
+  const file: FileDiff = {
+    oldPath: "a.ts",
+    newPath: "a.ts",
+    status: "modified",
+    hunks: [
+      {
+        header: "@@ -1 +1 @@",
+        lines: [
+          { kind: "del", oldLine: 1, content: "const a = 0;" },
+          { kind: "add", newLine: 1, content: "const a = 1;" },
+        ],
+      },
+    ],
+  };
+  vi.mocked(api.file).mockResolvedValue({ ...content("const a = 1;"), path: "a.ts" });
+  render(<DiffView {...props} headRef="feature" file={file} reviewed />);
+  act(() => setThemePref("github-light"));
+  await new Promise((r) => setTimeout(r, 0));
+  expect(vi.mocked(tokenize)).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole("button", { name: "Expand file" }));
+  await waitFor(() =>
+    expect(vi.mocked(tokenize)).toHaveBeenCalledWith("const a = 0;", "typescript", "github-light")
+  );
+  await waitFor(() =>
+    expect(vi.mocked(tokenize)).toHaveBeenCalledWith("const a = 1;", "typescript", "github-light")
+  );
+});
