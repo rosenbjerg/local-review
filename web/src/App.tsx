@@ -32,7 +32,7 @@ import { usePanelResize } from "./usePanelResize";
 import { useReview } from "./useReview";
 import { useUndoableDelete } from "./useUndoableDelete";
 import { useUnseenActivity } from "./useUnseenActivity";
-import { clearDrafts, useLeaveWarning } from "./drafts";
+import { showDraftsFor, useLeaveWarning } from "./drafts";
 import { setFontsRepo } from "./fonts";
 import { setThemeRepo } from "./theme";
 import type { CommentFilter } from "./commentFilter";
@@ -170,11 +170,12 @@ export default function App() {
       : "local-review";
   }, [review, repo, unseen]);
 
+  const reviewId = review ? review.id : null;
   // A filter carried into another review would silently hide its comments.
   useEffect(() => {
     setCommentFilter(NO_FILTER);
-    clearDrafts();
-  }, [review?.id]);
+    showDraftsFor(reviewId);
+  }, [reviewId]);
 
   // Both stores ignore the empty repo the first render carries, having seeded from the remembered one.
   useEffect(() => {

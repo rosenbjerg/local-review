@@ -26,6 +26,7 @@ import {
   getDraft,
   getDrafts,
   putDraft,
+  showDraftsFor,
   useLeaveWarning,
 } from "./drafts";
 import type { Comment, FileDiff } from "./types";
@@ -255,6 +256,28 @@ test("leaving the page asks first only while a draft exists", () => {
   expect(leave()).toBe(false);
   act(() => putDraft({ ...ref, body: "unsent", type: "general" }));
   expect(leave()).toBe(true);
+});
+
+test("switching reviews parks the drafts and switching back restores them", () => {
+  renderHook(() => useLeaveWarning());
+  const leave = () => {
+    const e = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(e);
+    return e.defaultPrevented;
+  };
+  act(() => showDraftsFor(1));
+  act(() => putDraft({ ...ref, body: "for review 1", type: "general" }));
+
+  act(() => showDraftsFor(null));
+  act(() => showDraftsFor(2));
+  expect(getDrafts().size).toBe(0);
+  expect(leave()).toBe(true);
+  act(() => putDraft({ ...ref, body: "for review 2", type: "nit" }));
+
+  act(() => showDraftsFor(1));
+  expect(getDraft(ref.key)?.body).toBe("for review 1");
+  act(() => showDraftsFor(2));
+  expect(getDraft(ref.key)?.body).toBe("for review 2");
 });
 
 // Discarding from the panel has to close the box too: left open, it still holds the text and
