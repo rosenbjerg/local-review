@@ -49,7 +49,6 @@ const props = {
   expandComment: null,
   showFullSignal: null,
   activeComment: null,
-  commentIds: new Set<number>(),
 };
 
 const content = (text: string, worktree = false) => ({

@@ -1,6 +1,18 @@
+import { createContext } from "react";
 import type MarkdownIt from "markdown-it";
 
 const REF_RE = /#(\d+)/g;
+
+export const CommentIdsContext = createContext<Set<number>>(new Set());
+
+export function knownRefs(source: string, ids: Set<number>): string {
+  const found = new Set<number>();
+  for (const m of source.matchAll(REF_RE)) {
+    const id = Number(m[1]);
+    if (ids.has(id)) found.add(id);
+  }
+  return [...found].sort((a, b) => a - b).join(",");
+}
 
 // Core rule linking `#<id>` in text tokens only, so inline code and fences stay plain. Gated on
 // `env.commentIds`: an unknown id, or a render without env (markdown files, export preview), stays inert.

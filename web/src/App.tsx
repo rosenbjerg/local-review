@@ -41,6 +41,8 @@ import type { CommentSort } from "./commentSort";
 import { isCommentSort, sortComments } from "./commentSort";
 import { awaitingYouCount } from "./commentTurn";
 import { commentsFor, groupByPath } from "./commentsByPath";
+import { commentSignal, pathSignal } from "./cardSignals";
+import { CommentIdsContext } from "./commentRef";
 import { diffRowHeight, estFileHeight } from "./fileHeight";
 import { useDefaultLayout } from "./diffLayout";
 import { offsetOf, useFonts } from "./fonts";
@@ -488,36 +490,38 @@ export default function App() {
                   hint="Nothing differs between the two ends of this comparison. Widen it from the toolbar — a different base, an earlier commit to start from, or the staged / working-tree side."
                 />
               )}
-              {orderedDiffFiles.map((f) => {
-                const path = f.newPath || f.oldPath;
-                return (
-                  <LazyFile
-                    key={path}
-                    anchorId={`file-${path}`}
-                    label={path}
-                    estHeight={estHeight(f)}
-                    rootRef={diffColRef}
-                  >
-                    <DiffView
-                      file={f}
-                      repo={repo}
-                      headRef={review.headRef}
-                      baseRef={baseSha}
-                      side={side}
-                      comments={commentsFor(commentsByPath, path)}
-                      onAddComment={handleAddComment}
-                      actions={commentActions}
-                      reviewed={reviewedFiles.has(path)}
-                      onToggleReviewed={toggleReviewed}
-                      expandTarget={expandTarget}
-                      expandComment={expandComment}
-                      showFullSignal={showFullSignal}
-                      activeComment={activeComment}
-                      commentIds={commentIds}
-                    />
-                  </LazyFile>
-                );
-              })}
+              <CommentIdsContext.Provider value={commentIds}>
+                {orderedDiffFiles.map((f) => {
+                  const path = f.newPath || f.oldPath;
+                  const fileComments = commentsFor(commentsByPath, path);
+                  return (
+                    <LazyFile
+                      key={path}
+                      anchorId={`file-${path}`}
+                      label={path}
+                      estHeight={estHeight(f)}
+                      rootRef={diffColRef}
+                    >
+                      <DiffView
+                        file={f}
+                        repo={repo}
+                        headRef={review.headRef}
+                        baseRef={baseSha}
+                        side={side}
+                        comments={fileComments}
+                        onAddComment={handleAddComment}
+                        actions={commentActions}
+                        reviewed={reviewedFiles.has(path)}
+                        onToggleReviewed={toggleReviewed}
+                        expandTarget={pathSignal(expandTarget, path)}
+                        expandComment={commentSignal(expandComment, fileComments)}
+                        showFullSignal={pathSignal(showFullSignal, path)}
+                        activeComment={commentSignal(activeComment, fileComments)}
+                      />
+                    </LazyFile>
+                  );
+                })}
+              </CommentIdsContext.Provider>
             </div>
             {highlight.term && (
               <FindBar

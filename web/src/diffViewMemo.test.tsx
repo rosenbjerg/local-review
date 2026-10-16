@@ -68,7 +68,6 @@ const props = {
   expandComment: null,
   showFullSignal: null,
   activeComment: null,
-  commentIds: new Set<number>(),
 };
 
 // Every review read rebuilds the comment list from JSON, so a card's comments prop

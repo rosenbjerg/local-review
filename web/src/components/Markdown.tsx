@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import MarkdownIt from "markdown-it";
 import { highlightBlocks } from "../highlight";
 import { renderMermaid } from "../mermaid";
-import { commentRefPlugin } from "../commentRef";
+import { CommentIdsContext, commentRefPlugin, knownRefs } from "../commentRef";
 import { useTheme } from "../theme";
 
 // html:false — bodies go through dangerouslySetInnerHTML, so raw HTML must stay escaped.
@@ -21,19 +21,22 @@ export function Markdown({
   className,
   inline = false,
   softBreaks = true,
-  commentIds,
+  commentRefs = false,
 }: {
   source: string;
   className?: string;
   inline?: boolean;
   softBreaks?: boolean;
-  commentIds?: Set<number>;
+  commentRefs?: boolean;
 }) {
+  const allIds = useContext(CommentIdsContext);
+  const refKey = commentRefs ? knownRefs(source, allIds) : "";
+  const commentIds = useMemo(() => new Set(refKey ? refKey.split(",").map(Number) : []), [refKey]);
   const base = useMemo(
     () =>
       inline
         ? inlineMd.renderInline(source)
-        : (softBreaks ? md : docMd).render(source, commentIds ? { commentIds } : {}),
+        : (softBreaks ? md : docMd).render(source, { commentIds }),
     [source, inline, softBreaks, commentIds]
   );
   const [html, setHtml] = useState(base);

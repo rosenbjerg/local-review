@@ -39,6 +39,7 @@ src/
   useOccurrenceHighlight.ts  select a word → light up its occurrences (CSS Custom Highlight API)
   useUnseenActivity.ts   agent comments/replies that arrived while the tab was hidden
   useCommentRefs.ts      delegated click/hover/focus for #<id> links
+  cardSignals.ts         narrows App's jump/expand signals to the one card they concern
   useFocusTrap.ts  useListNavigation.ts (shared by Combobox, FontCombobox and AddFileModal)
   api.ts  types.ts  util.ts  storage.ts (typed localStorage, the lr.* keys)  time.ts
   highlight.ts           Shiki, JS regex engine, all languages lazy      mermaid.ts  ```mermaid → SVG
@@ -254,6 +255,13 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   handler identities; `scripts/compilercheck.ts` pins the compiler.
 - `App` keys the comment-id `Set` on the joined id list, not the array, or every ping re-runs
   markdown-it + Shiki in every thread.
+- **A signal goes to the card it concerns, nothing else** (`cardSignals.ts`). `activeComment`,
+  `expandTarget`, `expandComment` and `showFullSignal` reach a card only when it holds the comment or
+  is the path named — given to every card, each `n`/`p` rebuilt every mounted table.
+- **The review's comment ids are a context, not a prop** (`CommentIdsContext`): a prop would break
+  `DiffView`'s memo on every comment added anywhere. `Markdown` with `commentRefs` keys its render on
+  `knownRefs` — the existing ids its own body mentions — so a new comment re-runs markdown-it only in
+  bodies that cite it. `markdownRefs.test.tsx`.
 
 ## Comments pane
 
