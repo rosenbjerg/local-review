@@ -325,8 +325,10 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
   (`fileOrder`) and each file's drafts top to bottom (file comment, lines, replies). A draft's hover
   cross is `discardDraft`, not `dropDraft`: it also tells the host holding the composer open
   (`onDraftDiscarded` in `DiffView`, `FileComments`, `CommentThread`) to close it, since an open
-  composer still has the text and would put the draft back on its next render. An edit is
-  not listed; its comment's row is marked `editing` instead (`useEditedCommentIds`, whose snapshot
+  composer still has the text and would put the draft back on its next render. The summary's editor
+  is a draft too (`draftKey.summary`), so it survives the pane closing and a failed save (`setSummary`
+  resolves `false`); it isn't listed, since it sits in the pane's head (`isListedDraft`). An edit is
+  not listed either; its comment's row is marked `editing` instead (`useEditedCommentIds`, whose snapshot
   keeps one `Set` per id list, so typing doesn't re-render the list). A click is `useJump`'s
   `jumpToDraft`: expand the card (and, for a reply, the thread, whose composer reopens from the
   store), aim at `#draft-<key>` with the card standing in, then focus the box with `preventScroll`.

@@ -1,17 +1,20 @@
 import { useState } from "react";
+import { type DraftRef, draftKey, getDraft } from "../drafts";
 import { CommentComposer } from "./CommentComposer";
 import { IconChevronRight } from "./icons";
 import { Markdown } from "./Markdown";
 
 interface Props {
   summary: string;
-  onSave: (summary: string) => void;
+  onSave: (summary: string) => Promise<boolean>;
   onCollapse: () => void;
 }
 
+const draft: DraftRef = { key: draftKey.summary(), target: { kind: "summary" } };
+
 // The review's overall note: what the export leads with.
 export function ReviewSummary({ summary, onSave, onCollapse }: Props) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(() => !!getDraft(draft.key));
 
   const collapse = (
     <button
@@ -25,8 +28,7 @@ export function ReviewSummary({ summary, onSave, onCollapse }: Props) {
     </button>
   );
 
-  // The composer's `.composer` root is what the global shortcuts stand down for; it only
-  // mounts while editing, so reopening always starts from the saved summary.
+  // The composer's `.composer` root is what the global shortcuts stand down for.
   if (editing) {
     return (
       <div className="review-summary">
@@ -39,12 +41,14 @@ export function ReviewSummary({ summary, onSave, onCollapse }: Props) {
           // No empty guard: clearing the box is how you delete the summary.
           allowEmpty
           initialBody={summary}
+          draft={draft}
           submitLabel="Save"
           placeholder="What should the agent know before working through the comments?"
           onCancel={() => setEditing(false)}
-          onSubmit={(body) => {
-            onSave(body);
-            setEditing(false);
+          onSubmit={async (body) => {
+            const saved = await onSave(body);
+            if (saved) setEditing(false);
+            return saved;
           }}
         />
       </div>

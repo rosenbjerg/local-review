@@ -1,11 +1,13 @@
 import { useEffect, useSyncExternalStore } from "react";
 import type { CommentType } from "./types";
 
-export type DraftTarget =
+export type FileDraftTarget =
   | { kind: "line"; path: string; startLine: number; endLine: number }
   | { kind: "file"; path: string }
   | { kind: "reply"; path: string; commentId: number }
   | { kind: "edit"; path: string; commentId: number };
+
+export type DraftTarget = FileDraftTarget | { kind: "summary" };
 
 export interface DraftRef {
   key: string;
@@ -17,12 +19,21 @@ export interface Draft extends DraftRef {
   type: CommentType;
 }
 
+export interface FileDraft extends Draft {
+  target: FileDraftTarget;
+}
+
+export function isListedDraft(d: Draft): d is FileDraft {
+  return d.target.kind !== "edit" && d.target.kind !== "summary";
+}
+
 export const draftKey = {
   line: (path: string, startLine: number, endLine: number) => `line:${startLine}-${endLine}:${path}`,
   file: (path: string) => `file:${path}`,
   reply: (commentId: number) => `reply:${commentId}`,
   editComment: (commentId: number) => `edit:${commentId}`,
   editReply: (replyId: number) => `edit-reply:${replyId}`,
+  summary: () => "summary",
 };
 
 let drafts: ReadonlyMap<string, Draft> = new Map();

@@ -467,8 +467,8 @@ export function useReview() {
   const toggleReviewed = (path: string, reviewed: boolean) => setReviewedPaths([path], reviewed);
 
   // Trimmed here as well as server-side, so the optimistic value matches what a refetch returns.
-  async function setSummary(text: string) {
-    if (!review) return;
+  async function setSummary(text: string): Promise<boolean> {
+    if (!review) return false;
     const summary = text.trim();
     const previous = review.summary;
     setError(null);
@@ -478,7 +478,9 @@ export function useReview() {
     } catch (e) {
       setReview((r) => (r ? { ...r, summary: previous } : r));
       setError((e as Error).message);
+      return false;
     }
+    return true;
   }
 
   const shortSha = review?.headSha.slice(0, 7);
