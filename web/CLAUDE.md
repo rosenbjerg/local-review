@@ -243,6 +243,10 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
 - `estFileHeight` re-runs for every file whenever comments, reviewed marks or fonts change, so its
   split count (`splitRowCount`, O(lines)) is cached per `FileDiff` in a `WeakMap` — sound only
   because `mergeFiles` keeps an unchanged file's identity. `fileHeight.test.ts`.
+- **A collapsed card builds no table.** Both tokenize effects, `hunkWordRanges` and `buildRows` stand
+  down while `collapsed` — the cards that start collapsed are the largest (generated, over
+  `LARGE_FILE_LINES`). The tokenize effects keep their last tokens rather than clearing them, and list
+  `collapsed` in deps, so opening a card catches up on a theme it missed. `diffView.test.tsx`.
 - Per-file work in `FileExplorer` (unmemoized, re-rendered by the scroll-spy) stays behind `useMemo`.
 - `useActiveFile` scans `root.children` for `#file-<path>` anchors — never a subtree query.
 - `.file-body` carries `content-visibility: auto` — not `.file`, which would clip the sticky header.

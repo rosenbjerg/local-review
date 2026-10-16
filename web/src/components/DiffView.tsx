@@ -209,6 +209,7 @@ export const DiffView = memo(function DiffView({
   }, [collapsed, source, file, headRef, repo, side, mediaView]);
 
   useEffect(() => {
+    if (collapsed) return;
     if (!source || !lang || source.length > HIGHLIGHT_MAX_LINES) {
       setNewTokens(null);
       return;
@@ -223,9 +224,10 @@ export const DiffView = memo(function DiffView({
     return () => {
       cancelled = true;
     };
-  }, [source, lang, theme]);
+  }, [collapsed, source, lang, theme]);
 
   useEffect(() => {
+    if (collapsed) return;
     if (!lang) {
       setDelTokens(null);
       return;
@@ -249,7 +251,7 @@ export const DiffView = memo(function DiffView({
     return () => {
       cancelled = true;
     };
-  }, [file, lang, theme]);
+  }, [collapsed, file, lang, theme]);
 
   useEffect(() => {
     if (dragAnchor === null) return;
@@ -259,11 +261,11 @@ export const DiffView = memo(function DiffView({
   }, [dragAnchor]);
 
   // Keyed by line number, so Full view marks the additions though it renders no deleted rows.
-  const wordRanges = useMemo(() => hunkWordRanges(file.hunks), [file]);
+  const wordRanges = useMemo(() => hunkWordRanges(collapsed ? [] : file.hunks), [collapsed, file]);
 
   const rows = useMemo(
-    () => buildRows({ mode, source, hunks: file.hunks, revealed }),
-    [mode, source, file, revealed]
+    () => (collapsed ? [] : buildRows({ mode, source, hunks: file.hunks, revealed })),
+    [collapsed, mode, source, file, revealed]
   );
 
   // Every non-rendering decision lives in diffRows.ts, so the rules are testable.
