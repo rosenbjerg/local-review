@@ -12,7 +12,7 @@ vi.mock("./api", () => ({
   api: { file: vi.fn(async () => ({ path: "a.txt", ref: "r", content: "x\n", worktree: false })) },
 }));
 vi.mock("./highlight", () => ({
-  langForPath: () => null,
+  resolveLang: () => null,
   langForInfo: () => null,
   tokenize: vi.fn(async () => null),
   highlightBlocks: vi.fn(async () => null),

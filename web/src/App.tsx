@@ -8,6 +8,7 @@ import { ExportModal } from "./components/ExportModal";
 import { FileExplorer, orderedFiles } from "./components/FileExplorer";
 import { FindBar } from "./components/FindBar";
 import { SettingsModal } from "./components/SettingsModal";
+import { LanguagesModal } from "./components/LanguagesModal";
 import { LazyFile } from "./components/LazyFile";
 import { PaneRail } from "./components/PaneRail";
 import { ResetConfirmModal } from "./components/ResetConfirmModal";
@@ -34,6 +35,7 @@ import { useUndoableDelete } from "./useUndoableDelete";
 import { useUnseenActivity } from "./useUnseenActivity";
 import { pruneDrafts, showDraftsFor, useLeaveWarning } from "./drafts";
 import { setFontsRepo } from "./fonts";
+import { setLangMapRepo } from "./langMap";
 import { setThemeRepo } from "./theme";
 import type { CommentFilter } from "./commentFilter";
 import { NO_FILTER, authorsOf, filterComments } from "./commentFilter";
@@ -109,6 +111,7 @@ export default function App() {
   const [showExport, setShowExport] = useState(false);
   const [showPrompts, setShowPrompts] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showLanguages, setShowLanguages] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [commentSort, setCommentSort] = useState<CommentSort>(() => {
     const stored = getString(LS.commentSort);
@@ -186,6 +189,7 @@ export default function App() {
   useEffect(() => {
     setThemeRepo(repo);
     setFontsRepo(repo);
+    setLangMapRepo(repo);
   }, [repo]);
 
   // Keyed on repo alone, deliberately (resetJump isn't a dep); useReview resets its own data.
@@ -319,7 +323,7 @@ export default function App() {
 
   useKeyboardShortcuts({
     enabled: !!review,
-    modalOpen: showSettings || confirmingReset || showExport || showPrompts || showAddFile,
+    modalOpen: showSettings || showLanguages || confirmingReset || showExport || showPrompts || showAddFile,
     settingsOpen: showSettings,
     loading,
     onNextFile: () => moveFile(1),
@@ -622,7 +626,25 @@ export default function App() {
         />
       )}
 
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsModal
+          onClose={() => setShowSettings(false)}
+          onEditLanguages={() => {
+            setShowSettings(false);
+            setShowLanguages(true);
+          }}
+        />
+      )}
+
+      {showLanguages && (
+        <LanguagesModal
+          onClose={() => setShowLanguages(false)}
+          onBack={() => {
+            setShowLanguages(false);
+            setShowSettings(true);
+          }}
+        />
+      )}
 
       {confirmingReset && (
         <ResetConfirmModal

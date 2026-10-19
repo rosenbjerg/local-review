@@ -45,6 +45,7 @@ type FileDiff struct {
 	Status    FileStatus `json:"status"`
 	Binary    bool       `json:"binary,omitempty"`
 	Generated bool       `json:"generated,omitempty"`
+	Language  string     `json:"language,omitempty"`
 	TooLarge  bool       `json:"tooLarge,omitempty"`
 	Hunks     []Hunk     `json:"hunks"`
 }

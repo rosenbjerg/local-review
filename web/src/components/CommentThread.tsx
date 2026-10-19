@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { draftKey, dropDraft, getDraft, onDraftDiscarded } from "../drafts";
 import type { Comment, CommentType, Reply } from "../types";
 import { commentRef, effectivePath, lineLabel } from "../types";
-import { langForPath } from "../highlight";
 import { Chevron } from "./Chevron";
 import { CommentComposer } from "./CommentComposer";
 import { CopyButton } from "./CopyButton";
@@ -12,8 +11,7 @@ import { MetaTimestamps } from "./MetaTimestamps";
 import { IconCheck, IconReply } from "./icons";
 
 // A fence longer than any backtick run inside, so the snippet can't close the block early.
-function snippetSource(snippet: string, path: string): string {
-  const lang = langForPath(path) ?? "";
+function snippetSource(snippet: string, lang: string): string {
   let maxRun = 0;
   let run = 0;
   for (const ch of snippet) {
@@ -47,6 +45,7 @@ export interface CommentActions {
 
 interface Props {
   comment: Comment;
+  lang?: string | null;
   actions: CommentActions;
   // Bumped by a jump-to; expands this thread when it targets this comment.
   expandSignal?: { id: number; n: number } | null;
@@ -113,7 +112,7 @@ function ReplyItem({
   );
 }
 
-export function CommentThread({ comment, actions, expandSignal }: Props) {
+export function CommentThread({ comment, lang, actions, expandSignal }: Props) {
   const { onUpdate, onDelete, onAddReply, onUpdateReply, onDeleteReply, onResolve } = actions;
   const path = effectivePath(comment);
   const editKey = draftKey.editComment(comment.id);
@@ -152,8 +151,8 @@ export function CommentThread({ comment, actions, expandSignal }: Props) {
   const hasSnippet = outdated && comment.snippet.trim() !== "";
   const [snippetOpen, setSnippetOpen] = useState(false);
   const snippetMd = useMemo(
-    () => snippetSource(comment.snippet, comment.filePath),
-    [comment.snippet, comment.filePath]
+    () => snippetSource(comment.snippet, lang ?? ""),
+    [comment.snippet, lang]
   );
 
   function toggle() {

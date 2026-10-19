@@ -76,46 +76,63 @@ func generatedByName(p string) bool {
 	return strings.HasPrefix(base, "zz_generated.")
 }
 
-// Generated reports, per path, whether it holds generated output: .gitattributes'
-// linguist-generated wherever the repo states it either way, the built-in patterns everywhere
-// it says nothing.
-func (r *Repo) Generated(paths []string) map[string]bool {
-	out := make(map[string]bool, len(paths))
+type FileAttrs struct {
+	Generated bool
+	Language  string
+}
+
+// Attributes reports, per path, linguist-generated and linguist-language. Generated follows
+// .gitattributes wherever the repo states it either way, the built-in patterns everywhere it says
+// nothing.
+func (r *Repo) Attributes(paths []string) map[string]FileAttrs {
+	out := make(map[string]FileAttrs, len(paths))
 	for _, p := range paths {
-		out[p] = generatedByName(p)
+		out[p] = FileAttrs{Generated: generatedByName(p)}
 	}
 	if len(paths) == 0 {
 		return out
 	}
 	// A failure here leaves the pattern answers standing: returning the error instead would take a
-	// whole diff down over a flag that only decides whether a card starts collapsed.
+	// whole diff down over flags that only decide whether a card starts collapsed and its colours.
 	res, err := r.runStdin(strings.Join(paths, "\x00")+"\x00",
-		"check-attr", "-z", "--stdin", "linguist-generated")
+		"check-attr", "-z", "--stdin", "linguist-generated", "linguist-language")
 	if err != nil {
 		return out
 	}
 	fields := strings.Split(strings.TrimSuffix(res, "\x00"), "\x00")
 	for i := 0; i+2 < len(fields); i += 3 {
-		switch fields[i+2] {
-		case "set", "true":
-			out[fields[i]] = true
-		case "unset", "false":
-			out[fields[i]] = false
+		p, attr, value := fields[i], fields[i+1], fields[i+2]
+		a := out[p]
+		switch attr {
+		case "linguist-generated":
+			switch value {
+			case "set", "true":
+				a.Generated = true
+			case "unset", "false":
+				a.Generated = false
+			}
+		case "linguist-language":
+			if value != "unspecified" && value != "set" && value != "unset" {
+				a.Language = value
+			}
 		}
+		out[p] = a
 	}
 	return out
 }
 
-// MarkGenerated fills each file's Generated flag. Kept off Diff/DiffWorktree/DiffStaged: the
-// anchoring passes in internal/review read those on every SSE ping and have no use for the flag.
-func (r *Repo) MarkGenerated(files []FileDiff) {
+// MarkAttributes fills each file's Generated and Language. Kept off Diff/DiffWorktree/DiffStaged:
+// the anchoring passes in internal/review read those on every SSE ping and have no use for either.
+func (r *Repo) MarkAttributes(files []FileDiff) {
 	paths := make([]string, 0, len(files))
 	for _, f := range files {
 		paths = append(paths, diffPath(f))
 	}
-	gen := r.Generated(paths)
+	attrs := r.Attributes(paths)
 	for i := range files {
-		files[i].Generated = gen[diffPath(files[i])]
+		a := attrs[diffPath(files[i])]
+		files[i].Generated = a.Generated
+		files[i].Language = a.Language
 	}
 }
 

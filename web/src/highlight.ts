@@ -54,6 +54,7 @@ export const EXT_EXTRA: Record<string, string> = {
   hpp: "cpp",
   hh: "cpp",
   htm: "html",
+  feature: "gherkin",
 
   xcstrings: "json",
   webmanifest: "json",
@@ -86,12 +87,94 @@ export const EXT_EXTRA: Record<string, string> = {
   nuspec: "xml",
 };
 
+export const NAME_EXTRA: Record<string, string> = {
+  dockerfile: "docker",
+  containerfile: "docker",
+  makefile: "make",
+  gnumakefile: "make",
+  jenkinsfile: "groovy",
+  gemfile: "ruby",
+  rakefile: "ruby",
+  podfile: "ruby",
+  vagrantfile: "ruby",
+  "cmakelists.txt": "cmake",
+};
+
+export const PLAIN_TEXT = "text";
+
+function baseName(path: string): string {
+  return path.slice(path.lastIndexOf("/") + 1).toLowerCase();
+}
+
+function builtIn(name: string): string | undefined {
+  const named = NAME_EXTRA[name];
+  if (named) return ALIAS_TO_ID.get(named);
+  const dot = name.lastIndexOf(".");
+  if (dot < 0) return undefined;
+  const ext = name.slice(dot + 1);
+  return ALIAS_TO_ID.get(EXT_EXTRA[ext] ?? ext);
+}
+
 export function langForPath(path: string): string | null {
-  const dot = path.lastIndexOf(".");
-  if (dot < 0) return null;
-  const ext = path.slice(dot + 1).toLowerCase();
-  const candidate = EXT_EXTRA[ext] ?? ext;
-  return ALIAS_TO_ID.get(candidate) ?? null;
+  return builtIn(baseName(path)) ?? null;
+}
+
+export type LangMap = Record<string, string>;
+
+function lookup(map: LangMap, name: string): string | undefined {
+  const lang = map[name];
+  if (lang !== undefined) return lang;
+  for (let i = name.indexOf("."); i >= 0; i = name.indexOf(".", i + 1)) {
+    const suffix = map[name.slice(i)];
+    if (suffix !== undefined) return suffix;
+  }
+  return undefined;
+}
+
+function grammar(lang: string | undefined): string | undefined {
+  if (lang === undefined) return undefined;
+  return lang === PLAIN_TEXT ? PLAIN_TEXT : ALIAS_TO_ID.get(lang);
+}
+
+const LINGUIST_EXTRA: Record<string, string> = {
+  text: PLAIN_TEXT,
+  batchfile: "bat",
+  "json-with-comments": "jsonc",
+  "protocol-buffer": "proto",
+  "java-properties": "ini",
+  restructuredtext: "rst",
+  "html+erb": "erb",
+};
+
+export function langForLinguist(name: string): string | undefined {
+  const n = name.trim().toLowerCase().replace(/[\s_]+/g, "-");
+  if (n === "") return undefined;
+  return grammar(LINGUIST_EXTRA[n] ?? n) ?? ALIAS_TO_ID.get(n.replace(/-/g, ""));
+}
+
+export interface LangLayers {
+  repo: LangMap;
+  global: LangMap;
+  attribute?: string;
+}
+
+export function resolveLang(path: string, layers: LangLayers): string | null {
+  const name = baseName(path);
+  const lang =
+    grammar(lookup(layers.repo, name)) ??
+    (layers.attribute ? langForLinguist(layers.attribute) : undefined) ??
+    grammar(lookup(layers.global, name)) ??
+    builtIn(name);
+  return lang === undefined || lang === PLAIN_TEXT ? null : lang;
+}
+
+export const LANGUAGES: readonly { id: string; name: string }[] = [
+  { id: PLAIN_TEXT, name: "Plain text" },
+  ...bundledLanguagesInfo.map(({ id, name }) => ({ id, name })),
+];
+
+export function languageName(id: string): string {
+  return LANGUAGES.find((l) => l.id === id)?.name ?? id;
 }
 
 export function langForInfo(info: string): string | null {

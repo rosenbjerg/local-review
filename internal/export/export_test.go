@@ -245,3 +245,20 @@ func TestRenderOmitsEmptySummary(t *testing.T) {
 		t.Fatalf("a blank summary should render nothing:\n%s", out)
 	}
 }
+
+func TestLangForPath(t *testing.T) {
+	cases := map[string]string{
+		"main.go":            "go",
+		"specs/a.feature":    "gherkin",
+		"Dockerfile":         "dockerfile",
+		"ci/Jenkinsfile":     "groovy",
+		"src/CMakeLists.txt": "cmake",
+		"notes.txt":          "",
+		"LICENSE":            "",
+	}
+	for path, want := range cases {
+		if got := langForPath(path); got != want {
+			t.Errorf("langForPath(%q) = %q, want %q", path, got, want)
+		}
+	}
+}

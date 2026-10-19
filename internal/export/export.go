@@ -66,7 +66,7 @@ func Render(r *store.Review, agentInstructions bool, baseURL string) string {
 		sort.Slice(comments, func(i, j int) bool {
 			return comments[i].StartLine < comments[j].StartLine
 		})
-		lang := langForExt(name)
+		lang := langForPath(name)
 		for _, c := range comments {
 			fmt.Fprintf(&b, "\n### #%d · %s · %s · %s\n", c.ID, anchorLabel(c), inlineField(string(c.Type)), inlineField(c.Author))
 			if strings.TrimSpace(c.Snippet) != "" {
@@ -304,11 +304,28 @@ var extToLang = map[string]string{
 	"tf":           "terraform",
 	"hcl":          "hcl",
 	"cmake":        "cmake",
+	"feature":      "gherkin",
 	"diff":         "diff",
 	"patch":        "diff",
 }
 
-func langForExt(path string) string {
+var nameToLang = map[string]string{
+	"dockerfile":     "dockerfile",
+	"containerfile":  "dockerfile",
+	"makefile":       "makefile",
+	"gnumakefile":    "makefile",
+	"jenkinsfile":    "groovy",
+	"gemfile":        "ruby",
+	"rakefile":       "ruby",
+	"podfile":        "ruby",
+	"vagrantfile":    "ruby",
+	"cmakelists.txt": "cmake",
+}
+
+func langForPath(path string) string {
+	if lang, ok := nameToLang[strings.ToLower(filepath.Base(path))]; ok {
+		return lang
+	}
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(path), "."))
 	return extToLang[ext]
 }

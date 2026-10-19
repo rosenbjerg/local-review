@@ -669,3 +669,35 @@ func TestDiffCarriesTheGeneratedFlag(t *testing.T) {
 		t.Errorf("%s missing from the diff", path)
 	}
 }
+
+func TestDiffCarriesTheLanguageAttribute(t *testing.T) {
+	r := newRepo(t)
+	r.write(".gitattributes", "*.steps linguist-language=Gherkin\n")
+	r.write("a.steps", "Feature: a\n")
+	r.write("b.txt", "b\n")
+	r.commitAll("c1")
+	r.git("checkout", "-q", "-b", "feature")
+	r.write("a.steps", "Feature: a\n  Scenario: b\n")
+	r.write("b.txt", "c\n")
+	r.commitAll("c2")
+	s := r.server()
+
+	code, d := getDiff(t, s, "repo="+r.name+"&head=feature&base=main")
+	if code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", code)
+	}
+	want := map[string]string{"a.steps": "Gherkin", "b.txt": ""}
+	for _, f := range d.Files {
+		w, ok := want[f.NewPath]
+		if !ok {
+			continue
+		}
+		if f.Language != w {
+			t.Errorf("%s language = %q, want %q", f.NewPath, f.Language, w)
+		}
+		delete(want, f.NewPath)
+	}
+	for path := range want {
+		t.Errorf("%s missing from the diff", path)
+	}
+}

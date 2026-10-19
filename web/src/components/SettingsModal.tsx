@@ -1,4 +1,5 @@
 import { setDefaultLayout, useDefaultLayout } from "../diffLayout";
+import { useLangMap } from "../langMap";
 import { FontPicker } from "./FontPicker";
 import { Modal } from "./Modal";
 import { ThemePicker } from "./ThemePicker";
@@ -6,8 +7,17 @@ import { ViewToggle } from "./ViewToggle";
 import { MOD_KEY } from "../util";
 
 // The toolbar's non-review controls — appearance, shortcut list, repo link — behind the gear, or `?`.
-export function SettingsModal({ onClose }: { onClose: () => void }) {
+export function SettingsModal({
+  onClose,
+  onEditLanguages,
+}: {
+  onClose: () => void;
+  onEditLanguages: () => void;
+}) {
   const layout = useDefaultLayout();
+  const langs = useLangMap();
+  const repoMappings = Object.keys(langs.own).length;
+  const globalMappings = Object.keys(langs.inherited).length;
   return (
     <Modal onClose={onClose} title="Settings" close="autofocus" className="modal-settings">
       <div className="settings-body">
@@ -34,6 +44,19 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             />
           </div>
           <p className="settings-note">A file's own Unified/Split toggle overrides this for that file.</p>
+          <div className="settings-row">
+            <span className="settings-label">Languages</span>
+            <div className="settings-actions">
+              <button className="btn" onClick={onEditLanguages}>
+                Map files to languages…
+              </button>
+            </div>
+          </div>
+          <p className="settings-note">
+            {repoMappings + globalMappings === 0
+              ? "Highlight an extension or file name with the grammar you pick, here or in every repo."
+              : `${repoMappings} for this repo, ${globalMappings} for every repo.`}
+          </p>
         </div>
 
         <div className="settings-cols">
