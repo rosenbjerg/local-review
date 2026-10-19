@@ -2799,6 +2799,63 @@ textarea:focus-visible {
   gap: 8px;
   padding: 4px 0 0;
 }
+.lang-body {
+  align-items: stretch;
+  gap: 4px;
+  padding: 8px 20px 16px;
+}
+.lang-body code {
+  font-family: var(--font-mono);
+}
+.lang-section .settings-subhead {
+  margin-bottom: 4px;
+}
+.lang-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.lang-table td {
+  padding: 3px 8px 3px 0;
+  vertical-align: middle;
+  font-size: var(--text-md);
+}
+.lang-key {
+  width: 100%;
+}
+.lang-over {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.lang-pick .combobox {
+  width: 220px;
+}
+.lang-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.lang-key-input {
+  flex: 1;
+  min-width: 0;
+  padding-right: 8px;
+  font-family: var(--font-mono);
+}
+.lang-key-input[aria-invalid="true"] {
+  border-color: var(--del-border);
+}
+.lang-builtins {
+  margin-top: 10px;
+  font-size: var(--text-sm);
+}
+.lang-builtins summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.lang-builtins .lang-table {
+  margin-top: 6px;
+}
 /* The two reference tables side by side; stacked they were most of the dialog's height. Centred on
    the same axis as the form above rather than stretched, so the blocks read as one column of content. */
 .settings-cols {

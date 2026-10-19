@@ -43,7 +43,7 @@ func TestGeneratedAttributes(t *testing.T) {
 	gitCmd(t, dir, "add", "-A")
 	gitCmd(t, dir, "commit", "-q", "-m", "attrs")
 
-	got := repo.Generated([]string{"src/schema.ts", "bun.lock", "src/tags.ts", "src/App.tsx", "web/dist/a.js"})
+	got := repo.Attributes([]string{"src/schema.ts", "bun.lock", "src/tags.ts", "src/App.tsx", "web/dist/a.js"})
 	want := map[string]bool{
 		"src/schema.ts": true,  // =true
 		"bun.lock":      false, // unset beats the built-in pattern
@@ -52,20 +52,40 @@ func TestGeneratedAttributes(t *testing.T) {
 		"web/dist/a.js": true, // unspecified, so the built-in pattern stands
 	}
 	for path, w := range want {
-		if got[path] != w {
-			t.Errorf("Generated[%q] = %v, want %v", path, got[path], w)
+		if got[path].Generated != w {
+			t.Errorf("Attributes[%q].Generated = %v, want %v", path, got[path].Generated, w)
 		}
 	}
 }
 
-func TestGeneratedNoPaths(t *testing.T) {
-	_, repo := initRepoOn(t, "main")
-	if got := repo.Generated(nil); len(got) != 0 {
-		t.Errorf("Generated(nil) = %v, want empty", got)
+func TestLanguageAttribute(t *testing.T) {
+	dir, repo := initRepoOn(t, "main")
+	mustWrite(t, dir, ".gitattributes", "*.feature linguist-language=Gherkin\n*.h linguist-language=C++\nplain.txt linguist-language\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-q", "-m", "attrs")
+
+	got := repo.Attributes([]string{"specs/login.feature", "src/a.h", "plain.txt", "src/a.go"})
+	want := map[string]string{
+		"specs/login.feature": "Gherkin",
+		"src/a.h":             "C++",
+		"plain.txt":           "",
+		"src/a.go":            "",
+	}
+	for path, w := range want {
+		if got[path].Language != w {
+			t.Errorf("Attributes[%q].Language = %q, want %q", path, got[path].Language, w)
+		}
 	}
 }
 
-func TestMarkGenerated(t *testing.T) {
+func TestAttributesNoPaths(t *testing.T) {
+	_, repo := initRepoOn(t, "main")
+	if got := repo.Attributes(nil); len(got) != 0 {
+		t.Errorf("Attributes(nil) = %v, want empty", got)
+	}
+}
+
+func TestMarkAttributes(t *testing.T) {
 	dir, repo := initRepoOn(t, "main")
 	firstCommit(t, dir)
 
@@ -74,7 +94,7 @@ func TestMarkGenerated(t *testing.T) {
 		{NewPath: "internal/api/api.go", Status: FileModified},
 		{OldPath: "web/dist/old.js", Status: FileDeleted},
 	}
-	repo.MarkGenerated(files)
+	repo.MarkAttributes(files)
 
 	if !files[0].Generated {
 		t.Error("bun.lock should be generated")

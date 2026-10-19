@@ -17,6 +17,8 @@ export const LS = {
   fonts: "lr.fonts",
   fontsByRepo: "lr.fontsByRepo",
   diffLayout: "lr.diffLayout",
+  langMap: "lr.langMap",
+  langMapByRepo: "lr.langMapByRepo",
 } as const;
 
 export function getString(key: string, def = ""): string {
@@ -229,4 +231,45 @@ export function writeFontOverrides(repo: string, prefs: FontPrefs): void {
 
 export function clearFontOverrides(): void {
   setJSON(LS.fontsByRepo, {});
+}
+
+const MAX_LANG_KEY = 100;
+export const MAX_LANG_MAPPINGS = 200;
+
+export function normalizeLangKey(raw: string): string {
+  const key = raw.trim().toLowerCase().replace(/^\*(?=\.)/, "");
+  if (key === "" || key === "." || key.length > MAX_LANG_KEY || /[\s/\\*]/.test(key)) return "";
+  return key;
+}
+
+function pruneLangMap(v: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return out;
+  for (const [raw, lang] of Object.entries(v).slice(0, MAX_LANG_MAPPINGS)) {
+    const key = normalizeLangKey(raw);
+    if (key !== "" && typeof lang === "string" && lang.trim() !== "") out[key] = lang.trim();
+  }
+  return out;
+}
+
+export function readLangDefaults(): Record<string, string> {
+  return pruneLangMap(getJSON<unknown>(LS.langMap, {}));
+}
+
+export function writeLangDefaults(map: Record<string, string>): void {
+  setJSON(LS.langMap, pruneLangMap(map));
+}
+
+export function readLangOverrides(repo: string): Record<string, string> {
+  if (repo === "") return {};
+  return pruneLangMap(getJSON<Record<string, unknown>>(LS.langMapByRepo, {})[repo]);
+}
+
+export function writeLangOverrides(repo: string, map: Record<string, string>): void {
+  if (repo === "") return;
+  const next = pruneLangMap(map);
+  const all = getJSON<Record<string, unknown>>(LS.langMapByRepo, {});
+  if (Object.keys(next).length === 0) delete all[repo];
+  else all[repo] = next;
+  setJSON(LS.langMapByRepo, all);
 }

@@ -16,7 +16,8 @@ import { useDefaultLayout } from "../diffLayout";
 import { type DraftRef, draftKey, onDraftDiscarded, useLineDraftRanges } from "../drafts";
 import { EXPAND_STEP, offersStep, type Gap, type Reveal } from "../hunkGaps";
 import { hunkWordRanges, splitPieces, type Segment } from "../wordDiff";
-import { langForPath, tokenize, type Token } from "../highlight";
+import { tokenize, type Token } from "../highlight";
+import { useLangFor } from "../langMap";
 import { LARGE_FILE_LINES, changedLineCount } from "../fileHeight";
 import { useTheme } from "../theme";
 import type { Comment, CommentType, FileDiff, LineKind, Side } from "../types";
@@ -141,7 +142,7 @@ export const DiffView = memo(function DiffView({
       }),
     [path]
   );
-  const lang = langForPath(path);
+  const lang = useLangFor(path, file.language);
   // Tokens carry resolved colors, so both tokenize effects re-run on a theme switch.
   const theme = useTheme();
   const defaultLayout = useDefaultLayout();
@@ -456,6 +457,7 @@ export const DiffView = memo(function DiffView({
     <CommentThread
       key={c.id}
       comment={c}
+      lang={lang}
       actions={actions}
       expandSignal={expandComment}
     />

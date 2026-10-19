@@ -45,9 +45,10 @@ One binary: Go backend with the React frontend embedded. Nothing to install but 
   [Working with an agent](#working-with-an-agent).
 - **Live.** Every tab follows along, edits and commits made outside the UI are picked
   up, and the tab title counts what an agent said while you were away.
-- **A proper diff viewer.** Word-level diffs, ~235 highlighted languages, light and dark
-  editor color themes with the code and interface fonts set to your taste, expandable
-  context between hunks, rendered markdown and mermaid, image previews, generated files
+- **A proper diff viewer.** Word-level diffs, ~235 highlighted languages (map any extension
+  or file name to one, per repo or everywhere, or with `linguist-language` in
+  `.gitattributes`), light and dark editor color themes with the code and interface fonts
+  set to your taste, expandable context between hunks, rendered markdown and mermaid, image previews, generated files
   (lockfiles, `dist/`, snapshots) folded shut so they stop drowning the real changes, and
   lazy rendering so a huge branch stays responsive.
 - **Keyboard-driven.** `j`/`k` between files, `n`/`p` between comments, `v` to mark

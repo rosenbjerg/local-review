@@ -51,6 +51,7 @@ src/
   fileHeight.ts          LARGE_FILE_LINES + what a LazyFile placeholder is worth
   theme.ts               theme registry + store (owns <html data-theme>)   themes/  hand-written Shiki themes
   diffLayout.ts          the default Unified/Split layout store (lr.diffLayout, every repo)
+  langMap.ts             file → language mapping store (lr.langMap every repo, lr.langMapByRepo over it)
   fonts.ts               font-family override store (owns the inline --font-mono/--font-sans on <html>)
   localFonts.ts          Local Font Access store: permission state, the machine's families, a family's files as FontFaces
   fontNames.ts           name matching (normalizeName, nearestFamily, findFamily)   sfnt.ts  OS/2 + fvar → FontFace descriptors
@@ -62,7 +63,7 @@ src/
     DiffView             per-file diff: fetches source, tokenizes, owns view/selection/reveal state, draws planRows
     FileHeader  MediaView  MarkdownView  LazyFile  FindBar
     CommentThread  CommentsPanel  CommentPreview  CommentRefPopover  ReviewSummary  CommentComposer  FileComments  DraftList
-    Modal + ExportModal  AgentPromptsModal  AddFileModal  SettingsModal  ResetConfirmModal
+    Modal + ExportModal  AgentPromptsModal  AddFileModal  SettingsModal  LanguagesModal  ResetConfirmModal
     UndoToast  SearchInput  Combobox  PaneRail  ViewToggle  CopyButton  ThemePicker  FontPicker  FontCombobox
     ErrorBoundary  EmptyState  icons
     small primitives: Chevron, CommentCount, DiffStatBadge, AnchorBadge, MetaTimestamps, HighlightMatch, Markdown
@@ -140,7 +141,7 @@ src/
   naming the stored path scrolls to no card and expands no `DiffView`.
 - Hunkless files (R100, mode-only, empty add/delete) get `noHunksNote` in Changed view. Files over
   `LARGE_FILE_LINES` (500) start collapsed, as do ones the backend flagged `generated` (lockfiles,
-  `dist/`, snapshots — `internal/git/generated.go`), which carry a `generated` badge on the file
+  `dist/`, snapshots — `internal/git/attributes.go`), which carry a `generated` badge on the file
   header saying why. Nothing else changes: they stay in the tree, in the reviewed denominator and in
   `j`/`k`, and they still take comments. **`estFileHeight` has to agree with whatever starts a card
   collapsed** — a placeholder sized for an open card leaves every card below it jumping when this one
@@ -220,7 +221,19 @@ src/
   exists". `highlight.test.ts` resolves every value against the alias map, so a typo or a Shiki
   upgrade that renames a language fails there. `internal/export`'s `extToLang` is a separate map
   serving markdown fences; the two are deliberately independent, but an alias worth adding is
-  usually worth adding to both, or a snippet exports unfenced while the UI colours it.
+  usually worth adding to both, or a snippet exports unfenced while the UI colours it. `NAME_EXTRA`
+  is the same for whole file names (`Dockerfile`, `Jenkinsfile`), mirrored by export's `nameToLang`;
+  only the name after the last `/` is ever read, so a dot in a directory can't pose as an extension.
+- **A file's language is `resolveLang`, layered**: this repo's mapping, then the diff's `language`
+  (`.gitattributes` `linguist-language`, Linguist's name, translated by `langForLinguist`), then
+  the every-repo mapping, then the built-ins. A mapping key is a lowercased file name or a `.`
+  suffix (`.d.ts`); a name beats a suffix and a longer suffix a shorter one. `text` is plain text,
+  which is how a mapping switches highlighting off, and a value Shiki doesn't know falls through
+  to the next layer rather than blanking the file. Only `/api/diff` carries `language`, so a card
+  synthesized for an unchanged file skips that layer. `DiffView` resolves through `useLangFor` and
+  hands the result to its threads' snippet fences, so a mapping change re-colours open cards.
+  `LanguagesModal` is opened from Settings in its place (never stacked: both would take Escape).
+  `highlight.test.ts`, `langMap.test.ts`, `languagesModal.test.tsx`.
 - Mermaid (`mermaid.ts`): a second pass after highlighting, only the `language-mermaid` fence,
   lazy import. Load-bearing: `htmlLabels: false` (else awaits `<img>` loads from untrusted source),
   `securityLevel: 'strict'`, `suppressErrorRendering: true`. `useMaxWidth: false` per diagram type;
@@ -568,7 +581,7 @@ mounted set reads as "it gets slow around file 70". `diffViewMemo.test.tsx`.
 - Fonts: vendored woff2 under `src/fonts`, `url()`'d from the `@font-face` block; woff2 only, never
   subsetted, `font-display: swap`.
 - Persisted prefs go under `lr.*` via `storage.ts`; validate on read (`isCommentSort`, `isThemePref`,
-  `normalizeDiffView`, `normalizeFamily`) so a stale value falls back.
+  `normalizeDiffView`, `normalizeFamily`, `normalizeLangKey`) so a stale value falls back.
 
 ## Gotchas
 

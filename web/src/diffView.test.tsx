@@ -21,7 +21,7 @@ vi.mock("./api", () => ({
 // through Markdown, which chains it after markdown-it.
 vi.mock("./highlight", () => ({
   // Only a .ts fixture tokenizes; the rest of the file's fixtures are .txt.
-  langForPath: (p: string) => (p.endsWith(".ts") ? "typescript" : null),
+  resolveLang: (p: string) => (p.endsWith(".ts") ? "typescript" : null),
   tokenize: vi.fn(async () => null),
   highlightBlocks: vi.fn(async () => null),
   langForInfo: () => null,

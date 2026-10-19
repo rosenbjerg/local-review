@@ -14,7 +14,7 @@ git/commits.go          RecentCommits
 git/diff.go             Diff / DiffFile / DiffWorktree / DiffStaged + the diff parser
 git/linemap.go          MapOldLine, HunksOldExtent — an old-side line through the hunks
 git/fingerprint.go      RefsFingerprint + WorktreeFingerprint (the poller's two change signals)
-git/generated.go        Generated/MarkGenerated: linguist-generated + the built-in pattern list
+git/attributes.go       Attributes/MarkAttributes: linguist-generated + linguist-language, the built-in generated patterns
 store/store.go          Store, Open (WAL, foreign_keys, single connection), time helpers
 store/schema.go         migrate() + ensureColumn
 store/reviews.go        Review, reviewCols/scanReview, review + draft-pruning queries
@@ -111,14 +111,16 @@ export/export.go        review → canonical markdown
   stub: `Binary` if its first `binarySniffBytes` hold a NUL, else `TooLarge`, which the card renders as
   a note with no source fetch and no Full or Rendered view. Only regular files are read, or a FIFO
   would block the diff.
-- **The `generated` flag is `/api/diff`'s alone.** `MarkGenerated` is called by the handler, never by
-  `Diff`/`DiffWorktree`/`DiffStaged`: `internal/review` reads those on every SSE ping to re-anchor and
-  has no use for the flag, and `DiffCache` would be caching it pointlessly. It is one batched
-  `check-attr -z --stdin` however many files the diff holds — the third process `spawn_test.go`
-  expects. `.gitattributes` decides wherever it speaks (`set`/`true` → generated, `unset`/`false` →
-  not, both beating the patterns); `unspecified` falls to `generatedByName`. A `check-attr` failure
-  leaves the pattern answers standing rather than failing the diff — the flag only decides whether a
-  card starts collapsed.
+- **The `generated` and `language` fields are `/api/diff`'s alone.** `MarkAttributes` is called by
+  the handler, never by `Diff`/`DiffWorktree`/`DiffStaged`: `internal/review` reads those on every SSE
+  ping to re-anchor and has no use for either, and `DiffCache` would be caching them pointlessly. Both
+  come from one batched `check-attr -z --stdin linguist-generated linguist-language` however many files
+  the diff holds — the third process `spawn_test.go` expects. `.gitattributes` decides `generated`
+  wherever it speaks (`set`/`true` → generated, `unset`/`false` → not, both beating the patterns);
+  `unspecified` falls to `generatedByName`. `language` is Linguist's name passed through as written
+  (`Gherkin`, `C++`); mapping it to a Shiki grammar is the frontend's (`langMap.ts`). A `check-attr`
+  failure leaves the pattern answers standing rather than failing the diff — the fields only decide
+  whether a card starts collapsed and how it is coloured.
 
 ## Reads that must not fail loudly or wrongly
 
