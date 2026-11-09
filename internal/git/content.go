@@ -25,10 +25,20 @@ func (r *Repo) IndexFile(path string) (string, error) {
 	return r.showObject(":" + path)
 }
 
-// showObject reads a `<ref>:<path>` object; absence (ErrNotFound) is confirmed with
-// `cat-file -e`, not by matching stderr, whose wording varies by git version and locale.
+// CheckoutContent reads a `<ref>:<path>` (or `:<path>`) object as a checkout would write it,
+// with smudge filters applied, so a Git LFS file yields its bytes rather than its pointer.
+func (r *Repo) CheckoutContent(spec string) (string, error) {
+	return r.readObject(spec, "cat-file", "--filters", spec)
+}
+
 func (r *Repo) showObject(spec string) (string, error) {
-	out, err := r.run("show", spec)
+	return r.readObject(spec, "show", spec)
+}
+
+// readObject runs a read of spec; absence (ErrNotFound) is confirmed with `cat-file -e`,
+// not by matching stderr, whose wording varies by git version and locale.
+func (r *Repo) readObject(spec string, args ...string) (string, error) {
+	out, err := r.run(args...)
 	if err != nil {
 		if _, probe := r.run("cat-file", "-e", spec); probe != nil {
 			return "", fmt.Errorf("%w: %v", ErrNotFound, err)

@@ -133,7 +133,7 @@ func (s *Server) handleCommits(w http.ResponseWriter, r *http.Request) error {
 
 // readFileContent reads path from the requested side; fromWorktree reports where the content
 // actually came from, since a ref read may have fallen back to the on-disk copy.
-func (s *Server) readFileContent(r *http.Request) (content, path string, fromWorktree bool, err error) {
+func (s *Server) readFileContent(r *http.Request, checkedOut bool) (content, path string, fromWorktree bool, err error) {
 	repo, err := s.repoParam(r)
 	if err != nil {
 		return "", "", false, err
@@ -153,7 +153,11 @@ func (s *Server) readFileContent(r *http.Request) (content, path string, fromWor
 			return "", "", false, err
 		}
 	}
-	content, err = review.ReadSide(repo, ref, path, side)
+	read := review.ReadSide
+	if checkedOut {
+		read = review.ReadSideCheckedOut
+	}
+	content, err = read(repo, ref, path, side)
 	fromWorktree = side == store.SideWorktree
 	if side.IsHead() && errors.Is(err, git.ErrNotFound) {
 		// Only absence falls back: a real git failure answered with the on-disk copy would
@@ -174,7 +178,7 @@ func (s *Server) readFileContent(r *http.Request) (content, path string, fromWor
 
 // "ref" echoes what was asked for; "worktree" says where the content actually came from.
 func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) error {
-	content, path, fromWorktree, err := s.readFileContent(r)
+	content, path, fromWorktree, err := s.readFileContent(r, false)
 	if err != nil {
 		return err
 	}
@@ -187,7 +191,7 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) handleBlob(w http.ResponseWriter, r *http.Request) error {
-	content, path, _, err := s.readFileContent(r)
+	content, path, _, err := s.readFileContent(r, true)
 	if err != nil {
 		return err
 	}

@@ -19,6 +19,19 @@ func ReadSide(repo *git.Repo, headRef, path string, side store.Side) (string, er
 	}
 }
 
+// ReadSideCheckedOut is ReadSide with smudge filters applied, for serving a file's real bytes:
+// a Git LFS object is stored as a pointer, which no image viewer can decode.
+func ReadSideCheckedOut(repo *git.Repo, headRef, path string, side store.Side) (string, error) {
+	switch side {
+	case store.SideIndex:
+		return repo.CheckoutContent(":" + path)
+	case store.SideWorktree:
+		return repo.WorktreeFile(path)
+	default:
+		return repo.CheckoutContent(headRef + ":" + path)
+	}
+}
+
 // SideLabel names a side in prose, for the 404 and the file card's substitution note.
 func SideLabel(side store.Side, headRef string) string {
 	switch side {
