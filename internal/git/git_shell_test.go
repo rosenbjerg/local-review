@@ -440,3 +440,26 @@ func TestListBranchesOrderedByActivity(t *testing.T) {
 		}
 	}
 }
+
+// Stands in for Git LFS: the repo stores lowercase, a checkout writes uppercase.
+func TestCheckoutContentAppliesSmudge(t *testing.T) {
+	dir, r := initRepoOn(t, "main")
+	gitCmd(t, dir, "config", "filter.upper.smudge", "tr a-z A-Z")
+	gitCmd(t, dir, "config", "filter.upper.clean", "cat")
+	mustWrite(t, dir, ".gitattributes", "*.img filter=upper\n")
+	mustWrite(t, dir, "a.img", "pointer\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-q", "-m", "c1")
+
+	for spec, want := range map[string]string{"main:a.img": "POINTER\n", ":a.img": "POINTER\n"} {
+		if got, err := r.CheckoutContent(spec); err != nil || got != want {
+			t.Errorf("CheckoutContent(%q) = %q, %v; want %q", spec, got, err, want)
+		}
+	}
+	if got, _ := r.FileContent("main", "a.img"); got != "pointer\n" {
+		t.Errorf("FileContent = %q, want the stored bytes", got)
+	}
+	if _, err := r.CheckoutContent("main:gone.img"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("CheckoutContent(absent) err = %v, want ErrNotFound", err)
+	}
+}
